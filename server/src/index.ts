@@ -17,6 +17,10 @@ async function main() {
   app.get("/api/health", (_req, res) => {
     res.json({ ok: true, storage: storage.kind });
   });
+  // Alias for hosts (Render, k8s, etc.) that default their health check to /healthz.
+  app.get("/healthz", (_req, res) => {
+    res.json({ ok: true, storage: storage.kind });
+  });
   app.use("/api/listings", listingsRouter);
   app.use("/api/scrape", scrapeRouter);
   app.use("/api/meta", metaRouter);

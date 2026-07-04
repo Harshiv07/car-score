@@ -10,6 +10,7 @@ services:
     rootDir: .
     buildCommand: npm install && npm run build -w server
     startCommand: npm run start -w server
+    healthCheckPath: /healthz
     envVars:
       - key: NODE_VERSION
         value: 20.18.0
