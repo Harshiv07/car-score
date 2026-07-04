@@ -1,0 +1,45 @@
+{
+  "dealers": [
+    {
+      "key": "waynetoyota",
+      "name": "Wayne Toyota",
+      "city": "Thunder Bay",
+      "province": "ON",
+      "urls": [
+        "https://www.waynetoyota.com/vehicles/used/",
+        "https://www.waynetoyota.com/vehicles/used/?p=2",
+        "https://www.waynetoyota.com/vehicles/used/?p=3"
+      ]
+    },
+    {
+      "key": "goremotorshonda",
+      "name": "Gore Motors Honda",
+      "city": "Thunder Bay",
+      "province": "ON",
+      "urls": [
+        "https://www.goremotorshonda.com/vehicles/used/",
+        "https://www.goremotorshonda.com/vehicles/used/?p=2"
+      ]
+    },
+    {
+      "key": "halfwaymotorsmazda",
+      "name": "Half-Way Motors Mazda",
+      "city": "Thunder Bay",
+      "province": "ON",
+      "urls": [
+        "https://www.halfwaymotorsmazda.com/vehicles/used/",
+        "https://www.halfwaymotorsmazda.com/vehicles/used/?p=2"
+      ]
+    },
+    {
+      "key": "superiorhyundai",
+      "name": "Superior Hyundai",
+      "city": "Thunder Bay",
+      "province": "ON",
+      "urls": [
+        "https://www.superiorhyundai.ca/vehicles/used/",
+        "https://www.superiorhyundai.ca/vehicles/used/?p=2"
+      ]
+    }
+  ]
+}

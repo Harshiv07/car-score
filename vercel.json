@@ -1,5 +1,8 @@
 {
-  "buildCommand": "PUBLIC_URL=/ npm run build",
-  "outputDirectory": "build",
-  "framework": "create-react-app"
+  "buildCommand": "npm run build -w client",
+  "outputDirectory": "client/dist",
+  "installCommand": "PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1 npm install",
+  "rewrites": [
+    { "source": "/((?!api/).*)", "destination": "/index.html" }
+  ]
 }

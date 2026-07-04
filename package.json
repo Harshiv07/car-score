@@ -1,42 +1,23 @@
 {
   "name": "carscore",
-  "version": "0.1.0",
+  "version": "2.0.0",
   "private": true,
-  "dependencies": {
-    "@testing-library/jest-dom": "^4.2.4",
-    "@testing-library/react": "^9.5.0",
-    "@testing-library/user-event": "^7.2.1",
-    "react": "^16.13.1",
-    "react-dom": "^16.13.1",
-    "react-scripts": "5.0.1"
-  },
+  "description": "CarScore V2 — first-car buying copilot for Canada: scrapes listings, scores them on reliability, value, winter capability and ownership cost, and ranks the best-value cars.",
+  "workspaces": [
+    "server",
+    "client"
+  ],
   "scripts": {
-    "start": "react-scripts start",
-    "build": "react-scripts build",
-    "test": "react-scripts test",
-    "scrape": "node scripts/scrape.js",
-    "predeploy": "npm run build",
-    "deploy": "gh-pages -d build",
-    "eject": "react-scripts eject"
-  },
-  "eslintConfig": {
-    "extends": "react-app"
-  },
-  "homepage": "https://Harshiv07.github.io/car-score",
-  "browserslist": {
-    "production": [
-      ">0.2%",
-      "not dead",
-      "not op_mini all"
-    ],
-    "development": [
-      "last 1 chrome version",
-      "last 1 firefox version",
-      "last 1 safari version"
-    ]
+    "dev": "concurrently -n server,client -c cyan,magenta \"npm run dev -w server\" \"npm run dev -w client\"",
+    "dev:server": "npm run dev -w server",
+    "dev:client": "npm run dev -w client",
+    "build": "npm run build -w server && npm run build -w client",
+    "start": "npm run start -w server"
   },
   "devDependencies": {
-    "cheerio": "^1.2.0",
-    "gh-pages": "^5.0.0"
+    "concurrently": "^9.1.0"
+  },
+  "engines": {
+    "node": ">=18"
   }
 }

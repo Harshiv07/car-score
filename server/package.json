@@ -1,0 +1,28 @@
+{
+  "name": "@carscore/server",
+  "version": "2.0.0",
+  "private": true,
+  "description": "CarScore V2 backend — Express REST API, Crawlee-based listing crawler, MongoDB storage, hybrid 100-point scoring engine.",
+  "main": "dist/index.js",
+  "scripts": {
+    "dev": "tsx watch src/index.ts",
+    "build": "tsc -p tsconfig.json",
+    "start": "node dist/index.js",
+    "typecheck": "tsc -p tsconfig.json --noEmit"
+  },
+  "dependencies": {
+    "cheerio": "^1.0.0",
+    "cors": "^2.8.5",
+    "crawlee": "^3.13.0",
+    "express": "^4.21.2",
+    "mongoose": "^8.9.0",
+    "playwright": "^1.49.0"
+  },
+  "devDependencies": {
+    "@types/cors": "^2.8.17",
+    "@types/express": "^4.17.21",
+    "@types/node": "^22.10.0",
+    "tsx": "^4.19.0",
+    "typescript": "^5.6.0"
+  }
+}
