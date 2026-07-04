@@ -31,20 +31,32 @@ Only these are scraped and scored:
 ## Quick start
 
 ```bash
-npm run setup        # npm install + downloads Chromium for the browser fallback
-npm run dev          # API on :4000, app on :3000 (proxied /api)
-npm test -w server   # scrape-pipeline test suite (no network needed)
+npm run setup             # npm install + downloads Chromium for the browser fallback
+npm run dev               # API on :4000, app on :3000 (proxied /api)
+npm test -w server        # unit + pipeline test suite (no network needed)
+npm run scrape:check -w server          # confirm the pipeline is healthy (no network)
+npm run scrape:check -w server -- --live # + probe each source over the network
 ```
 
 No database needed for development — without `MONGODB_URI` the server uses a
 JSON-file store (`server/.data/db.json`) seeded with representative listings.
 
-> **Why Chromium matters:** the Thunder Bay dealer sites (Wayne Toyota, Gore
-> Motors Honda, Half-Way Motors Mazda, Superior Hyundai) render their
-> inventory client-side, so the static Cheerio pass finds nothing on them by
-> design — they are only scrapeable through the Playwright browser fallback.
-> If a scrape log says "Browser fallback disabled: Chromium is not
-> installed", run `npx playwright install chromium` and scrape again.
+> **The primary source is browser-free.** `Clutch.ca` is scraped through its
+> public JSON API, so it returns fully-structured, accurate listings (year,
+> price, mileage, drivetrain, fuel) with **no browser required** — it works on
+> Render and other hosts without Chromium.
+>
+> **Everything else is best-effort.** Most Canadian car sites (AutoTrader,
+> CarGurus, the Thunder Bay dealers) render inventory client-side and/or block
+> automated access from datacenter IPs (AWS WAF, DataDome, Cloudflare), so a
+> static crawl from a server usually finds nothing on them. To render the JS
+> dealer sites **locally**, install Chromium (`npx playwright install
+> chromium`) and run with `SCRAPE_JS_FALLBACK=1`.
+>
+> **A run can never hang.** The whole run is capped at `SCRAPE_RUN_BUDGET_MS`
+> (2 min) and each source at `SCRAPE_SOURCE_TIMEOUT_MS` (30 s); tune sources and
+> page counts via env vars (see `server/.env.example`). The API keeps serving
+> listings while a scrape is in progress.
 
 ### Production (MongoDB)
 
@@ -63,16 +75,24 @@ source has its own module returning a common `Listing[]` interface:
 
 ```
 server/src/scrapers/
-  autotrader.ts    # AutoTrader.ca search pages per model
+  clutch.ts        # Clutch.ca — public JSON API (browser-free, primary source)
+  autotrader.ts    # AutoTrader.ca search pages per model (best-effort HTML)
   cargurus.ts      # CarGurus.ca (best-effort — DataDome anti-bot)
-  clutch.ts        # Clutch.ca (__NEXT_DATA__ blob)
   dealer.ts        # dealership sites, configurable via src/config/dealers.json
+  config.ts        # env-driven run budget, timeouts, source allow-list
 ```
 
-Extraction runs three strategies per page (JSON-LD → embedded state blobs →
-DOM cards) and falls back to a real browser (Playwright) only when the static
-pass finds nothing on a JS-rendered site. A failing source is logged and
-skipped — one bad site never sinks a run.
+The HTML sources run three extraction strategies per page (JSON-LD → embedded
+state blobs → DOM cards) and keep the strategy with the most **usable** records
+(a record needs both a year and a price — this is what stops year-less
+AutoTrader JSON-LD from shadowing the DOM cards that do carry the year). A real
+browser (Playwright) is used only when the static pass finds nothing **and**
+`SCRAPE_JS_FALLBACK=1`. A failing source is logged and skipped — one bad site
+never sinks a run.
+
+Run `npm run scrape:check -w server` any time to confirm the extract → normalize
+→ score → store pipeline is healthy independent of the network; the same check
+is served at `GET /api/scrape/selfcheck`.
 
 - **`POST /api/scrape`** starts a run (`409` while running or during the
   **10-minute cooldown**; `lastScrapeTime` comes from `ScrapeHistory`).
@@ -110,9 +130,10 @@ rating, known issues, pros and cons — the UI shows *why* a car ranks first.
 | ------------------------ | ---------------------------------------------------- |
 | `GET /api/listings`      | Filtered + sorted leaderboard. Filters: price, year, mileage, brand, model, province, city, drivetrain, fuel, CPO-only, dealer-only, source, score range. Sorts: score, deal, mileage, price, reliability, newest, resale. |
 | `GET /api/listings/:id`  | Full detail: breakdown, ownership estimate, known issues, alternatives, external links (AutoTrader, CarGurus, CARFAX when VIN known). |
-| `POST /api/scrape`       | Run the crawler (10-min cooldown).                   |
+| `POST /api/scrape`       | Run the crawler (10-min cooldown, ≤2-min hard budget). |
 | `GET /api/scrape/status` | Progress, live logs, cooldown state.                 |
-| `GET /api/scrape/history`| Past runs.                                           |
+| `GET /api/scrape/history`| Past runs.                                            |
+| `GET /api/scrape/selfcheck`| Pipeline health check (extract→normalize→score).   |
 | `GET /api/meta`          | Filter options + sort keys for the UI.               |
 
 ## Deployment

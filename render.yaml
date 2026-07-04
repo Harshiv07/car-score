@@ -8,7 +8,13 @@ services:
     runtime: node
     plan: free
     rootDir: .
-    buildCommand: npm install && npx playwright install chromium && npm run build -w server
+    # No Chromium here on purpose: the primary source (Clutch.ca) is a
+    # browser-free JSON API, and Playwright's Chromium rarely launches on
+    # Render's free plan (missing system libs) — installing it just slows and
+    # flakes the build. To enable the browser fallback for the JS dealer sites,
+    # add `&& npx playwright install --with-deps chromium` and set
+    # SCRAPE_JS_FALLBACK=1 below.
+    buildCommand: npm install && npm run build -w server
     startCommand: npm run start -w server
     healthCheckPath: /healthz
     envVars:

@@ -1,8 +1,15 @@
 import { Router } from "express";
 import { getProgress, startScrape } from "../services/scrapeService";
 import { getStorage } from "../db/storage";
+import { verifyPipeline } from "../services/selfCheck";
 
 export const scrapeRouter = Router();
+
+/** GET /api/scrape/selfcheck — is the extract→normalize→score pipeline healthy? */
+scrapeRouter.get("/selfcheck", (_req, res) => {
+  const report = verifyPipeline();
+  res.status(report.ok ? 200 : 500).json(report);
+});
 
 /** POST /api/scrape — kick off a crawler run (409 if running or cooling down). */
 scrapeRouter.post("/", async (_req, res) => {

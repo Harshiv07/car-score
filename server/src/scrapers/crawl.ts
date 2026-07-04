@@ -31,7 +31,21 @@ export interface CrawlOutcome {
   errors: string[];
 }
 
-export async function crawlPages(urls: string[], log: LogFn): Promise<CrawlOutcome> {
+export interface CrawlOptions {
+  /** Parallel requests. Default 4. */
+  concurrency?: number;
+  /** Per-request handler timeout (seconds). Default 20. */
+  requestTimeoutSecs?: number;
+  /** Retries per request. Default 0 — a slow/blocked page must not be retried
+   *  into a multi-minute stall; the run just moves on. */
+  maxRetries?: number;
+}
+
+export async function crawlPages(
+  urls: string[],
+  log: LogFn,
+  opts: CrawlOptions = {}
+): Promise<CrawlOutcome> {
   const pages: CrawledPage[] = [];
   const errors: string[] = [];
   let blocked = false;
@@ -40,9 +54,13 @@ export async function crawlPages(urls: string[], log: LogFn): Promise<CrawlOutco
   const crawler = new CheerioCrawler(
     {
       proxyConfiguration: proxyConfig(),
-      maxConcurrency: 2,
-      maxRequestRetries: 1,
-      requestHandlerTimeoutSecs: 45,
+      maxConcurrency: opts.concurrency ?? 4,
+      maxRequestRetries: opts.maxRetries ?? 0,
+      requestHandlerTimeoutSecs: opts.requestTimeoutSecs ?? 20,
+      // Never let a single hung navigation exceed the handler budget.
+      navigationTimeoutSecs: opts.requestTimeoutSecs ?? 20,
+      // Cap total work so a mis-sized URL list can't balloon the run.
+      maxRequestsPerCrawl: urls.length,
       additionalMimeTypes: ["application/json"],
       async requestHandler({ request, body }) {
         pages.push({ url: request.url, html: body.toString() });

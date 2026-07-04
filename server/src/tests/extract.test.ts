@@ -112,3 +112,29 @@ test("extractListings tries strategies in order and never throws on garbage", ()
   assert.deepEqual(extractListings("not html at all %%%"), []);
   assert.equal(extractListings(JSONLD_PAGE).length, 1);
 });
+
+// AutoTrader regression: JSON-LD is served WITHOUT a per-listing year, so those
+// records are structurally present but useless (normalize needs a year). The
+// DOM cards carry the year in visible text. extractListings must prefer the
+// strategy with the most USABLE (year+price) records, not the first non-empty
+// one — otherwise a live run finds ~1 listing instead of a page full.
+const YEARLESS_JSONLD_PLUS_CARDS = `<!doctype html><html><head>
+<script type="application/ld+json">
+[
+  {"@type":"Car","name":"Toyota Corolla SE","brand":"Toyota","model":"Corolla","offers":{"price":24999}},
+  {"@type":"Car","name":"Toyota Corolla LE","brand":"Toyota","model":"Corolla","offers":{"price":21988}},
+  {"@type":"Car","name":"Toyota Corolla L","brand":"Toyota","model":"Corolla","offers":{"price":19995}}
+]
+</script></head><body>
+<div class="vehicle-card"><a href="/a/1">2022 Toyota Corolla SE</a><span>$24,999</span><span>35,000 km</span></div>
+<div class="vehicle-card"><a href="/a/2">2020 Toyota Corolla LE</a><span>$21,988</span><span>67,000 km</span></div>
+<div class="vehicle-card"><a href="/a/3">2019 Toyota Corolla L</a><span>$19,995</span><span>72,000 km</span></div>
+</body></html>`;
+
+test("year-less JSON-LD must not shadow the year-bearing DOM cards", () => {
+  const rows = extractListings(YEARLESS_JSONLD_PLUS_CARDS);
+  assert.equal(rows.length, 3, "should keep 3 records");
+  // The chosen strategy must be the cards: every record carries a real year.
+  const withYear = rows.filter((r) => /\b20\d\d\b/.test(String(r.year) + " " + String(r.title)));
+  assert.equal(withYear.length, 3, "all chosen records must have a usable year");
+});

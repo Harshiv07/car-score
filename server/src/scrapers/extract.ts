@@ -216,16 +216,46 @@ export function extractCards(html: string): RawVehicleRecord[] {
   return out;
 }
 
-/** Run all three strategies; return the first that yields records. */
+/**
+ * A record is only worth keeping if a model year and a price can be recovered
+ * from it — normalize drops anything missing either. Some sites (AutoTrader)
+ * emit JSON-LD `Car` objects with a price but no year field; those records are
+ * structurally present but useless, and must not shadow a later strategy (the
+ * DOM cards) that *does* carry the year in visible text.
+ */
+function isUsable(r: RawVehicleRecord): boolean {
+  const hasPrice = r.price != null && r.price !== "";
+  const yearHaystack = [r.year, r.title, r.name, r.trim].filter(Boolean).join(" ");
+  const hasYear = /\b(19\d\d|20[0-3]\d)\b/.test(yearHaystack);
+  return hasPrice && hasYear;
+}
+
+/**
+ * Run all three strategies (JSON-LD, state blob, DOM cards — in reliability
+ * order) and keep the one that produces the most *usable* records. This beats
+ * "first non-empty wins": AutoTrader emits year-less JSON-LD with a couple of
+ * accidentally-usable rows, which would otherwise shadow the DOM cards that
+ * carry the year for every tile. Reliability order breaks ties, and a strategy
+ * with zero usable records is only used if nothing better exists.
+ */
 export function extractListings(html: string | null): RawVehicleRecord[] {
   if (!html) return [];
+  let best: RawVehicleRecord[] = [];
+  let bestUsable = -1;
   for (const fn of [extractJsonLd, extractStateBlob, extractCards]) {
+    let rows: RawVehicleRecord[];
     try {
-      const rows = fn(html);
-      if (rows && rows.length) return rows;
+      rows = fn(html);
     } catch {
-      /* try next strategy */
+      continue;
+    }
+    if (!rows || rows.length === 0) continue;
+    const usable = rows.filter(isUsable).length;
+    // Strictly-greater keeps the earlier (more reliable) strategy on ties.
+    if (usable > bestUsable) {
+      best = rows;
+      bestUsable = usable;
     }
   }
-  return [];
+  return best;
 }
