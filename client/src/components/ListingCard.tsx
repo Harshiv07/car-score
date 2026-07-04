@@ -1,6 +1,6 @@
 import { Link } from "react-router-dom";
 import { ScoredListing } from "../api/types";
-import { Badge, cad, DealPill, km, ScoreDonut, Stars } from "./ui";
+import { Badge, cad, DealPill, isRecent, km, NewBadge, ScoreDonut, Stars, timeAgo } from "./ui";
 
 function cat(l: ScoredListing, key: string) {
   return l.score.breakdown.find((c) => c.key === key);
@@ -26,6 +26,7 @@ export function ListingCard({ listing, rank }: { listing: ScoredListing; rank: n
             </h3>
             <DealPill rating={listing.score.dealRating} />
             {listing.cpo && <Badge label="CPO" />}
+            {isRecent(listing.firstSeenAt) && <NewBadge />}
           </div>
 
           <div className="mt-1 flex flex-wrap items-baseline gap-x-4 gap-y-1 text-sm">
@@ -56,6 +57,14 @@ export function ListingCard({ listing, rank }: { listing: ScoredListing; rank: n
               {listing.city ? ` · ${listing.city}${listing.province ? `, ${listing.province}` : ""}` : ""}
             </span>
             <span className="font-mono">{listing.sourceWebsite}</span>
+            <span title={new Date(listing.firstSeenAt).toLocaleString()}>
+              Added {timeAgo(listing.firstSeenAt)}
+            </span>
+            {listing.lastSeenAt !== listing.firstSeenAt && (
+              <span title={new Date(listing.lastSeenAt).toLocaleString()}>
+                · refreshed {timeAgo(listing.lastSeenAt)}
+              </span>
+            )}
           </div>
 
           {listing.badges.length > 0 && (

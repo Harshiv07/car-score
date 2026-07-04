@@ -5,6 +5,34 @@ import { DealRating } from "../api/types";
 export const cad = (n: number) => `$${Math.round(n).toLocaleString("en-CA")}`;
 export const km = (n: number) => `${Math.round(n).toLocaleString("en-CA")} km`;
 
+/** Coarse relative time for "added / last seen" timestamps. */
+export function timeAgo(iso: string): string {
+  const diffMs = Date.now() - new Date(iso).getTime();
+  const min = Math.floor(diffMs / 60000);
+  if (min < 1) return "just now";
+  if (min < 60) return `${min}m ago`;
+  const hr = Math.floor(min / 60);
+  if (hr < 24) return `${hr}h ago`;
+  const day = Math.floor(hr / 24);
+  if (day < 30) return `${day}d ago`;
+  const mo = Math.floor(day / 30);
+  if (mo < 12) return `${mo}mo ago`;
+  return `${Math.floor(mo / 12)}y ago`;
+}
+
+export function isRecent(iso: string, hours = 48): boolean {
+  return Date.now() - new Date(iso).getTime() < hours * 3600 * 1000;
+}
+
+export function NewBadge() {
+  return (
+    <span className="inline-flex items-center gap-1 rounded-full bg-cyan-500/15 px-2 py-0.5 text-[11px] font-bold text-cyan-600 dark:text-cyan-400">
+      <span className="h-1.5 w-1.5 rounded-full bg-cyan-500" />
+      NEW
+    </span>
+  );
+}
+
 export function Stars({ value, className = "" }: { value: number; className?: string }) {
   const full = Math.floor(value);
   const half = value - full >= 0.5;

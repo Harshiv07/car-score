@@ -1,7 +1,7 @@
 import { Link, useParams } from "react-router-dom";
 import { useListingDetail } from "../api/hooks";
 import { ListingCard } from "../components/ListingCard";
-import { Badge, cad, DealPill, km, scoreColor, Stars } from "../components/ui";
+import { Badge, cad, DealPill, isRecent, km, NewBadge, scoreColor, Stars, timeAgo } from "../components/ui";
 
 const SEVERITY_STYLES: Record<string, string> = {
   major: "text-red-600 dark:text-red-400",
@@ -44,11 +44,17 @@ export function DetailPage() {
             <div className="flex flex-wrap items-center gap-2">
               <h1 className="text-2xl font-extrabold tracking-tight text-slate-900 dark:text-white">{l.title}</h1>
               <DealPill rating={l.score.dealRating} />
+              {isRecent(l.firstSeenAt) && <NewBadge />}
             </div>
             <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
               {l.dealer ? `${l.dealer} · ` : ""}
               {l.city ? `${l.city}${l.province ? `, ${l.province}` : ""} · ` : ""}
               via {l.sourceWebsite}
+              {" · "}
+              <span title={new Date(l.firstSeenAt).toLocaleString()}>added {timeAgo(l.firstSeenAt)}</span>
+              {l.lastSeenAt !== l.firstSeenAt && (
+                <span title={new Date(l.lastSeenAt).toLocaleString()}> · refreshed {timeAgo(l.lastSeenAt)}</span>
+              )}
             </p>
             {l.badges.length > 0 && (
               <div className="mt-2 flex flex-wrap gap-1.5">{l.badges.map((b) => <Badge key={b} label={b} />)}</div>
