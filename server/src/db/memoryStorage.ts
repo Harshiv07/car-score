@@ -9,7 +9,7 @@ interface Snapshot {
   scrapeHistory: ScrapeHistoryEntry[];
 }
 
-const DATA_DIR = path.join(__dirname, "..", "..", ".data");
+const DATA_DIR = process.env.CARSCORE_DATA_DIR ?? path.join(__dirname, "..", "..", ".data");
 const DATA_FILE = path.join(DATA_DIR, "db.json");
 
 /**

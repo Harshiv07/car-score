@@ -1,5 +1,6 @@
 import { Link } from "react-router-dom";
 import { ScoredListing } from "../api/types";
+import { useFavorites } from "../hooks/useFavorites";
 import { Badge, cad, DealPill, isRecent, km, NewBadge, ScoreDonut, Stars, timeAgo } from "./ui";
 
 function cat(l: ScoredListing, key: string) {
@@ -9,21 +10,54 @@ function cat(l: ScoredListing, key: string) {
 export function ListingCard({ listing, rank }: { listing: ScoredListing; rank: number }) {
   const rel = cat(listing, "reliability");
   const savings = listing.score.market.savings;
+  const { isFavorite, toggle } = useFavorites();
+  const fav = isFavorite(listing.id);
+
   return (
     <Link
       to={`/listing/${listing.id}`}
-      className="group block rounded-xl border border-slate-200 bg-white p-4 transition hover:border-cyan-500/50 hover:shadow-lg hover:shadow-cyan-500/5 dark:border-slate-800 dark:bg-slate-900"
+      className="group relative block rounded-xl border border-slate-200 bg-white p-4 transition hover:border-cyan-500/50 hover:shadow-lg hover:shadow-cyan-500/5 dark:border-slate-800 dark:bg-slate-900"
     >
+      <button
+        onClick={(e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          toggle(listing.id);
+        }}
+        aria-pressed={fav}
+        aria-label={fav ? "Remove from favourites" : "Add to favourites"}
+        title={fav ? "Remove from favourites" : "Add to favourites"}
+        className={`absolute right-3 top-3 grid h-8 w-8 place-items-center rounded-full text-lg transition ${
+          fav
+            ? "text-rose-500 hover:bg-rose-500/10"
+            : "text-slate-300 hover:bg-slate-100 hover:text-rose-400 dark:text-slate-600 dark:hover:bg-slate-800"
+        }`}
+      >
+        {fav ? "♥" : "♡"}
+      </button>
+
       <div className="flex items-start gap-4">
         <div className="hidden w-8 pt-1 text-center font-mono text-sm font-bold text-slate-400 dark:text-slate-500 sm:block">
           #{rank}
         </div>
         <ScoreDonut total={listing.score.total} />
-        <div className="min-w-0 flex-1">
+        <div className="min-w-0 flex-1 pr-8">
           <div className="flex flex-wrap items-center gap-2">
             <h3 className="truncate text-base font-bold text-slate-900 group-hover:text-cyan-700 dark:text-slate-100 dark:group-hover:text-cyan-300">
               {listing.title}
             </h3>
+            {listing.listingUrl && (
+              <a
+                href={listing.listingUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                onClick={(e) => e.stopPropagation()}
+                title={`Open on ${listing.sourceWebsite}`}
+                className="text-sm font-semibold text-cyan-600 hover:underline dark:text-cyan-400"
+              >
+                ↗
+              </a>
+            )}
             <DealPill rating={listing.score.dealRating} />
             {listing.cpo && <Badge label="CPO" />}
             {isRecent(listing.firstSeenAt) && <NewBadge />}
@@ -57,14 +91,10 @@ export function ListingCard({ listing, rank }: { listing: ScoredListing; rank: n
               {listing.city ? ` · ${listing.city}${listing.province ? `, ${listing.province}` : ""}` : ""}
             </span>
             <span className="font-mono">{listing.sourceWebsite}</span>
-            <span title={new Date(listing.firstSeenAt).toLocaleString()}>
+            <span className="ml-auto text-right" title={new Date(listing.firstSeenAt).toLocaleString()}>
               Added {timeAgo(listing.firstSeenAt)}
+              {listing.lastSeenAt !== listing.firstSeenAt && ` · refreshed ${timeAgo(listing.lastSeenAt)}`}
             </span>
-            {listing.lastSeenAt !== listing.firstSeenAt && (
-              <span title={new Date(listing.lastSeenAt).toLocaleString()}>
-                · refreshed {timeAgo(listing.lastSeenAt)}
-              </span>
-            )}
           </div>
 
           {listing.badges.length > 0 && (

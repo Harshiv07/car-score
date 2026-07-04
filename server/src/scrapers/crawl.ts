@@ -61,8 +61,16 @@ export async function crawlPages(urls: string[], log: LogFn): Promise<CrawlOutco
   return { pages, blocked, errors };
 }
 
+/**
+ * Once a launch fails because no browser binary is installed, remember it —
+ * every later fallback in the same process would fail identically, so we log
+ * the actionable message once instead of once per source.
+ */
+let browserUnavailable = false;
+
 /** Real-browser fallback (Playwright/Chromium). Returns rendered HTML or null. */
 export async function fetchWithPlaywright(url: string, log: LogFn): Promise<string | null> {
+  if (browserUnavailable) return null;
   try {
     const { chromium } = await import("playwright");
     const proxyUrl = process.env.HTTPS_PROXY ?? process.env.HTTP_PROXY;
@@ -86,7 +94,17 @@ export async function fetchWithPlaywright(url: string, log: LogFn): Promise<stri
       await browser.close();
     }
   } catch (e) {
-    log("warn", `playwright fallback failed for ${url}: ${(e as Error).message.slice(0, 120)}`);
+    const msg = (e as Error).message;
+    if (/Executable doesn't exist|browserType.launch/i.test(msg)) {
+      browserUnavailable = true;
+      log(
+        "warn",
+        "Browser fallback disabled: Chromium is not installed on this host. " +
+          "Add `npx playwright install chromium` to the build command (see README) to enable it."
+      );
+    } else {
+      log("warn", `playwright fallback failed for ${url}: ${msg.slice(0, 120)}`);
+    }
     return null;
   }
 }

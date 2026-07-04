@@ -1,12 +1,21 @@
+import { useMemo } from "react";
 import { useSearchParams } from "react-router-dom";
 import { useListings, useMeta } from "../api/hooks";
 import { FiltersSidebar } from "../components/FiltersSidebar";
 import { ListingCard } from "../components/ListingCard";
+import { Pagination } from "../components/Pagination";
 import { RefreshButton } from "../components/RefreshButton";
+
+const DEFAULT_PAGE_SIZE = 10;
 
 export function LeaderboardPage() {
   const [params, setParams] = useSearchParams();
-  const { data, isLoading, isError, error } = useListings(params);
+  const queryParams = useMemo(() => {
+    const p = new URLSearchParams(params);
+    if (!p.has("pageSize")) p.set("pageSize", String(DEFAULT_PAGE_SIZE));
+    return p;
+  }, [params]);
+  const { data, isLoading, isError, error } = useListings(queryParams);
   const { data: meta } = useMeta();
 
   const setParam = (key: string, value: string) => {
@@ -103,6 +112,25 @@ export function LeaderboardPage() {
               <ListingCard key={l.id} listing={l} rank={(data.page - 1) * data.pageSize + i + 1} />
             ))}
           </div>
+
+          {data && (
+            <Pagination
+              page={data.page}
+              pageSize={data.pageSize}
+              total={data.total}
+              onPage={(p) =>
+                setParams(
+                  (prev) => {
+                    const next = new URLSearchParams(prev);
+                    if (p <= 1) next.delete("page");
+                    else next.set("page", String(p));
+                    return next;
+                  },
+                  { replace: true }
+                )
+              }
+            />
+          )}
         </div>
       </div>
     </div>

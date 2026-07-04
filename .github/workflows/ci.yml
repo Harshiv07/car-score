@@ -24,6 +24,9 @@ jobs:
       - name: Typecheck server
         run: npm run typecheck -w server
 
+      - name: Test server (scrape pipeline)
+        run: npm test -w server
+
       - name: Build server
         run: npm run build -w server
 

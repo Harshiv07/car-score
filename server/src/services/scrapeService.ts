@@ -142,6 +142,14 @@ async function runScrape(runId: string): Promise<void> {
     "info",
     `Scrape complete: ${entry.totalFound} found, ${entry.totalInserted} new, ${entry.totalUpdated} refreshed.`
   );
+  if (entry.totalFound === 0) {
+    pushLog(
+      "warn",
+      "Every source returned 0 listings. This usually means the host's network is blocked by the sites " +
+        "(datacenter IPs often are), the browser fallback isn't installed, or site markup changed. " +
+        "Run `npm test -w server` to confirm the extraction pipeline itself is healthy."
+    );
+  }
   state.running = false;
   state.currentSource = null;
 }
