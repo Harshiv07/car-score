@@ -31,12 +31,20 @@ Only these are scraped and scored:
 ## Quick start
 
 ```bash
-npm install          # installs server + client workspaces
+npm run setup        # npm install + downloads Chromium for the browser fallback
 npm run dev          # API on :4000, app on :3000 (proxied /api)
+npm test -w server   # scrape-pipeline test suite (no network needed)
 ```
 
 No database needed for development — without `MONGODB_URI` the server uses a
 JSON-file store (`server/.data/db.json`) seeded with representative listings.
+
+> **Why Chromium matters:** the Thunder Bay dealer sites (Wayne Toyota, Gore
+> Motors Honda, Half-Way Motors Mazda, Superior Hyundai) render their
+> inventory client-side, so the static Cheerio pass finds nothing on them by
+> design — they are only scrapeable through the Playwright browser fallback.
+> If a scrape log says "Browser fallback disabled: Chromium is not
+> installed", run `npx playwright install chromium` and scrape again.
 
 ### Production (MongoDB)
 

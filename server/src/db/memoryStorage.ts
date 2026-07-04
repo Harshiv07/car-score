@@ -9,21 +9,30 @@ interface Snapshot {
   scrapeHistory: ScrapeHistoryEntry[];
 }
 
-const DATA_DIR = process.env.CARSCORE_DATA_DIR ?? path.join(__dirname, "..", "..", ".data");
-const DATA_FILE = path.join(DATA_DIR, "db.json");
-
 /**
  * JSON-file-backed storage used when no MONGODB_URI is configured.
  * Persists across restarts; seeds itself on first run.
+ *
+ * The data directory is resolved at construction time (not module load) so
+ * tests can point CARSCORE_DATA_DIR at a temp dir regardless of import
+ * hoisting order.
  */
 export class MemoryStorage implements Storage {
   readonly kind = "memory" as const;
   private data: Snapshot = { listings: [], scrapeHistory: [] };
+  private readonly dataFile: string;
+  private readonly dataDir: string;
+
+  constructor(dataDir?: string) {
+    this.dataDir =
+      dataDir ?? process.env.CARSCORE_DATA_DIR ?? path.join(__dirname, "..", "..", ".data");
+    this.dataFile = path.join(this.dataDir, "db.json");
+  }
 
   async init(): Promise<void> {
-    await fs.mkdir(DATA_DIR, { recursive: true });
+    await fs.mkdir(this.dataDir, { recursive: true });
     try {
-      const raw = await fs.readFile(DATA_FILE, "utf8");
+      const raw = await fs.readFile(this.dataFile, "utf8");
       this.data = JSON.parse(raw) as Snapshot;
     } catch {
       this.data = { listings: [...SEED_LISTINGS], scrapeHistory: [] };
@@ -36,7 +45,7 @@ export class MemoryStorage implements Storage {
   }
 
   private async flush(): Promise<void> {
-    await fs.writeFile(DATA_FILE, JSON.stringify(this.data, null, 2), "utf8");
+    await fs.writeFile(this.dataFile, JSON.stringify(this.data, null, 2), "utf8");
   }
 
   async getAllListings(): Promise<Listing[]> {

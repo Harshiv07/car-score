@@ -69,6 +69,44 @@ test("DOM-card fallback finds year+price tiles", () => {
   assert.ok(rows.some((r) => (r.title ?? "").includes("Tucson")));
 });
 
+// AutoTrader-style page: a results wrapper whose class also matches the tile
+// selector, containing several LONG tiles (>600 chars each — the old cap
+// silently dropped these, which is why a live scrape found only 1 listing).
+function longTile(year: number, model: string, slug: string, price: string): string {
+  const filler =
+    "Certified Pre-Owned One Owner No Accidents Heated Seats Apple CarPlay Android Auto " +
+    "Adaptive Cruise Control Lane Keep Assist Blind Spot Monitoring Backup Camera Alloy Wheels " +
+    "Bluetooth Push Button Start Keyless Entry Dual Zone Climate Remote Start Power Liftgate " +
+    "Dealer Demo Fresh Trade Local Vehicle Winter Tires Included Financing Available OAC " +
+    "Extended Warranty Available Certified Technicians 150 Point Inspection Free CARFAX Report " +
+    "Price includes admin fee Call for details Book a test drive today Trade-ins welcome";
+  return `<div class="result-item">
+    <a href="/a/${slug}/">${year} Toyota ${model} XLE AWD</a>
+    <span class="price-amount">$${price}</span>
+    <span class="odometer">64,000 km</span>
+    <p>${filler}</p>
+  </div>`;
+}
+
+const AUTOTRADER_STYLE_PAGE = `<!doctype html><html><body>
+<div class="search-results-wrapper listing-container">
+  ${longTile(2021, "RAV4", "toyota-rav4-thunder-bay-1", "29,800")}
+  ${longTile(2020, "RAV4", "toyota-rav4-barrie-2", "25,988")}
+  ${longTile(2019, "RAV4", "toyota-rav4-toronto-3", "23,500")}
+</div>
+</body></html>`;
+
+test("DOM-card fallback handles long tiles and skips the wrapper (AutoTrader regression)", () => {
+  const rows = extractCards(AUTOTRADER_STYLE_PAGE);
+  assert.equal(rows.length, 3, `expected all 3 long tiles, got ${rows.length}`);
+  const urls = rows.map((r) => r.url).sort();
+  assert.deepEqual(urls, [
+    "/a/toyota-rav4-barrie-2/",
+    "/a/toyota-rav4-thunder-bay-1/",
+    "/a/toyota-rav4-toronto-3/",
+  ]);
+});
+
 test("extractListings tries strategies in order and never throws on garbage", () => {
   assert.deepEqual(extractListings(null), []);
   assert.deepEqual(extractListings("not html at all %%%"), []);

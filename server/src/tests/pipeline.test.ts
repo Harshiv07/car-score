@@ -10,9 +10,6 @@ import assert from "node:assert/strict";
 import { mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
-
-process.env.CARSCORE_DATA_DIR = mkdtempSync(path.join(tmpdir(), "carscore-test-"));
-
 import { extractListings } from "../scrapers/extract";
 import { normalizeRecord } from "../scrapers/normalize";
 import { MemoryStorage } from "../db/memoryStorage";
@@ -35,7 +32,7 @@ const INVENTORY_PAGE = `<!doctype html><html><head>
 let storage: MemoryStorage;
 
 before(async () => {
-  storage = new MemoryStorage();
+  storage = new MemoryStorage(mkdtempSync(path.join(tmpdir(), "carscore-test-")));
   await storage.init();
 });
 

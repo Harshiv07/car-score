@@ -177,17 +177,31 @@ export function extractCards(html: string): RawVehicleRecord[] {
   const seen = new Set<string>();
   const sel =
     '[class*="vehicle"],[class*="listing"],[class*="inventory"],[class*="result"],[class*="srp"],[class*="vcard"],article';
-  $(sel).each((_, el) => {
+  const candidates = $(sel).toArray();
+  const candidateSet = new Set(candidates);
+
+  for (const el of candidates) {
     const $el = $(el);
+    // Only take the innermost matching container: if a matching descendant
+    // exists, this node is a wrapper (results grid, page shell) — skip it and
+    // let the tile itself be processed. This is what lets us accept long
+    // tiles (AutoTrader's run 1,000+ chars) without swallowing whole pages.
+    const hasMatchingChild = $el.find(sel).toArray().some((child) => candidateSet.has(child));
+    if (hasMatchingChild) continue;
+
     const text = $el.text().replace(/\s+/g, " ").trim();
-    if (!text || text.length > 600) return; // skip page-level wrappers
-    if (!/\b(199\d|20[0-3]\d)\b/.test(text)) return;
-    if (!/\$\s?\d{1,3}[,\d]{3,}/.test(text)) return;
-    const key = text.slice(0, 120);
-    if (seen.has(key)) return;
-    seen.add(key);
-    const priceMatch = text.match(/\$\s?(\d{1,3}(?:[,\s]\d{3})+)/);
+    if (!text || text.length > 1500) continue;
+    if (!/\b(199\d|20[0-3]\d)\b/.test(text)) continue;
+    if (!/\$\s?\d{1,3}[,\d]{3,}/.test(text)) continue;
+
     const link = $el.find("a[href]").attr("href");
+    // Dedupe by detail-page link when available — tiles for different cars
+    // can share a text prefix (badges, dealer name), but never a VDP URL.
+    const key = link || text.slice(0, 120);
+    if (seen.has(key)) continue;
+    seen.add(key);
+
+    const priceMatch = text.match(/\$\s?(\d{1,3}(?:[,\s]\d{3})+)/);
     const img = $el.find("img[src]").attr("src");
     out.push({
       title: text.slice(0, 160),
@@ -198,7 +212,7 @@ export function extractCards(html: string): RawVehicleRecord[] {
       url: link || null,
       image: img || null,
     });
-  });
+  }
   return out;
 }
 
