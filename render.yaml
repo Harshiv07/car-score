@@ -1,0 +1,19 @@
+# Render Blueprint — deploys the CarScore API as a persistent Node web service.
+# In the Render dashboard: New > Blueprint > point at this repo > it reads this file.
+# After creation, set MONGODB_URI in the service's Environment tab (get a free
+# cluster at https://www.mongodb.com/cloud/atlas — copy its connection string).
+services:
+  - type: web
+    name: carscore-api
+    runtime: node
+    plan: free
+    rootDir: .
+    buildCommand: npm install && npm run build -w server
+    startCommand: npm run start -w server
+    envVars:
+      - key: NODE_VERSION
+        value: 20.18.0
+      - key: MONGODB_URI
+        sync: false
+      - key: PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD
+        value: "1"
