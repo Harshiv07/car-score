@@ -1,5 +1,5 @@
 {
-  "_comment": "Thunder Bay dealers. `platform: convertus` dealers (Wayne Toyota, Superior Hyundai) are scraped browser-free via the dealer's same-origin Convertus VMS JSON proxy — cp is the Convertus company id (discover it by watching the ajax-vehicles.php request the used-inventory page makes). Other dealers fall back to the generic HTML scraper and only yield data when SCRAPE_JS_FALLBACK=1 (they render client-side and/or sit behind bot challenges).",
+  "_comment": "Thunder Bay dealers, all scraped browser-free. `convertus` (Wayne Toyota, Superior Hyundai): same-origin Convertus VMS JSON proxy — `cp` is the Convertus company id (watch the ajax-vehicles.php request the used page makes). `stm` (Gore Motors): WordPress Motors theme — reads the per-vehicle pages listed in `domain`/listings-sitemap.xml. `html` (default): generic three-strategy HTML scraper, best-effort (only yields with SCRAPE_JS_FALLBACK=1).",
   "dealers": [
     {
       "key": "waynetoyota",
@@ -22,11 +22,8 @@
       "name": "Gore Motors Honda",
       "city": "Thunder Bay",
       "province": "ON",
-      "platform": "html",
-      "urls": [
-        "https://goremotorshonda.com/used-car-inventory-thunder-bay-ontario/?make=honda&serie=civic",
-        "https://goremotorshonda.com/used-car-inventory-thunder-bay-ontario/?make=honda&serie=cr-v"
-      ]
+      "platform": "stm",
+      "domain": "goremotorshonda.com"
     },
     {
       "key": "halfwaymotorsmazda",
