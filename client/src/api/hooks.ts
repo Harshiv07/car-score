@@ -16,6 +16,31 @@ export function useListings(params: URLSearchParams) {
   });
 }
 
+/** Aggregate stats for the leaderboard KPI row (whole inventory, best-savings first). */
+export function useListingStats() {
+  return useQuery({
+    queryKey: ["listingStats"],
+    queryFn: () => apiGet<ListingsResponse>("/api/listings?pageSize=100&sort=deal"),
+    staleTime: 30_000,
+    select: (data) => {
+      const ls = data.listings;
+      const avgScore = ls.length ? Math.round(ls.reduce((s, l) => s + l.score.total, 0) / ls.length) : 0;
+      const best = ls.reduce<(typeof ls)[number] | null>(
+        (b, l) => (l.score.market.savings > (b?.score.market.savings ?? -Infinity) ? l : b),
+        null
+      );
+      const sources = new Set(ls.map((l) => l.sourceWebsite));
+      return {
+        totalListings: data.totalUnfiltered,
+        avgScore,
+        bestSavings: best && best.score.market.savings > 0 ? best.score.market.savings : 0,
+        bestSavingsTitle: best?.title ?? null,
+        sourcesActive: sources.size,
+      };
+    },
+  });
+}
+
 export function useListingDetail(id: string | undefined) {
   return useQuery({
     queryKey: ["listing", id],

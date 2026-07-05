@@ -1,13 +1,13 @@
 import { Link } from "react-router-dom";
 import { ScoredListing } from "../api/types";
 import { useFavorites } from "../hooks/useFavorites";
-import { Badge, cad, DealPill, isRecent, km, NewBadge, ScoreDonut, Stars, timeAgo } from "./ui";
+import { Badge, cad, DealPill, isRecent, km, NewBadge, ScoreGauge, Stars, timeAgo } from "./ui";
 
 function cat(l: ScoredListing, key: string) {
   return l.score.breakdown.find((c) => c.key === key);
 }
 
-export function ListingCard({ listing, rank }: { listing: ScoredListing; rank: number }) {
+export function ListingCard({ listing, rank }: { listing: ScoredListing; rank?: number }) {
   const rel = cat(listing, "reliability");
   const savings = listing.score.market.savings;
   const { isFavorite, toggle } = useFavorites();
@@ -16,7 +16,7 @@ export function ListingCard({ listing, rank }: { listing: ScoredListing; rank: n
   return (
     <Link
       to={`/listing/${listing.id}`}
-      className="group relative block rounded-xl border border-slate-200 bg-white p-4 transition hover:border-cyan-500/50 hover:shadow-lg hover:shadow-cyan-500/5 dark:border-slate-800 dark:bg-slate-900"
+      className="group relative block rounded-2xl border border-line bg-surface p-4 transition hover:border-brand/40 hover:shadow-lg hover:shadow-black/20"
     >
       <button
         onClick={(e) => {
@@ -28,59 +28,58 @@ export function ListingCard({ listing, rank }: { listing: ScoredListing; rank: n
         aria-label={fav ? "Remove from favourites" : "Add to favourites"}
         title={fav ? "Remove from favourites" : "Add to favourites"}
         className={`absolute right-3 top-3 grid h-8 w-8 place-items-center rounded-full text-lg transition ${
-          fav
-            ? "text-rose-500 hover:bg-rose-500/10"
-            : "text-slate-300 hover:bg-slate-100 hover:text-rose-400 dark:text-slate-600 dark:hover:bg-slate-800"
+          fav ? "text-bad hover:bg-bad/10" : "text-faint hover:bg-surface-2 hover:text-bad"
         }`}
       >
         {fav ? "♥" : "♡"}
       </button>
 
       <div className="flex items-start gap-4">
-        <div className="hidden w-8 pt-1 text-center font-mono text-sm font-bold text-slate-400 dark:text-slate-500 sm:block">
-          #{rank}
+        {rank != null && (
+          <div className="nums hidden w-6 pt-2 text-center text-sm font-bold text-faint sm:block">{rank}</div>
+        )}
+        <div className="pt-1">
+          <ScoreGauge total={listing.score.total} size={66} />
         </div>
-        <ScoreDonut total={listing.score.total} />
+
         <div className="min-w-0 flex-1 pr-8">
           <div className="flex flex-wrap items-center gap-2">
-            <h3 className="truncate text-base font-bold text-slate-900 group-hover:text-cyan-700 dark:text-slate-100 dark:group-hover:text-cyan-300">
+            <h3 className="truncate text-[15px] font-bold text-text transition group-hover:text-brand">
               {listing.title}
             </h3>
             {listing.listingUrl && (
-              <a
-                href={listing.listingUrl}
-                target="_blank"
-                rel="noopener noreferrer"
-                onClick={(e) => e.stopPropagation()}
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  window.open(listing.listingUrl!, "_blank", "noopener,noreferrer");
+                }}
                 title={`Open on ${listing.sourceWebsite}`}
-                className="text-sm font-semibold text-cyan-600 hover:underline dark:text-cyan-400"
+                className="text-sm font-semibold text-brand hover:text-brand-strong"
               >
                 ↗
-              </a>
+              </button>
             )}
             <DealPill rating={listing.score.dealRating} />
             {listing.cpo && <Badge label="CPO" />}
             {isRecent(listing.firstSeenAt) && <NewBadge />}
           </div>
 
-          <div className="mt-1 flex flex-wrap items-baseline gap-x-4 gap-y-1 text-sm">
-            <span className="font-mono text-lg font-bold text-slate-900 dark:text-white">{cad(listing.price)}</span>
+          <div className="mt-1.5 flex flex-wrap items-baseline gap-x-4 gap-y-1 text-sm">
+            <span className="nums text-lg font-extrabold text-text">{cad(listing.price)}</span>
             {savings > 0 ? (
-              <span className="font-semibold text-emerald-600 dark:text-emerald-400">
-                {cad(savings)} below market
-              </span>
+              <span className="nums font-semibold text-good">{cad(savings)} below market</span>
             ) : savings < -500 ? (
-              <span className="font-semibold text-amber-600 dark:text-amber-400">
-                {cad(-savings)} above market
-              </span>
+              <span className="nums font-semibold text-bad">{cad(-savings)} above market</span>
             ) : null}
-            <span className="text-slate-500 dark:text-slate-400">
+            <span className="nums text-muted">
               {listing.mileageKm != null ? km(listing.mileageKm) : "mileage n/a"}
             </span>
-            <span className="text-slate-500 dark:text-slate-400">{listing.drivetrain}</span>
+            <span className="text-muted">{listing.drivetrain}</span>
           </div>
 
-          <div className="mt-1.5 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-slate-500 dark:text-slate-400">
+          <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-muted">
             {rel && (
               <span className="flex items-center gap-1">
                 Reliability <Stars value={rel.stars} />
@@ -90,15 +89,15 @@ export function ListingCard({ listing, rank }: { listing: ScoredListing; rank: n
               {listing.dealer ?? "Private / aggregator"}
               {listing.city ? ` · ${listing.city}${listing.province ? `, ${listing.province}` : ""}` : ""}
             </span>
-            <span className="font-mono">{listing.sourceWebsite}</span>
-            <span className="ml-auto text-right" title={new Date(listing.firstSeenAt).toLocaleString()}>
+            <span className="text-faint">{listing.sourceWebsite}</span>
+            <span className="ml-auto text-right text-faint" title={new Date(listing.firstSeenAt).toLocaleString()}>
               Added {timeAgo(listing.firstSeenAt)}
               {listing.lastSeenAt !== listing.firstSeenAt && ` · refreshed ${timeAgo(listing.lastSeenAt)}`}
             </span>
           </div>
 
           {listing.badges.length > 0 && (
-            <div className="mt-2 flex flex-wrap gap-1.5">
+            <div className="mt-2.5 flex flex-wrap gap-1.5">
               {listing.badges.map((b) => (
                 <Badge key={b} label={b} />
               ))}
