@@ -3,6 +3,7 @@ import cors from "cors";
 import { listingsRouter } from "./routes/listings";
 import { scrapeRouter } from "./routes/scrape";
 import { metaRouter } from "./routes/meta";
+import { newCarsRouter } from "./routes/newcars";
 import { getStorage } from "./db/storage";
 
 const PORT = Number(process.env.PORT ?? 4000);
@@ -24,6 +25,7 @@ async function main() {
   app.use("/api/listings", listingsRouter);
   app.use("/api/scrape", scrapeRouter);
   app.use("/api/meta", metaRouter);
+  app.use("/api/newcars", newCarsRouter);
 
   app.listen(PORT, () => {
     // eslint-disable-next-line no-console
