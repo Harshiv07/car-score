@@ -36,6 +36,10 @@ export function useListingStats() {
         bestSavings: best && best.score.market.savings > 0 ? best.score.market.savings : 0,
         bestSavingsTitle: best?.title ?? null,
         sourcesActive: sources.size,
+        // Keys of the loaded set; `complete` means it's the whole inventory
+        // (so favourites-pruning against it is safe).
+        keys: ls.map((l) => l.dedupeKey),
+        complete: data.totalUnfiltered <= ls.length,
       };
     },
   });

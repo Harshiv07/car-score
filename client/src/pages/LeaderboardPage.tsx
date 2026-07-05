@@ -1,4 +1,4 @@
-import { useMemo } from "react";
+import { useEffect, useMemo } from "react";
 import { useSearchParams } from "react-router-dom";
 import { useListings, useListingStats, useMeta, useScrapeStatus } from "../api/hooks";
 import { FiltersSidebar } from "../components/FiltersSidebar";
@@ -6,6 +6,7 @@ import { ListingCard } from "../components/ListingCard";
 import { Pagination } from "../components/Pagination";
 import { RefreshButton } from "../components/RefreshButton";
 import { Wordmark } from "../App";
+import { useFavorites } from "../hooks/useFavorites";
 import { cad, timeAgo } from "../components/ui";
 
 const DEFAULT_PAGE_SIZE = 10;
@@ -21,6 +22,12 @@ export function LeaderboardPage() {
   const { data: meta } = useMeta();
   const { data: stats } = useListingStats();
   const { data: scrape } = useScrapeStatus();
+  const { prune } = useFavorites();
+
+  // Keep the header favourites count honest once we've seen the whole inventory.
+  useEffect(() => {
+    if (stats?.complete) prune(stats.keys);
+  }, [stats, prune]);
 
   const setParam = (key: string, value: string) => {
     setParams(

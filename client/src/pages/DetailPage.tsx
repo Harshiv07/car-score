@@ -1,7 +1,7 @@
 import { Link, useParams } from "react-router-dom";
 import { useListingDetail } from "../api/hooks";
 import { ListingCard } from "../components/ListingCard";
-import { Badge, cad, DealPill, isRecent, km, NewBadge, ScoreGauge, Stars, timeAgo } from "../components/ui";
+import { Badge, cad, DealPill, isRecent, km, NewBadge, ScoreBadge, Stars, timeAgo } from "../components/ui";
 
 const SEVERITY_STYLES: Record<string, string> = {
   major: "text-bad",
@@ -47,8 +47,7 @@ export function DetailPage() {
       <div className={`mt-3 ${section}`}>
         <div className="flex flex-col gap-5 sm:flex-row sm:items-center">
           <div className="shrink-0">
-            <ScoreGauge total={l.score.total} size={150} />
-            <div className="mt-1 text-center text-xs text-faint">out of 100</div>
+            <ScoreBadge total={l.score.total} variant="hero" />
           </div>
           <div className="min-w-0 flex-1">
             <div className="flex flex-wrap items-center gap-2">

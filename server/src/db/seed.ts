@@ -139,6 +139,12 @@ const rows: SeedRow[] = [
     carfax: true, accident: false, features: ["Heated seats", "Apple CarPlay", "Adaptive cruise", "Lane keep", "X-Mode"] },
 ];
 
+/**
+ * Kept only so existing databases can be cleaned: the app no longer seeds
+ * fabricated demo listings (users want to see scraped inventory only). The
+ * dedupe keys are deterministic, so storage can delete any previously-seeded
+ * rows on startup. Real scraped dealer cars carry a VIN → a different key.
+ */
 export const SEED_LISTINGS: Listing[] = rows.map((r) =>
   finalizeListing({
     title: `${r.year} ${r.make} ${r.model}${r.trim ? ` ${r.trim}` : ""}`,
@@ -172,3 +178,6 @@ export const SEED_LISTINGS: Listing[] = rows.map((r) =>
     features: r.features ?? [],
   })
 );
+
+/** Deterministic dedupe keys of the old seed rows, for one-time cleanup. */
+export const SEED_DEDUPE_KEYS: ReadonlySet<string> = new Set(SEED_LISTINGS.map((l) => l.dedupeKey));

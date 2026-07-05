@@ -1,4 +1,4 @@
-import { useMemo } from "react";
+import { useEffect, useMemo } from "react";
 import { Link } from "react-router-dom";
 import { useListings } from "../api/hooks";
 import { useFavorites } from "../hooks/useFavorites";
@@ -7,13 +7,18 @@ import { ListingCard } from "../components/ListingCard";
 const ALL = new URLSearchParams({ pageSize: "100" });
 
 export function FavoritesPage() {
-  const { ids } = useFavorites();
+  const { ids, prune } = useFavorites();
   const { data, isLoading } = useListings(ALL);
 
   const favorites = useMemo(
-    () => (data ? data.listings.filter((l) => ids.includes(l.id)) : []),
+    () => (data ? data.listings.filter((l) => ids.includes(l.dedupeKey)) : []),
     [data, ids]
   );
+
+  // Once the full inventory is loaded, drop favourites that no longer exist.
+  useEffect(() => {
+    if (data) prune(data.listings.map((l) => l.dedupeKey));
+  }, [data, prune]);
 
   return (
     <div className="mx-auto max-w-7xl px-4 py-8">

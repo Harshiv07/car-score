@@ -1,7 +1,7 @@
 import mongoose, { Schema, model, Model } from "mongoose";
 import { Listing, ScrapeHistoryEntry } from "../types";
 import { Storage, UpsertResult } from "./storage";
-import { SEED_LISTINGS } from "./seed";
+import { SEED_DEDUPE_KEYS } from "./seed";
 import { VEHICLE_MODELS } from "../data/vehicleModels";
 
 /**
@@ -106,9 +106,9 @@ export class MongoStorage implements Storage {
       { upsert: true }
     );
 
-    if ((await this.ListingM.countDocuments()) === 0) {
-      await this.ListingM.insertMany(SEED_LISTINGS);
-    }
+    // One-time cleanup: remove any previously-seeded demo listings so the app
+    // shows scraped inventory only. (No longer seeds on an empty DB.)
+    await this.ListingM.deleteMany({ dedupeKey: { $in: [...SEED_DEDUPE_KEYS] } });
   }
 
   async getAllListings(): Promise<Listing[]> {

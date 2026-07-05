@@ -100,19 +100,51 @@ export function RefreshButton() {
         </div>
       )}
 
-      {showLogs && (status?.logs.length ?? 0) > 0 && (
-        <div className="absolute right-0 z-10 mt-2 max-h-64 w-[min(92vw,32rem)] overflow-y-auto rounded-xl border border-line bg-surface-2 p-3 font-mono text-[11px] leading-relaxed shadow-xl">
-          {status?.logs.map((log, i) => (
-            <div
-              key={i}
-              className={
-                log.level === "error" ? "text-bad" : log.level === "warn" ? "text-brand" : "text-muted"
-              }
-            >
-              <span className="text-faint">{log.time.slice(11, 19)}</span> {log.message}
+      {/* Logs live in a slide-over drawer so they never overlap the listings. */}
+      {showLogs && (
+        <div className="fixed inset-0 z-50" role="dialog" aria-label="Scrape activity" onClick={() => setShowLogs(false)}>
+          <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" />
+          <aside
+            onClick={(e) => e.stopPropagation()}
+            className="absolute right-0 top-0 flex h-full w-[min(92vw,30rem)] flex-col border-l border-line bg-surface shadow-2xl"
+          >
+            <header className="flex items-center justify-between border-b border-line px-4 py-3">
+              <h3 className="flex items-center gap-2 text-sm font-bold text-text">
+                Scrape activity
+                {running && <span className="h-2 w-2 animate-pulse rounded-full bg-brand" />}
+              </h3>
+              <button
+                onClick={() => setShowLogs(false)}
+                aria-label="Close"
+                className="grid h-7 w-7 place-items-center rounded-lg text-muted hover:bg-surface-2 hover:text-text"
+              >
+                ✕
+              </button>
+            </header>
+            {status && (
+              <div className="border-b border-line px-4 py-3 text-xs text-muted">
+                {running ? (
+                  <span className="nums">
+                    Scraping {status.currentSource ?? "…"} ({status.sourcesDone}/{status.sourcesTotal})
+                  </span>
+                ) : (
+                  <span>Idle — {status.logs.length} log line(s) from the last run.</span>
+                )}
+              </div>
+            )}
+            <div className="flex-1 overflow-y-auto p-4 font-mono text-[11px] leading-relaxed">
+              {(status?.logs.length ?? 0) === 0 && <p className="text-faint">No activity yet.</p>}
+              {status?.logs.map((log, i) => (
+                <div
+                  key={i}
+                  className={log.level === "error" ? "text-bad" : log.level === "warn" ? "text-brand" : "text-muted"}
+                >
+                  <span className="text-faint">{log.time.slice(11, 19)}</span> {log.message}
+                </div>
+              ))}
+              <div ref={logsEndRef} />
             </div>
-          ))}
-          <div ref={logsEndRef} />
+          </aside>
         </div>
       )}
     </div>

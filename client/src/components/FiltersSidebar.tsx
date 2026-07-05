@@ -101,37 +101,37 @@ export function FiltersSidebar({
         />
       </div>
 
-      {/* Brand / model */}
-      <div className={row}>
-        <div>
-          <span className={label}>Brand</span>
-          <select
-            className={input}
-            value={get("make")}
-            onChange={(e) => {
-              onChange("make", e.target.value);
-              onChange("model", "");
-            }}
-          >
-            <option value="">All</option>
-            {meta?.brands.map((b) => (
-              <option key={b} value={b}>
-                {b}
-              </option>
-            ))}
-          </select>
-        </div>
-        <div>
-          <span className={label}>Model</span>
-          <select className={input} value={get("model")} onChange={(e) => onChange("model", e.target.value)}>
-            <option value="">All</option>
-            {models.map((m) => (
-              <option key={`${m.make}-${m.model}`} value={m.model}>
-                {m.model}
-              </option>
-            ))}
-          </select>
-        </div>
+      {/* Brand */}
+      <div>
+        <span className={label}>Brand</span>
+        <select
+          className={input}
+          value={get("make")}
+          onChange={(e) => {
+            onChange("make", e.target.value);
+            onChange("model", "");
+          }}
+        >
+          <option value="">All brands</option>
+          {meta?.brands.map((b) => (
+            <option key={b} value={b}>
+              {b}
+            </option>
+          ))}
+        </select>
+      </div>
+
+      {/* Model */}
+      <div>
+        <span className={label}>Model</span>
+        <select className={input} value={get("model")} onChange={(e) => onChange("model", e.target.value)}>
+          <option value="">All models</option>
+          {models.map((m) => (
+            <option key={`${m.make}-${m.model}`} value={m.model}>
+              {m.model}
+            </option>
+          ))}
+        </select>
       </div>
 
       {/* Year */}
@@ -140,32 +140,6 @@ export function FiltersSidebar({
         <div className={row}>
           <input className={input} type="number" placeholder="From" value={get("yearMin")} onChange={(e) => onChange("yearMin", e.target.value)} />
           <input className={input} type="number" placeholder="To" value={get("yearMax")} onChange={(e) => onChange("yearMax", e.target.value)} />
-        </div>
-      </div>
-
-      {/* Province / fuel */}
-      <div className={row}>
-        <div>
-          <span className={label}>Province</span>
-          <select className={input} value={get("province")} onChange={(e) => onChange("province", e.target.value)}>
-            <option value="">All</option>
-            {meta?.provinces.map((p) => (
-              <option key={p} value={p}>
-                {p}
-              </option>
-            ))}
-          </select>
-        </div>
-        <div>
-          <span className={label}>Fuel</span>
-          <select className={input} value={get("fuelType")} onChange={(e) => onChange("fuelType", e.target.value)}>
-            <option value="">All</option>
-            {meta?.fuelTypes.map((f) => (
-              <option key={f} value={f}>
-                {f}
-              </option>
-            ))}
-          </select>
         </div>
       </div>
 

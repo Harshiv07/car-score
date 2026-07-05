@@ -1,7 +1,7 @@
 import { Link } from "react-router-dom";
 import { ScoredListing } from "../api/types";
 import { useFavorites } from "../hooks/useFavorites";
-import { Badge, cad, DealPill, isRecent, km, NewBadge, ScoreGauge, Stars, timeAgo } from "./ui";
+import { Badge, cad, DealPill, isRecent, km, NewBadge, ScoreBadge, Stars, timeAgo } from "./ui";
 
 function cat(l: ScoredListing, key: string) {
   return l.score.breakdown.find((c) => c.key === key);
@@ -11,7 +11,7 @@ export function ListingCard({ listing, rank }: { listing: ScoredListing; rank?: 
   const rel = cat(listing, "reliability");
   const savings = listing.score.market.savings;
   const { isFavorite, toggle } = useFavorites();
-  const fav = isFavorite(listing.id);
+  const fav = isFavorite(listing.dedupeKey);
 
   return (
     <Link
@@ -22,7 +22,7 @@ export function ListingCard({ listing, rank }: { listing: ScoredListing; rank?: 
         onClick={(e) => {
           e.preventDefault();
           e.stopPropagation();
-          toggle(listing.id);
+          toggle(listing.dedupeKey);
         }}
         aria-pressed={fav}
         aria-label={fav ? "Remove from favourites" : "Add to favourites"}
@@ -38,8 +38,8 @@ export function ListingCard({ listing, rank }: { listing: ScoredListing; rank?: 
         {rank != null && (
           <div className="nums hidden w-6 pt-2 text-center text-sm font-bold text-faint sm:block">{rank}</div>
         )}
-        <div className="pt-1">
-          <ScoreGauge total={listing.score.total} size={66} />
+        <div className="pt-0.5">
+          <ScoreBadge total={listing.score.total} />
         </div>
 
         <div className="min-w-0 flex-1 pr-8">

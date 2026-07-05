@@ -42,50 +42,28 @@ export function scoreColor(total: number): string {
   return "text-bad";
 }
 
-/* ---- score gauge (semicircle + needle) ----------------------------------- */
+/* ---- score badge --------------------------------------------------------- */
 
-export function ScoreGauge({ total, size = 64 }: { total: number; size?: number }) {
-  const pct = Math.min(100, Math.max(0, total)) / 100;
+/** Clean, legible score chip: big number in the band colour on a tinted,
+ *  ring-bordered tile. Replaces the old semicircle meter. */
+export function ScoreBadge({ total, variant = "card" }: { total: number; variant?: "card" | "hero" }) {
   const hex = scoreHex(total);
-  const r = 42;
-  const cx = 50;
-  const cy = 50;
-  const arcLen = Math.PI * r;
-  // Needle angle: pct 0 → 180° (left), pct 1 → 0° (right).
-  const theta = Math.PI - pct * Math.PI;
-  const nx = cx + (r - 6) * Math.cos(theta);
-  const ny = cy - (r - 6) * Math.sin(theta);
-
+  const hero = variant === "hero";
+  const n = Math.round(total);
   return (
-    <div className="relative shrink-0" style={{ width: size, height: size * 0.72 }}>
-      <svg viewBox="0 0 100 62" className="h-full w-full overflow-visible">
-        {/* track */}
-        <path
-          d={`M ${cx - r} ${cy} A ${r} ${r} 0 0 1 ${cx + r} ${cy}`}
-          fill="none"
-          stroke="var(--surface-2)"
-          strokeWidth="9"
-          strokeLinecap="round"
-        />
-        {/* value arc */}
-        <path
-          d={`M ${cx - r} ${cy} A ${r} ${r} 0 0 1 ${cx + r} ${cy}`}
-          fill="none"
-          stroke={hex}
-          strokeWidth="9"
-          strokeLinecap="round"
-          strokeDasharray={`${pct * arcLen} ${arcLen}`}
-          style={{ transition: "stroke-dasharray 0.6s ease" }}
-        />
-        {/* needle + hub */}
-        <line x1={cx} y1={cy} x2={nx} y2={ny} stroke="var(--text)" strokeWidth="2.4" strokeLinecap="round" />
-        <circle cx={cx} cy={cy} r="4.5" fill="var(--surface)" stroke="var(--text)" strokeWidth="2" />
-      </svg>
-      <div
-        className="nums absolute inset-x-0 bottom-0 text-center font-extrabold leading-none"
-        style={{ color: hex, fontSize: size * 0.34 }}
-      >
-        {Math.round(total)}
+    <div
+      className={`grid shrink-0 place-items-center rounded-2xl ${hero ? "h-24 w-24" : "h-14 w-14"}`}
+      style={{
+        backgroundColor: `color-mix(in oklab, ${hex} 14%, transparent)`,
+        boxShadow: `inset 0 0 0 1.5px color-mix(in oklab, ${hex} 38%, transparent)`,
+      }}
+      aria-label={`Score ${n} out of 100`}
+    >
+      <div className="nums font-extrabold leading-none" style={{ color: hex, fontSize: hero ? 46 : 24 }}>
+        {n}
+      </div>
+      <div className="font-semibold uppercase tracking-wider text-faint" style={{ fontSize: hero ? 11 : 8, marginTop: hero ? 4 : 1 }}>
+        / 100
       </div>
     </div>
   );

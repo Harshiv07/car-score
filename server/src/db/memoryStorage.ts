@@ -2,7 +2,7 @@ import { promises as fs } from "fs";
 import path from "path";
 import { Listing, ScrapeHistoryEntry } from "../types";
 import { Storage, UpsertResult } from "./storage";
-import { SEED_LISTINGS } from "./seed";
+import { SEED_DEDUPE_KEYS } from "./seed";
 
 interface Snapshot {
   listings: Listing[];
@@ -35,13 +35,14 @@ export class MemoryStorage implements Storage {
       const raw = await fs.readFile(this.dataFile, "utf8");
       this.data = JSON.parse(raw) as Snapshot;
     } catch {
-      this.data = { listings: [...SEED_LISTINGS], scrapeHistory: [] };
+      this.data = { listings: [], scrapeHistory: [] };
       await this.flush();
     }
-    if (this.data.listings.length === 0) {
-      this.data.listings = [...SEED_LISTINGS];
-      await this.flush();
-    }
+    // One-time cleanup: drop any previously-seeded demo listings so the app
+    // shows scraped inventory only.
+    const before = this.data.listings.length;
+    this.data.listings = this.data.listings.filter((l) => !SEED_DEDUPE_KEYS.has(l.dedupeKey));
+    if (this.data.listings.length !== before) await this.flush();
   }
 
   private async flush(): Promise<void> {

@@ -39,6 +39,7 @@ export interface ScoreResult {
 
 export interface ScoredListing {
   id: string;
+  dedupeKey: string;
   title: string;
   make: string;
   model: string;
