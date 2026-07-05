@@ -14,6 +14,7 @@ import { extractListings } from "../scrapers/extract";
 import { normalizeRecord } from "../scrapers/normalize";
 import { scoreListing } from "../scoring/engine";
 import { clutchToRaw } from "../scrapers/clutch";
+import { convertusToRaw } from "../scrapers/convertus";
 import { Listing } from "../types";
 
 /** A supported model (Corolla) with a full JSON-LD record, plus an F-150 that
@@ -88,8 +89,19 @@ export function verifyPipeline(): PipelineReport {
     clutchListing ? `mapped ${clutchListing.title} @ $${clutchListing.price}` : "Clutch mapping produced null"
   );
 
+  // 3b. Convertus (dealer VMS API) mapping produces a valid supported listing.
+  const convertusListing = normalizeRecord(
+    convertusToRaw({ year: 2020, make: "Toyota", model: "RAV4", search_trim: "XLE", drive_train: "All Wheel Drive", fuel_type: "Gas", odometer: 48157, final_price: 30995, vin: "2T3R1RFV2LC102476" }),
+    { sourceWebsite: "Wayne Toyota", baseUrl: "https://www.waynetoyota.com", dealer: "Wayne Toyota", province: "ON" }
+  );
+  add(
+    "convertus-map",
+    !!convertusListing && convertusListing.model === "RAV4" && convertusListing.drivetrain === "AWD" && convertusListing.vin === "2T3R1RFV2LC102476",
+    convertusListing ? `mapped ${convertusListing.title} (${convertusListing.drivetrain})` : "Convertus mapping produced null"
+  );
+
   // 4. Scoring yields a full 0–100 score for every normalized listing.
-  const pool = [...normalized, ...(clutchListing ? [clutchListing] : [])];
+  const pool = [...normalized, ...(clutchListing ? [clutchListing] : []), ...(convertusListing ? [convertusListing] : [])];
   const scored = pool.map((l) => scoreListing(l, pool));
   const allScored =
     scored.length > 0 &&

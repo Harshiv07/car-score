@@ -1,23 +1,31 @@
 {
-  "_comment": "Thunder Bay dealer inventory pages, targeted at the models we score. These platforms render inventory client-side, so static crawling usually finds nothing from a datacenter IP; set SCRAPE_JS_FALLBACK=1 (Chromium installed) to render them locally. Clutch.ca (browser-free JSON API) is the primary reliable source.",
+  "_comment": "Thunder Bay dealers. `platform: convertus` dealers (Wayne Toyota, Superior Hyundai) are scraped browser-free via the dealer's same-origin Convertus VMS JSON proxy — cp is the Convertus company id (discover it by watching the ajax-vehicles.php request the used-inventory page makes). Other dealers fall back to the generic HTML scraper and only yield data when SCRAPE_JS_FALLBACK=1 (they render client-side and/or sit behind bot challenges).",
   "dealers": [
     {
       "key": "waynetoyota",
       "name": "Wayne Toyota",
       "city": "Thunder Bay",
       "province": "ON",
-      "urls": [
-        "https://www.waynetoyota.com/vehicles/used/?view=grid&sc=used&mk=Toyota&md=Corolla,RAV%204"
-      ]
+      "platform": "convertus",
+      "cp": 3490
+    },
+    {
+      "key": "superiorhyundai",
+      "name": "Superior Hyundai",
+      "city": "Thunder Bay",
+      "province": "ON",
+      "platform": "convertus",
+      "cp": 2932
     },
     {
       "key": "goremotorshonda",
       "name": "Gore Motors Honda",
       "city": "Thunder Bay",
       "province": "ON",
+      "platform": "html",
       "urls": [
-        "https://goremotorshonda.com/used-car-inventory-thunder-bay-ontario/?make=honda&serie=civic&max_search_radius=500",
-        "https://goremotorshonda.com/used-car-inventory-thunder-bay-ontario/?make=honda&serie=cr-v&max_search_radius=500"
+        "https://goremotorshonda.com/used-car-inventory-thunder-bay-ontario/?make=honda&serie=civic",
+        "https://goremotorshonda.com/used-car-inventory-thunder-bay-ontario/?make=honda&serie=cr-v"
       ]
     },
     {
@@ -25,17 +33,9 @@
       "name": "Half-Way Motors Mazda",
       "city": "Thunder Bay",
       "province": "ON",
+      "platform": "html",
       "urls": [
-        "https://www.halfwaymotorsmazda.com/vehicles/used/?view=grid&sc=used&mk=Mazda&md=Mazda3,CX-5"
-      ]
-    },
-    {
-      "key": "superiorhyundai",
-      "name": "Superior Hyundai",
-      "city": "Thunder Bay",
-      "province": "ON",
-      "urls": [
-        "https://www.superiorhyundai.ca/vehicles/used/?view=grid&sc=used&mk=Hyundai&md=Elantra,Tucson"
+        "https://www.halfwaymotorsmazda.com/used/"
       ]
     }
   ]

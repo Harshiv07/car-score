@@ -75,12 +75,26 @@ source has its own module returning a common `Listing[]` interface:
 
 ```
 server/src/scrapers/
-  clutch.ts        # Clutch.ca — public JSON API (browser-free, primary source)
+  clutch.ts        # Clutch.ca — public JSON API (browser-free)
+  convertus.ts     # Convertus VMS dealers (Wayne Toyota, Superior Hyundai) — browser-free JSON proxy
   autotrader.ts    # AutoTrader.ca search pages per model (best-effort HTML)
   cargurus.ts      # CarGurus.ca (best-effort — DataDome anti-bot)
   dealer.ts        # dealership sites, configurable via src/config/dealers.json
   config.ts        # env-driven run budget, timeouts, source allow-list
 ```
+
+**Browser-free sources (work everywhere, incl. Render):** Clutch.ca and the
+Convertus dealers (Wayne Toyota, Superior Hyundai) are scraped through their
+JSON APIs — for Convertus, the dealer site's own same-origin
+`convertus-vms/…/ajax-vehicles.php` proxy (set each dealer's `cp` company id in
+`dealers.json`). These return complete, structured vehicles (year, price, km,
+VIN, drivetrain, fuel).
+
+**Best-effort sources:** AutoTrader (per-listing year lives only in
+client-rendered tiles, not the SSR JSON-LD), Gore Motors (STM Motors plugin
+behind a Cloudflare browser challenge) and CarGurus (DataDome) can't be reliably
+scraped browser-free from a datacenter IP and usually return little; they never
+break a run.
 
 The HTML sources run three extraction strategies per page (JSON-LD → embedded
 state blobs → DOM cards) and keep the strategy with the most **usable** records
