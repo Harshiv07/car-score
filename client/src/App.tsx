@@ -3,6 +3,7 @@ import { NavLink, Route, Routes } from "react-router-dom";
 import { LeaderboardPage } from "./pages/LeaderboardPage";
 import { DetailPage } from "./pages/DetailPage";
 import { FavoritesPage } from "./pages/FavoritesPage";
+import { NewCarsPage } from "./pages/NewCarsPage";
 import { useFavorites } from "./hooks/useFavorites";
 
 const THEME_KEY = "carscore:v2:theme";
@@ -84,6 +85,9 @@ export default function App() {
             <NavLink to="/" end className={tab}>
               Leaderboard
             </NavLink>
+            <NavLink to="/new-cars" className={tab}>
+              New Cars
+            </NavLink>
             <NavLink to="/favorites" className={tab}>
               ♥ Favourites{count > 0 ? ` (${count})` : ""}
             </NavLink>
@@ -98,6 +102,7 @@ export default function App() {
       <main>
         <Routes>
           <Route path="/" element={<LeaderboardPage />} />
+          <Route path="/new-cars" element={<NewCarsPage />} />
           <Route path="/favorites" element={<FavoritesPage />} />
           <Route path="/listing/:id" element={<DetailPage />} />
         </Routes>

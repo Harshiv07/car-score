@@ -4,6 +4,7 @@ import {
   ListingDetailResponse,
   ListingsResponse,
   MetaResponse,
+  NewCarsResponse,
   ScrapeProgress,
 } from "./types";
 
@@ -58,6 +59,17 @@ export function useMeta() {
   return useQuery({
     queryKey: ["meta"],
     queryFn: () => apiGet<MetaResponse>("/api/meta"),
+    staleTime: 5 * 60_000,
+  });
+}
+
+/** New-model lineup from official OEM sites. Polls while the backend is still
+ *  rendering the client-side OEM pages in the background. */
+export function useNewCars() {
+  return useQuery({
+    queryKey: ["newcars"],
+    queryFn: () => apiGet<NewCarsResponse>("/api/newcars"),
+    refetchInterval: (query) => (query.state.data?.loading ? 4000 : false),
     staleTime: 5 * 60_000,
   });
 }

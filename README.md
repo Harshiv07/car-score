@@ -155,7 +155,7 @@ rating, known issues, pros and cons — the UI shows *why* a car ranks first.
 | `GET /api/scrape/history`| Past runs.                                            |
 | `GET /api/scrape/selfcheck`| Pipeline health check (extract→normalize→score).   |
 | `GET /api/meta`          | Filter options + sort keys for the UI.               |
-| `GET /api/newcars`       | Current-model lineup scraped from official OEM sites (Hyundai Canada; browser-free, cached 6h). `?refresh=1` forces a re-fetch. |
+| `GET /api/newcars`       | Current-model lineup scraped from official OEM sites — Hyundai (browser-free) + Toyota/Honda/Mazda/Subaru (Playwright, local only). Cached 6h; `?refresh=1` forces a re-fetch. |
 
 ## Deployment
 

@@ -6,6 +6,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { parseHyundai } from "../newcars/hyundai";
+import { parseOemRendered } from "../newcars/oem";
 
 const PAGE = `<!doctype html><html><head>
 <meta property="og:image" content="https://img.hyundai.ca/tucson.jpg">
@@ -53,4 +54,35 @@ test("infers Electric fuel type for EV models", () => {
 
 test("returns null when there is no Car JSON-LD", () => {
   assert.equal(parseHyundai("x", "https://x", "<html><body>no data</body></html>"), null);
+});
+
+const OEM_HTML = `<!doctype html><html><head>
+<meta property="og:image" content="https://toyota.ca/rav4.jpg"></head>
+<body><h1>2026 RAV4</h1>
+<div class="hero">The RAV4 SUV. Starting from $35,962. Hybrid available.</div>
+</body></html>`;
+
+test("parses a rendered OEM (Toyota) page into a NewCar", () => {
+  const car = parseOemRendered(
+    { make: "Toyota", model: "RAV4", url: "https://www.toyota.ca/toyota/en/vehicles/rav4/overview" },
+    OEM_HTML
+  );
+  assert.ok(car);
+  assert.equal(car!.make, "Toyota");
+  assert.equal(car!.model, "RAV4");
+  assert.equal(car!.year, 2026);
+  assert.equal(car!.startingPriceCad, 35962);
+  assert.equal(car!.bodyType, "SUV");
+  assert.equal(car!.image, "https://toyota.ca/rav4.jpg");
+  assert.equal(car!.source, "Toyota Canada");
+});
+
+test("OEM parser leaves price null when the page has no price", () => {
+  const car = parseOemRendered(
+    { make: "Mazda", model: "CX-50", url: "https://www.mazda.ca/en/vehicles/cx-50/" },
+    "<html><body><h1>2025 MAZDA CX-50</h1><p>A compact SUV.</p></body></html>"
+  );
+  assert.ok(car);
+  assert.equal(car!.startingPriceCad, null);
+  assert.equal(car!.bodyType, "SUV");
 });

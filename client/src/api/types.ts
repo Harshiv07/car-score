@@ -122,6 +122,31 @@ export interface MetaResponse {
   storage: string;
 }
 
+export interface NewCar {
+  id: string;
+  make: string;
+  model: string;
+  year: number;
+  bodyType: string | null;
+  startingPriceCad: number | null;
+  engine: string | null;
+  transmission: string | null;
+  drivetrain: string | null;
+  fuelType: string | null;
+  fuelCapacity: string | null;
+  exteriorColours: string[];
+  description: string | null;
+  image: string | null;
+  officialUrl: string;
+  source: string;
+}
+
+export interface NewCarsResponse {
+  cars: NewCar[];
+  fetchedAt: string | null;
+  loading: boolean;
+}
+
 export interface ScrapeProgress {
   running: boolean;
   runId: string | null;
