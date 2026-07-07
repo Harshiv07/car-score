@@ -139,6 +139,7 @@ export interface NewCar {
   image: string | null;
   officialUrl: string;
   source: string;
+  score: number | null;
 }
 
 export interface NewCarsResponse {

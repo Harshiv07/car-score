@@ -16,4 +16,6 @@ export interface NewCar {
   image: string | null;
   officialUrl: string;
   source: string; // e.g. "Hyundai Canada"
+  /** Intrinsic CarScore (0–100) for the model, or null if not in our knowledge base. */
+  score: number | null;
 }

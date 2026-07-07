@@ -19,6 +19,7 @@ test("pipeline self-check passes on healthy code", () => {
 
 test("Clutch API vehicle maps to an accurate, non-empty listing", () => {
   const raw = clutchToRaw({
+    id: 111414,
     year: 2023,
     mileage: 33210,
     make: { name: "Subaru" },
@@ -43,7 +44,7 @@ test("Clutch API vehicle maps to an accurate, non-empty listing", () => {
   assert.equal(listing!.mileageKm, 33210);
   assert.equal(listing!.drivetrain, "AWD");
   assert.equal(listing!.isDealer, true);
-  assert.match(listing!.listingUrl ?? "", /clutch\.ca\/cars\/2023-subaru-crosstrek/);
+  assert.equal(listing!.listingUrl, "https://www.clutch.ca/vehicles/111414");
 });
 
 test("Clutch mapping drops unsupported models", () => {

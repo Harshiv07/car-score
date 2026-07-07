@@ -54,7 +54,9 @@ export function loadScrapeConfig(): ScrapeConfig {
     requestTimeoutMs: num("SCRAPE_REQUEST_TIMEOUT_MS", 12_000),
     maxPagesPerSource: num("SCRAPE_MAX_PAGES", 4),
     concurrency: num("SCRAPE_CONCURRENCY", 4),
-    jsFallbackEnabled: process.env.SCRAPE_JS_FALLBACK === "1",
+    // A configured rendering service works on browserless hosts, so it also
+    // enables the JS fallback automatically.
+    jsFallbackEnabled: process.env.SCRAPE_JS_FALLBACK === "1" || !!process.env.RENDER_SERVICE_URL,
     enabledSourceKeys: list("SCRAPE_SOURCES"),
   };
 }
@@ -79,5 +81,56 @@ export async function fetchWithTimeout(
     return await fetch(url, { ...rest, signal: controller.signal });
   } finally {
     clearTimeout(timer);
+  }
+}
+
+/* ---- external rendering service ----------------------------------------- */
+/*
+ * A headless-browser / rendering service lets us render JS-heavy sites
+ * (AutoTrader, the OEM new-car pages, JS dealer sites) from a host without a
+ * local Chromium (e.g. Render). Configure with:
+ *
+ *   RENDER_SERVICE_URL   a template that returns the rendered HTML for a target
+ *                        URL. Two shapes are supported:
+ *                          - contains "{url}"  → GET, {url} replaced with the
+ *                            URL-encoded target (ScrapingBee, ScraperAPI, …),
+ *                            e.g. https://app.scrapingbee.com/api/v1/?api_key=KEY&render_js=true&url={url}
+ *                          - no "{url}"        → POST { url } as JSON
+ *                            (Browserless /content, etc.)
+ *   RENDER_SERVICE_API_KEY  optional; sent as `x-api-key` / bearer on POST mode.
+ *   RENDER_SERVICE_TIMEOUT_MS  optional per-render cap (default 30000).
+ */
+export function renderServiceConfigured(): boolean {
+  return !!process.env.RENDER_SERVICE_URL;
+}
+
+export async function fetchRenderedViaService(targetUrl: string): Promise<string | null> {
+  const template = process.env.RENDER_SERVICE_URL;
+  if (!template) return null;
+  const timeoutMs = num("RENDER_SERVICE_TIMEOUT_MS", 30_000);
+  const apiKey = process.env.RENDER_SERVICE_API_KEY;
+  try {
+    let res: Response;
+    if (template.includes("{url}")) {
+      res = await fetchWithTimeout(template.replace("{url}", encodeURIComponent(targetUrl)), {
+        headers: BROWSER_HEADERS,
+        timeoutMs,
+      });
+    } else {
+      res = await fetchWithTimeout(template, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          ...(apiKey ? { "x-api-key": apiKey, Authorization: `Bearer ${apiKey}` } : {}),
+        },
+        body: JSON.stringify({ url: targetUrl, gotoOptions: { waitUntil: "networkidle2" } }),
+        timeoutMs,
+      });
+    }
+    if (!res.ok) return null;
+    const html = await res.text();
+    return html && html.length > 500 ? html : null;
+  } catch {
+    return null;
   }
 }

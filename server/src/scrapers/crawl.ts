@@ -11,6 +11,7 @@
 
 import { CheerioCrawler, Configuration, ProxyConfiguration, log as crawleeLog, LogLevel } from "crawlee";
 import { LogFn } from "./types";
+import { fetchRenderedViaService, renderServiceConfigured } from "./config";
 
 crawleeLog.setLevel(LogLevel.OFF);
 
@@ -77,6 +78,20 @@ export async function crawlPages(
 
   await crawler.run(urls.map((url) => ({ url })));
   return { pages, blocked, errors };
+}
+
+/**
+ * Render a page to HTML, preferring a configured external rendering service
+ * (works on hosts without Chromium, e.g. Render) and falling back to a local
+ * Playwright browser. Returns rendered HTML or null.
+ */
+export async function renderPage(url: string, log: LogFn): Promise<string | null> {
+  if (renderServiceConfigured()) {
+    const html = await fetchRenderedViaService(url);
+    if (html) return html;
+    log("warn", `render service returned nothing for ${url}; trying local browser`);
+  }
+  return fetchWithPlaywright(url, log);
 }
 
 /**

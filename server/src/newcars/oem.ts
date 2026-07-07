@@ -9,9 +9,10 @@
  */
 
 import * as cheerio from "cheerio";
-import { fetchWithPlaywright } from "../scrapers/crawl";
+import { renderPage } from "../scrapers/crawl";
 import { LogFn } from "../scrapers/types";
 import { NewCar } from "./types";
+import { pickImage } from "./util";
 
 interface OemModel {
   make: string;
@@ -69,16 +70,14 @@ export function parseOemRendered(m: OemModel, html: string): NewCar | null {
   )?.[1];
   const price = priceStr ? Number(priceStr.replace(/,/g, "")) : null;
 
-  const image =
-    $('meta[property="og:image"]').attr("content") ??
-    $('meta[name="twitter:image"]').attr("content") ??
-    null;
+  const image = pickImage(html, m.model);
 
   return {
     id: `${m.make}-${m.model}`.toLowerCase().replace(/[^a-z0-9]+/g, "-"),
     make: m.make,
     model: m.model,
     year,
+    score: null,
     bodyType: inferBody(h1) ?? inferBody(bodyText),
     startingPriceCad: price && price > 12000 && price < 200000 ? price : null,
     engine: null,
@@ -99,8 +98,8 @@ export async function fetchOemNewCars(log: LogFn): Promise<NewCar[]> {
   // Sequential: Playwright renders one page at a time (small memory footprint),
   // and this runs in the background behind a 6h cache.
   for (const m of OEM_MODELS) {
-    const html = await fetchWithPlaywright(m.url, log);
-    if (!html) continue; // no browser on this host, or a nav failure
+    const html = await renderPage(m.url, log);
+    if (!html) continue; // no renderer on this host, or a nav failure
     const car = parseOemRendered(m, html);
     if (car) out.push(car);
   }

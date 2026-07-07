@@ -30,6 +30,7 @@ interface ClutchPrice {
   promoPrice?: number | null;
 }
 interface ClutchVehicle {
+  id?: number;
   year?: number;
   mileage?: number;
   make?: ClutchNamed;
@@ -50,13 +51,6 @@ interface ClutchPage {
   vehicles: ClutchVehicle[];
 }
 
-function slug(s: string): string {
-  return s
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, "-")
-    .replace(/(^-|-$)/g, "");
-}
-
 function priceOf(v: ClutchVehicle): number | null {
   const p = v["vehiclePrice-ON"]?.price ?? v.vehiclePrices?.[0]?.price ?? null;
   return typeof p === "number" ? p : null;
@@ -70,10 +64,9 @@ export function clutchToRaw(v: ClutchVehicle): RawVehicleRecord {
   const drive = v.drivetrain?.name ?? "";
   const fuel = v.fuelType?.name ?? "";
   const year = v.year ?? "";
-  const url =
-    make && model && year
-      ? `https://www.clutch.ca/cars/${year}-${slug(make)}-${slug(model)}`
-      : "https://www.clutch.ca/cars";
+  // Deep-link to the exact vehicle detail page (e.g. clutch.ca/vehicles/111414)
+  // rather than a generic model search.
+  const url = v.id != null ? `https://www.clutch.ca/vehicles/${v.id}` : "https://www.clutch.ca/cars";
   return {
     // Put drivetrain + fuel in the title text so the normalizer's inference
     // (AWD / Hybrid) picks them up.

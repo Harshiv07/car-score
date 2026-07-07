@@ -295,6 +295,44 @@ function scoreFeatures(listing: Listing): ScoreCategory {
 /* Entry point                                                         */
 /* ------------------------------------------------------------------ */
 
+/**
+ * Intrinsic 0–100 score for a *new* model (no price/mileage/market signal):
+ * reliability, ownership, winter, safety, resale and recalls from the model
+ * knowledge base, rescaled to 100. Returns null for models we don't cover.
+ * New cars are assumed to ship with their typical features and full warranty.
+ */
+export function scoreNewModel(make: string, model: string, drivetrain?: string | null): number | null {
+  const info = getModelInfo(make, model);
+  if (!info) return null;
+  const dt = /awd|4wd|all.?wheel/i.test(drivetrain ?? "")
+    ? "AWD"
+    : /fwd|front/i.test(drivetrain ?? "")
+      ? "FWD"
+      : info.winter.awd === "standard"
+        ? "AWD"
+        : "FWD";
+  const synthetic = {
+    drivetrain: dt,
+    features: info.typicalFeatures,
+    mileageKm: 0,
+    year: CURRENT_YEAR,
+    recalls: [] as string[],
+    accidentReported: false,
+  } as unknown as Listing;
+
+  const cats = [
+    scoreReliability(info),
+    scoreOwnership(info),
+    scoreWinter(synthetic, info),
+    scoreSafety(synthetic, info),
+    scoreResale(info),
+    scoreRecalls(synthetic, info),
+  ];
+  const sum = cats.reduce((s, c) => s + c.points, 0);
+  const max = cats.reduce((s, c) => s + c.max, 0); // 65
+  return Math.round((sum / max) * 100);
+}
+
 export function scoreListing(listing: Listing, allListings: Listing[]): ScoreResult | null {
   const info = getModelInfo(listing.make, listing.model);
   if (!info) return null;

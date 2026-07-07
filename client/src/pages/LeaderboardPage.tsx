@@ -7,7 +7,7 @@ import { Pagination } from "../components/Pagination";
 import { RefreshButton } from "../components/RefreshButton";
 import { Wordmark } from "../App";
 import { useFavorites } from "../hooks/useFavorites";
-import { cad, timeAgo } from "../components/ui";
+import { cad, Select, timeAgo } from "../components/ui";
 
 const DEFAULT_PAGE_SIZE = 10;
 
@@ -35,6 +35,10 @@ export function LeaderboardPage() {
         const next = new URLSearchParams(prev);
         if (value) next.set(key, value);
         else next.delete(key);
+        // Changing brand resets the model (done in the SAME update — two
+        // separate setSearchParams calls each see the old params and clobber
+        // each other, which is why the brand filter appeared to do nothing).
+        if (key === "make") next.delete("model");
         next.delete("page");
         return next;
       },
@@ -102,20 +106,19 @@ export function LeaderboardPage() {
             </p>
             <div className="flex items-center gap-2">
               <RefreshButton />
-              <label className="flex items-center gap-2 text-sm text-muted">
+              <div className="flex items-center gap-2 text-sm text-muted">
                 <span className="hidden sm:inline">Sort</span>
-                <select
-                  className="rounded-lg border border-line bg-surface-2 px-2.5 py-2 text-sm font-semibold text-text focus:border-brand"
+                <Select
+                  ariaLabel="Sort"
+                  className="w-44"
                   value={sort}
-                  onChange={(e) => setParam("sort", e.target.value === "score" ? "" : e.target.value)}
-                >
-                  {(meta?.sortOptions ?? [{ key: "score", label: "Best Score" }]).map((o) => (
-                    <option key={o.key} value={o.key}>
-                      {o.label}
-                    </option>
-                  ))}
-                </select>
-              </label>
+                  options={(meta?.sortOptions ?? [{ key: "score", label: "Best Score" }]).map((o) => ({
+                    value: o.key,
+                    label: o.label,
+                  }))}
+                  onChange={(v) => setParam("sort", v === "score" ? "" : v)}
+                />
+              </div>
             </div>
           </div>
 

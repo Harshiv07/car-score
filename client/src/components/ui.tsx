@@ -1,5 +1,6 @@
-/** Shared UI atoms: score gauge, pills, badges, stars, segmented, toggle, fmt. */
+/** Shared UI atoms: score badge, pills, badges, stars, segmented, toggle, select, fmt. */
 
+import { useEffect, useRef, useState } from "react";
 import { DealRating } from "../api/types";
 
 export const cad = (n: number) => `$${Math.round(n).toLocaleString("en-CA")}`;
@@ -163,6 +164,90 @@ export function Segmented<T extends string>({
           </button>
         );
       })}
+    </div>
+  );
+}
+
+export interface Option {
+  value: string;
+  label: string;
+}
+
+/**
+ * Fully-themed dropdown (native <select> option lists can't be styled and look
+ * broken in dark mode). Button + popover list, closes on outside-click/Escape.
+ */
+export function Select({
+  value,
+  options,
+  onChange,
+  ariaLabel,
+  className = "",
+}: {
+  value: string;
+  options: Option[];
+  onChange: (v: string) => void;
+  ariaLabel?: string;
+  className?: string;
+}) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+  const current = options.find((o) => o.value === value) ?? options[0];
+
+  useEffect(() => {
+    if (!open) return;
+    const onDoc = (e: MouseEvent) => {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+    };
+    const onKey = (e: KeyboardEvent) => e.key === "Escape" && setOpen(false);
+    document.addEventListener("mousedown", onDoc);
+    document.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("mousedown", onDoc);
+      document.removeEventListener("keydown", onKey);
+    };
+  }, [open]);
+
+  return (
+    <div ref={ref} className={`relative ${className}`}>
+      <button
+        type="button"
+        aria-haspopup="listbox"
+        aria-expanded={open}
+        aria-label={ariaLabel}
+        onClick={() => setOpen((v) => !v)}
+        className="flex w-full items-center justify-between gap-2 rounded-lg border border-line bg-surface-2 px-3 py-2 text-sm font-medium text-text transition hover:border-line-strong"
+      >
+        <span className="truncate">{current?.label ?? ""}</span>
+        <span className={`text-faint transition-transform ${open ? "rotate-180" : ""}`}>▾</span>
+      </button>
+      {open && (
+        <ul
+          role="listbox"
+          className="absolute z-30 mt-1 max-h-64 w-full overflow-auto rounded-lg border border-line bg-surface p-1 shadow-xl shadow-black/30"
+        >
+          {options.map((o) => {
+            const active = o.value === value;
+            return (
+              <li key={o.value} role="option" aria-selected={active}>
+                <button
+                  type="button"
+                  onClick={() => {
+                    onChange(o.value);
+                    setOpen(false);
+                  }}
+                  className={`flex w-full items-center justify-between gap-2 rounded-md px-2.5 py-1.5 text-left text-sm transition ${
+                    active ? "bg-brand/15 font-semibold text-brand" : "text-text hover:bg-surface-2"
+                  }`}
+                >
+                  <span className="truncate">{o.label}</span>
+                  {active && <span className="text-brand">✓</span>}
+                </button>
+              </li>
+            );
+          })}
+        </ul>
+      )}
     </div>
   );
 }

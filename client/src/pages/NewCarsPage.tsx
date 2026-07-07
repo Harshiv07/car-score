@@ -1,7 +1,7 @@
 import { useMemo } from "react";
 import { useNewCars } from "../api/hooks";
 import { NewCar } from "../api/types";
-import { cad, timeAgo } from "../components/ui";
+import { cad, ScoreBadge, timeAgo } from "../components/ui";
 
 export function NewCarsPage() {
   const { data, isLoading } = useNewCars();
@@ -117,6 +117,11 @@ function NewCarCard({ car }: { car: NewCar }) {
           {car.bodyType && <Chip>{car.bodyType}</Chip>}
           {car.fuelType && car.fuelType !== "Gas" && <Chip>{car.fuelType}</Chip>}
         </div>
+        {car.score != null && (
+          <div className="absolute right-3 top-3">
+            <ScoreBadge total={car.score} />
+          </div>
+        )}
       </div>
 
       <div className="flex flex-1 flex-col p-4">

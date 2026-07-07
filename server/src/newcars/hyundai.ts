@@ -11,6 +11,7 @@
 import { BROWSER_HEADERS, fetchWithTimeout } from "../scrapers/config";
 import { LogFn } from "../scrapers/types";
 import { NewCar } from "./types";
+import { pickImage } from "./util";
 
 const SOURCE = "Hyundai Canada";
 const SLUGS = [
@@ -48,11 +49,6 @@ function firstCarLd(html: string): CarLd | null {
   return null;
 }
 
-function meta(html: string, prop: string): string | null {
-  const re = new RegExp(`<meta[^>]+(?:property|name)=["']${prop}["'][^>]+content=["']([^"']+)`, "i");
-  return html.match(re)?.[1] ?? null;
-}
-
 function toTitle(s: string): string {
   return s
     .toLowerCase()
@@ -87,13 +83,11 @@ export function parseHyundai(slug: string, url: string, html: string): NewCar | 
   const startingPriceCad = priceStr ? Number(priceStr.replace(/,/g, "")) : null;
 
   const image =
-    meta(html, "og:image") ??
-    meta(html, "twitter:image") ??
-    (Array.isArray(ld.image) ? ld.image[0] : ld.image) ??
-    null;
+    (Array.isArray(ld.image) ? ld.image[0] : ld.image) ?? pickImage(html, model) ?? null;
 
   return {
     id: `hyundai-${slug}`,
+    score: null,
     make: "Hyundai",
     model,
     year,

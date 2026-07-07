@@ -13,7 +13,7 @@
 import { Listing } from "../types";
 import { extractListings } from "./extract";
 import { normalizeRecord, NormalizeMeta } from "./normalize";
-import { crawlPages, fetchWithPlaywright } from "./crawl";
+import { crawlPages, renderPage } from "./crawl";
 import { LogFn, Scraper, ScraperRunResult } from "./types";
 import { loadScrapeConfig } from "./config";
 
@@ -65,8 +65,8 @@ export function makeScraper(config: GenericScraperConfig): Scraper {
       }
 
       if (listings.length === 0 && config.jsFallback && cfg.jsFallbackEnabled && urls.length > 0) {
-        log("info", `${config.source}: static pass found nothing — trying browser fallback…`);
-        const html = await fetchWithPlaywright(urls[0], log);
+        log("info", `${config.source}: static pass found nothing — trying rendered fallback…`);
+        const html = await renderPage(urls[0], log);
         if (html) collect(html);
       }
 

@@ -102,6 +102,13 @@ client-rendered tiles, not the SSR JSON-LD) and CarGurus (DataDome) can't be
 reliably scraped browser-free from a datacenter IP and usually return little;
 they never break a run.
 
+**External rendering service (optional).** Set `RENDER_SERVICE_URL` (see
+`server/.env.example`) to a headless-browser/rendering API (ScrapingBee,
+Browserless, ScraperAPI, …) and the JS fallback runs through it — so the JS
+dealer sites, the OEM new-car pages and AutoTrader can be rendered from a host
+without a local Chromium (Render). Falls back to a local Playwright browser when
+no service is set.
+
 The HTML sources run three extraction strategies per page (JSON-LD → embedded
 state blobs → DOM cards) and keep the strategy with the most **usable** records
 (a record needs both a year and a price — this is what stops year-less

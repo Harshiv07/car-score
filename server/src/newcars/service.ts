@@ -14,6 +14,8 @@ import { LogFn } from "../scrapers/types";
 import { NewCar } from "./types";
 import { fetchHyundaiNewCars } from "./hyundai";
 import { fetchOemNewCars } from "./oem";
+import { fetchCarImage } from "./util";
+import { scoreNewModel } from "../scoring/engine";
 
 const TTL_MS = 6 * 60 * 60 * 1000; // 6 hours
 
@@ -29,9 +31,26 @@ const noopLog: LogFn = () => {};
 function merge(...groups: NewCar[][]): NewCar[] {
   const byId = new Map<string, NewCar>();
   for (const g of groups) for (const c of g) byId.set(c.id, c);
-  return [...byId.values()].sort(
-    (a, b) => a.make.localeCompare(b.make) || (a.startingPriceCad ?? 1e9) - (b.startingPriceCad ?? 1e9)
+  const cars = [...byId.values()];
+  for (const c of cars) c.score = scoreNewModel(c.make, c.model, c.drivetrain);
+  // Best score first within each make, makes alphabetical.
+  return cars.sort(
+    (a, b) => a.make.localeCompare(b.make) || (b.score ?? -1) - (a.score ?? -1)
   );
+}
+
+/** Fill in a real photo (Wikipedia) for any car whose OEM page had no image. */
+async function enrichImages(cars: NewCar[]): Promise<NewCar[]> {
+  await Promise.all(
+    cars
+      .filter((c) => !c.image)
+      .map((c) => fetchCarImage(c.make, c.model).then((img) => { if (img) c.image = img; })),
+  );
+  return cars;
+}
+
+async function build(...groups: NewCar[][]): Promise<CacheEntry> {
+  return { fetchedAt: Date.now(), cars: await enrichImages(merge(...groups)) };
 }
 
 /** Fetch Hyundai (fast) then OEMs (slow, browser), updating the cache as we go. */
@@ -41,9 +60,9 @@ async function refresh(log: LogFn): Promise<void> {
   try {
     const { requestTimeoutMs } = loadScrapeConfig();
     const hyundai = await fetchHyundaiNewCars(log, requestTimeoutMs).catch(() => []);
-    cache = { fetchedAt: Date.now(), cars: merge(hyundai) };
+    cache = await build(hyundai);
     const oem = await fetchOemNewCars(log).catch(() => []);
-    if (oem.length) cache = { fetchedAt: Date.now(), cars: merge(hyundai, oem) };
+    if (oem.length) cache = await build(hyundai, oem);
   } finally {
     refreshing = false;
   }
@@ -64,7 +83,7 @@ export async function getNewCars(force = false, log: LogFn = noopLog): Promise<N
       // something immediately; OEM rendering continues in the background.
       const { requestTimeoutMs } = loadScrapeConfig();
       const hyundai = await fetchHyundaiNewCars(log, requestTimeoutMs).catch(() => []);
-      cache = { fetchedAt: Date.now(), cars: merge(hyundai) };
+      cache = await build(hyundai);
       void refreshOem(log, hyundai);
     } else {
       void refresh(log);
@@ -84,7 +103,7 @@ async function refreshOem(log: LogFn, hyundai: NewCar[]): Promise<void> {
   refreshing = true;
   try {
     const oem = await fetchOemNewCars(log).catch(() => []);
-    if (oem.length) cache = { fetchedAt: Date.now(), cars: merge(hyundai, oem) };
+    if (oem.length) cache = await build(hyundai, oem);
   } finally {
     refreshing = false;
   }
