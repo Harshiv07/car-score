@@ -10,7 +10,7 @@
 
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { buildModelQueryUrl, MODEL_TARGETS } from "../scrapers/clutch";
+import { buildModelQueryUrl, clutch, MODEL_TARGETS } from "../scrapers/clutch";
 import { VEHICLE_MODELS } from "../data/vehicleModels";
 
 test("every scored model gets its own Clutch query target", () => {
@@ -51,3 +51,37 @@ test("query has exactly the params a real browser session sends — nothing extr
     ["downPayment", "interestRate", "isBiweekly", "makes[]", "models[]", "page"].sort()
   );
 });
+
+test(
+  "a WAF block on 2 models never stops the remaining models from being attempted (regression)",
+  { timeout: 20_000 },
+  async (t) => {
+    // Reproduces the exact production failure: Honda CR-V and Mazda Mazda3 get
+    // WAF-challenged (HTTP 202, empty body) back-to-back. A prior version's
+    // circuit breaker treated that as "the whole run is blocked" and silently
+    // skipped every model queried after them (Mazda CX-5, both Hyundais, both
+    // Subarus) — they were never even attempted, which is what the user saw
+    // as 0 listings for CX-5/Forester/Crosstrek despite Clutch "succeeding".
+    const BLOCKED = new Set(["CR-V", "Mazda3"]);
+    const requestedModels: string[] = [];
+
+    t.mock.method(globalThis, "fetch", async (input: string | URL) => {
+      const model = new URL(input).searchParams.get("models[]") ?? "";
+      requestedModels.push(model);
+      if (BLOCKED.has(model)) {
+        return new Response("", { status: 202 }); // WAF challenge, not a real 404
+      }
+      return new Response(JSON.stringify({ page: 0, pageSize: 32, totalCount: 0, totalPages: 1, vehicles: [] }), {
+        status: 200,
+        headers: { "content-type": "application/json" },
+      });
+    });
+
+    await clutch.run(() => {});
+
+    const attempted = new Set(requestedModels);
+    for (const { model } of MODEL_TARGETS) {
+      assert.ok(attempted.has(model), `${model} should have been attempted regardless of earlier blocked models`);
+    }
+  }
+);

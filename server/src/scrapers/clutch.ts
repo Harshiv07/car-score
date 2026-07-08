@@ -26,10 +26,6 @@ const API = "https://api.clutch.ca/v1";
 // Overridable in case Clutch rotates ids.
 const LOCATION_ID = process.env.CLUTCH_LOCATION_ID || "56f159d4-49db-4a61-b2d8-d8784f10a184";
 const PROVINCE = "ON";
-// If 2 models in a row fail outright, the run is being WAF-blocked, not
-// hitting real 404s — stop querying rather than hammer the remaining models
-// (each with its own retries) into a longer/deeper block for no data.
-const MAX_CONSECUTIVE_MODEL_FAILURES = 2;
 
 /** One (make, model) query per model we score — derived from the knowledge
  *  base so this list can never drift out of sync with what we support.
@@ -190,22 +186,17 @@ export const clutch: Scraper = {
     const listings: Listing[] = [];
     const seen = new Set<string>();
     const failedModels: string[] = [];
-    let consecutiveFailures = 0;
-    let abortedEarly = false;
 
     log("info", `Clutch.ca: querying API for ${MODEL_TARGETS.length} model(s) (≤${pagesPerModel} page(s) each)…`);
 
+    // Every model gets its own independent attempt — a block/failure on one
+    // model must never cost the others their turn. A prior version stopped
+    // the whole run after 2 consecutive model failures to avoid deepening a
+    // WAF block, but that traded a real bug (a transient block on 2 models
+    // silently zeroed out every model queried *after* them, even though
+    // nothing was actually wrong with them) for a hypothetical one. Failures
+    // are logged (see `note` below) but never stop the loop.
     for (const { make, model } of MODEL_TARGETS) {
-      if (consecutiveFailures >= MAX_CONSECUTIVE_MODEL_FAILURES) {
-        abortedEarly = true;
-        log(
-          "warn",
-          `Clutch.ca: ${consecutiveFailures} models in a row were blocked — stopping early rather than ` +
-            `hammering the rest (looks like the Clutch API is rate-limiting this network right now).`
-        );
-        break;
-      }
-
       let modelFound = 0;
       let modelReachable = false;
       for (let page = 0; page < pagesPerModel; page++) {
@@ -245,11 +236,10 @@ export const clutch: Scraper = {
         await delay(600); // gentle pacing to stay under the WAF rate limit
       }
 
-      consecutiveFailures = modelReachable ? 0 : consecutiveFailures + 1;
       if (modelFound === 0 && modelReachable) {
         log("warn", `Clutch.ca: ${make} ${model} — 0 listings (may be temporarily out of stock)`);
       }
-      await delay(600);
+      await delay(600); // same pacing whether this model succeeded or not
     }
 
     const ok = listings.length > 0 || failedModels.length < MODEL_TARGETS.length;
@@ -257,7 +247,7 @@ export const clutch: Scraper = {
       listings.length > 0
         ? `${listings.length} supported-model listing(s) found` +
           (failedModels.length ? ` (${failedModels.join(", ")} unreachable)` : "")
-        : failedModels.length === MODEL_TARGETS.length || abortedEarly
+        : failedModels.length === MODEL_TARGETS.length
           ? "Clutch API unreachable — skipped"
           : "no supported-model listings in Clutch inventory right now";
     log(listings.length > 0 ? "info" : "warn", `Clutch.ca: ${note}`);
