@@ -26,8 +26,13 @@ test("config has fast, safe defaults", () => {
   const c = loadScrapeConfig();
   assert.equal(c.runBudgetMs, 120_000, "default run budget is 2 minutes");
   assert.ok(c.sourceTimeoutMs <= c.runBudgetMs);
-  assert.equal(c.jsFallbackEnabled, false, "browser fallback off by default");
+  assert.equal(c.jsFallbackEnabled, true, "rendered fallback on by default (fails fast without a browser)");
   assert.equal(c.enabledSourceKeys, null, "all sources by default");
+});
+
+test("SCRAPE_JS_FALLBACK=0 disables the rendered fallback", () => {
+  process.env.SCRAPE_JS_FALLBACK = "0";
+  assert.equal(loadScrapeConfig().jsFallbackEnabled, false);
 });
 
 test("config reads overrides from the environment", () => {

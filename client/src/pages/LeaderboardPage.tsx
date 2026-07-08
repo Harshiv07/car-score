@@ -39,6 +39,10 @@ export function LeaderboardPage() {
         // separate setSearchParams calls each see the old params and clobber
         // each other, which is why the brand filter appeared to do nothing).
         if (key === "make") next.delete("model");
+        // Defensive: a year bound that inverts the range clears the other bound
+        // (the selects already hide invalid options; this guards URL edits).
+        if (key === "yearMin" && value && Number(next.get("yearMax") ?? Infinity) < Number(value)) next.delete("yearMax");
+        if (key === "yearMax" && value && Number(next.get("yearMin") ?? 0) > Number(value)) next.delete("yearMin");
         next.delete("page");
         return next;
       },
@@ -187,7 +191,7 @@ function StatTile({
   return (
     <div className="rounded-2xl border border-line bg-surface p-4">
       <div className="text-[11px] font-semibold uppercase tracking-wide text-faint">{label}</div>
-      <div className={`nums mt-1 text-2xl font-extrabold ${color}`}>{value}</div>
+      <div className={`nums font-display mt-1 text-2xl font-bold ${color}`}>{value}</div>
       {sub && <div className="mt-0.5 truncate text-[11px] text-faint" title={sub}>{sub}</div>}
     </div>
   );

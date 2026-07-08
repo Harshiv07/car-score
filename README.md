@@ -34,6 +34,7 @@ Only these are scraped and scored:
 npm run setup             # npm install + downloads Chromium for the browser fallback
 npm run dev               # API on :4000, app on :3000 (proxied /api)
 npm test -w server        # unit + pipeline test suite (no network needed)
+npm run test:e2e          # Playwright e2e UI tests (boots API + client itself)
 npm run scrape:check -w server          # confirm the pipeline is healthy (no network)
 npm run scrape:check -w server -- --live # + probe each source over the network
 ```
@@ -97,10 +98,15 @@ entry has a `platform`:
 All return complete, structured vehicles (year, price, km, VIN where available,
 drivetrain, fuel).
 
-**Best-effort sources:** AutoTrader (per-listing year lives only in
-client-rendered tiles, not the SSR JSON-LD) and CarGurus (DataDome) can't be
-reliably scraped browser-free from a datacenter IP and usually return little;
-they never break a run.
+**AutoTrader** is scraped with a bespoke tile parser (`autotrader.ts`): each
+result `<article>` links to a VDP and shows year/price/km as text, so the
+parser pairs every VDP anchor with its own tile (the smallest ancestor holding
+a price) using element-boundary-aware text. The static pages already carry the
+tiles, so this works browser-free; the rendered fallback tops it up.
+
+**CarGurus** (DataDome anti-bot) remains best-effort — it blocks datacenter
+IPs and headless browsers alike; a residential IP or stealth rendering service
+sometimes passes. It never breaks a run.
 
 **External rendering service (optional).** Set `RENDER_SERVICE_URL` (see
 `server/.env.example`) to a headless-browser/rendering API (ScrapingBee,

@@ -1,4 +1,4 @@
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import { useNewCars } from "../api/hooks";
 import { NewCar } from "../api/types";
 import { cad, ScoreBadge, timeAgo } from "../components/ui";
@@ -17,7 +17,7 @@ export function NewCarsPage() {
   return (
     <div className="mx-auto max-w-7xl px-4 py-8">
       <div className="fade-up">
-        <h1 className="text-3xl font-extrabold tracking-tight text-text sm:text-4xl">
+        <h1 className="font-display text-3xl font-bold tracking-tight text-text sm:text-4xl">
           New <span className="text-brand">Cars</span>
         </h1>
         <p className="mt-2 max-w-xl text-sm leading-relaxed text-muted">
@@ -92,6 +92,32 @@ function Spec({ label, value }: { label: string; value: string | null }) {
   );
 }
 
+/**
+ * Model photo with graceful degradation: some OEM/wiki image URLs block
+ * hotlinking or 404 later — on error we fall back to the make placeholder
+ * instead of showing broken alt text over the card.
+ */
+function CarImage({ car }: { car: NewCar }) {
+  const [failed, setFailed] = useState(false);
+  if (!car.image || failed) {
+    return (
+      <div className="font-display grid h-full w-full place-items-center text-3xl font-bold text-line-strong">
+        {car.make}
+      </div>
+    );
+  }
+  return (
+    <img
+      src={car.image}
+      alt={`${car.year} ${car.make} ${car.model}`}
+      loading="lazy"
+      referrerPolicy="no-referrer"
+      onError={() => setFailed(true)}
+      className="h-full w-full object-cover transition duration-300 group-hover:scale-[1.03]"
+    />
+  );
+}
+
 function NewCarCard({ car }: { car: NewCar }) {
   return (
     <a
@@ -101,18 +127,7 @@ function NewCarCard({ car }: { car: NewCar }) {
       className="group flex flex-col overflow-hidden rounded-2xl border border-line bg-surface transition hover:border-brand/40 hover:shadow-lg hover:shadow-black/20"
     >
       <div className="relative aspect-[16/10] overflow-hidden bg-surface-2">
-        {car.image ? (
-          <img
-            src={car.image}
-            alt={`${car.year} ${car.make} ${car.model}`}
-            loading="lazy"
-            className="h-full w-full object-cover transition duration-300 group-hover:scale-[1.03]"
-          />
-        ) : (
-          <div className="grid h-full w-full place-items-center text-3xl font-extrabold text-line-strong">
-            {car.make}
-          </div>
-        )}
+        <CarImage car={car} />
         <div className="absolute left-3 top-3 flex gap-1.5">
           {car.bodyType && <Chip>{car.bodyType}</Chip>}
           {car.fuelType && car.fuelType !== "Gas" && <Chip>{car.fuelType}</Chip>}

@@ -57,7 +57,7 @@ function ThemeSwitch({ dark, onToggle }: { dark: boolean; onToggle: () => void }
 
 export function Wordmark({ className = "" }: { className?: string }) {
   return (
-    <span className={`font-extrabold tracking-tight text-text ${className}`}>
+    <span className={`font-display font-bold tracking-tight text-text ${className}`}>
       CAR<span className="text-brand">SCORE</span>
     </span>
   );

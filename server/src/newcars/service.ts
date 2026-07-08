@@ -16,6 +16,7 @@ import { fetchHyundaiNewCars } from "./hyundai";
 import { fetchOemNewCars } from "./oem";
 import { fetchCarImage } from "./util";
 import { scoreNewModel } from "../scoring/engine";
+import manualConfig from "../config/newcarsManual.json";
 
 const TTL_MS = 6 * 60 * 60 * 1000; // 6 hours
 
@@ -31,12 +32,74 @@ const noopLog: LogFn = () => {};
 function merge(...groups: NewCar[][]): NewCar[] {
   const byId = new Map<string, NewCar>();
   for (const g of groups) for (const c of g) byId.set(c.id, c);
-  const cars = [...byId.values()];
+  return [...byId.values()];
+}
+
+interface ManualCar {
+  make: string;
+  model: string;
+  year: number;
+  officialUrl: string;
+  startingPriceCad?: number | null;
+  bodyType?: string | null;
+  engine?: string | null;
+  transmission?: string | null;
+  drivetrain?: string | null;
+  fuelType?: string | null;
+  fuelCapacity?: string | null;
+  exteriorColours?: string[];
+  description?: string | null;
+  image?: string | null;
+}
+
+const carId = (make: string, model: string) => `${make}-${model}`.toLowerCase().replace(/[^a-z0-9]+/g, "-");
+
+/**
+ * Overlay the hand-maintained data (config/newcarsManual.json) onto the
+ * scraped set: any non-null manual field wins, and manual-only models get
+ * their own card. Exported for tests.
+ */
+export function applyManual(cars: NewCar[], manual: ManualCar[] = manualConfig.cars as ManualCar[]): NewCar[] {
+  const byId = new Map(cars.map((c) => [c.id, c]));
+  for (const m of manual) {
+    if (!m.make || !m.model || !m.year || !m.officialUrl) continue;
+    const id = carId(m.make, m.model);
+    const target: NewCar = byId.get(id) ?? {
+      id,
+      make: m.make,
+      model: m.model,
+      year: m.year,
+      bodyType: null,
+      startingPriceCad: null,
+      engine: null,
+      transmission: null,
+      drivetrain: null,
+      fuelType: null,
+      fuelCapacity: null,
+      exteriorColours: [],
+      description: null,
+      image: null,
+      officialUrl: m.officialUrl,
+      source: `${m.make} Canada`,
+      score: null,
+    };
+    for (const key of [
+      "year", "bodyType", "startingPriceCad", "engine", "transmission", "drivetrain",
+      "fuelType", "fuelCapacity", "description", "image", "officialUrl",
+    ] as const) {
+      const v = m[key];
+      if (v != null && v !== "") (target as unknown as Record<string, unknown>)[key] = v;
+    }
+    if (m.exteriorColours?.length) target.exteriorColours = m.exteriorColours;
+    byId.set(id, target);
+  }
+  return [...byId.values()];
+}
+
+function finalize(cars: NewCar[]): NewCar[] {
   for (const c of cars) c.score = scoreNewModel(c.make, c.model, c.drivetrain);
   // Best score first within each make, makes alphabetical.
-  return cars.sort(
-    (a, b) => a.make.localeCompare(b.make) || (b.score ?? -1) - (a.score ?? -1)
-  );
+  return cars.sort((a, b) => a.make.localeCompare(b.make) || (b.score ?? -1) - (a.score ?? -1));
 }
 
 /** Fill in a real photo (Wikipedia) for any car whose OEM page had no image. */
@@ -50,7 +113,7 @@ async function enrichImages(cars: NewCar[]): Promise<NewCar[]> {
 }
 
 async function build(...groups: NewCar[][]): Promise<CacheEntry> {
-  return { fetchedAt: Date.now(), cars: await enrichImages(merge(...groups)) };
+  return { fetchedAt: Date.now(), cars: await enrichImages(finalize(applyManual(merge(...groups)))) };
 }
 
 /** Fetch Hyundai (fast) then OEMs (slow, browser), updating the cache as we go. */

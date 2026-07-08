@@ -34,6 +34,12 @@ export function FiltersSidebar({
   const years: Option[] = [{ value: "", label: "Any" }];
   for (let y = currentYear; y >= YEAR_FLOOR; y--) years.push({ value: String(y), label: String(y) });
 
+  // Keep the range coherent: "to" can't offer years before "from" and vice versa.
+  const yearMin = Number(get("yearMin")) || 0;
+  const yearMax = Number(get("yearMax")) || 0;
+  const yearFromOptions = years.filter((o) => !o.value || !yearMax || Number(o.value) <= yearMax);
+  const yearToOptions = years.filter((o) => !o.value || !yearMin || Number(o.value) >= yearMin);
+
   const brandOptions: Option[] = [{ value: "", label: "All brands" }, ...(meta?.brands ?? []).map((b) => ({ value: b, label: b }))];
   const modelOptions: Option[] = [{ value: "", label: "All models" }, ...models.map((m) => ({ value: m.model, label: m.model }))];
   const sourceOptions: Option[] = [{ value: "", label: "All sources" }, ...(meta?.sources ?? []).map((s) => ({ value: s, label: s }))];
@@ -120,8 +126,8 @@ export function FiltersSidebar({
       <div>
         <span className={label}>Year</span>
         <div className="grid grid-cols-2 gap-2">
-          <Select ariaLabel="Year from" value={get("yearMin")} options={years} onChange={(v) => onChange("yearMin", v)} />
-          <Select ariaLabel="Year to" value={get("yearMax")} options={years} onChange={(v) => onChange("yearMax", v)} />
+          <Select ariaLabel="Year from" value={get("yearMin")} options={yearFromOptions} onChange={(v) => onChange("yearMin", v)} />
+          <Select ariaLabel="Year to" value={get("yearMax")} options={yearToOptions} onChange={(v) => onChange("yearMax", v)} />
         </div>
       </div>
 

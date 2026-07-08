@@ -16,11 +16,11 @@ async function wikiSummaryImage(title: string): Promise<string | null> {
     timeoutMs: 10_000,
   });
   if (!res.ok) return null;
-  const j = (await res.json()) as { thumbnail?: { source?: string }; type?: string };
-  const src = j.thumbnail?.source;
-  if (!src) return null;
-  // Bump the Wikimedia thumbnail width (…/330px-…) up for crisper cards.
-  return src.replace(/\/\d+px-/, "/640px-");
+  const j = (await res.json()) as { thumbnail?: { source?: string } };
+  // Use the API's thumbnail URL exactly as given: Wikimedia only serves
+  // pre-rendered widths and returns HTTP 400 for fabricated ones (verified:
+  // 330px works, 640px 400s on the same file).
+  return j.thumbnail?.source ?? null;
 }
 
 export async function fetchCarImage(make: string, model: string): Promise<string | null> {

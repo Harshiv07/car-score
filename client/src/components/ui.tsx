@@ -53,19 +53,23 @@ export function ScoreBadge({ total, variant = "card" }: { total: number; variant
   const n = Math.round(total);
   return (
     <div
-      className={`grid shrink-0 place-items-center rounded-2xl ${hero ? "h-24 w-24" : "h-14 w-14"}`}
+      className={`flex shrink-0 flex-col items-center justify-center rounded-2xl ${hero ? "h-24 w-24" : "h-14 w-14"}`}
       style={{
-        backgroundColor: `color-mix(in oklab, ${hex} 14%, transparent)`,
-        boxShadow: `inset 0 0 0 1.5px color-mix(in oklab, ${hex} 38%, transparent)`,
+        backgroundColor: `color-mix(in oklab, ${hex} 13%, var(--surface) 30%)`,
+        boxShadow: `inset 0 0 0 1.5px color-mix(in oklab, ${hex} 40%, transparent)`,
       }}
       aria-label={`Score ${n} out of 100`}
+      title={`CarScore ${n} / 100`}
     >
-      <div className="nums font-extrabold leading-none" style={{ color: hex, fontSize: hero ? 46 : 24 }}>
+      <span className="nums font-display font-bold" style={{ color: hex, fontSize: hero ? 42 : 22, lineHeight: 1 }}>
         {n}
-      </div>
-      <div className="font-semibold uppercase tracking-wider text-faint" style={{ fontSize: hero ? 11 : 8, marginTop: hero ? 4 : 1 }}>
-        / 100
-      </div>
+      </span>
+      <span
+        className="font-semibold uppercase text-faint"
+        style={{ fontSize: hero ? 10 : 7.5, letterSpacing: "0.1em", marginTop: hero ? 5 : 3, lineHeight: 1 }}
+      >
+        /100
+      </span>
     </div>
   );
 }

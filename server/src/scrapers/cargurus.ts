@@ -14,6 +14,8 @@ export const cargurus = makeScraper({
     `https://www.cargurus.ca/Cars/inventorylisting/viewDetailsFilterViewInventoryListing.action?sourceContext=carGurusHomePageModel&zip=${ZIP}&distance=250`,
   ],
   meta: { province: "ON" },
-  jsFallback: false, // DataDome blocks headless browsers too; not worth the cost
+  // DataDome usually blocks plain headless Chromium too, but a residential IP
+  // (local dev) or a stealth rendering service sometimes passes — try once.
+  jsFallback: true,
   bestEffort: true,
 });

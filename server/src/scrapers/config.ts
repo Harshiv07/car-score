@@ -54,9 +54,12 @@ export function loadScrapeConfig(): ScrapeConfig {
     requestTimeoutMs: num("SCRAPE_REQUEST_TIMEOUT_MS", 12_000),
     maxPagesPerSource: num("SCRAPE_MAX_PAGES", 4),
     concurrency: num("SCRAPE_CONCURRENCY", 4),
-    // A configured rendering service works on browserless hosts, so it also
-    // enables the JS fallback automatically.
-    jsFallbackEnabled: process.env.SCRAPE_JS_FALLBACK === "1" || !!process.env.RENDER_SERVICE_URL,
+    // Default ON: locally `npm run setup` installs Chromium (the free
+    // open-source headless browser Playwright drives), and on hosts without
+    // one the fallback fails fast once and is remembered. A configured
+    // rendering service serves the same role remotely. Set
+    // SCRAPE_JS_FALLBACK=0 to disable rendering entirely.
+    jsFallbackEnabled: process.env.SCRAPE_JS_FALLBACK !== "0",
     enabledSourceKeys: list("SCRAPE_SOURCES"),
   };
 }
