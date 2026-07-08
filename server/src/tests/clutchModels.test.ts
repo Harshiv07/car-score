@@ -36,3 +36,18 @@ test("model names with special characters are URL-encoded", () => {
   assert.ok(!url.includes(" "), "no raw spaces in the URL");
   assert.match(url, /models\[\]=CR-V/);
 });
+
+test("query has exactly the params a real browser session sends — nothing extra", () => {
+  // Regression: an earlier version added a non-functional `pc=` (page size)
+  // param that no real clutch.ca session ever sends. Clutch silently ignored
+  // it, but the scraper started getting WAF-blocked after 1-2 requests once
+  // it was added — a request shape a real browser never produces is exactly
+  // the kind of signal bot detection looks for. Every param here is one
+  // captured from real clutch.ca frontend traffic.
+  const url = buildModelQueryUrl("Toyota", "RAV4", 0);
+  const params = new URL(url).searchParams;
+  assert.deepEqual(
+    [...params.keys()].sort(),
+    ["downPayment", "interestRate", "isBiweekly", "makes[]", "models[]", "page"].sort()
+  );
+});

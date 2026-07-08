@@ -26,7 +26,10 @@ const API = "https://api.clutch.ca/v1";
 // Overridable in case Clutch rotates ids.
 const LOCATION_ID = process.env.CLUTCH_LOCATION_ID || "56f159d4-49db-4a61-b2d8-d8784f10a184";
 const PROVINCE = "ON";
-const PAGE_SIZE = 50;
+// If 2 models in a row fail outright, the run is being WAF-blocked, not
+// hitting real 404s — stop querying rather than hammer the remaining models
+// (each with its own retries) into a longer/deeper block for no data.
+const MAX_CONSECUTIVE_MODEL_FAILURES = 2;
 
 /** One (make, model) query per model we score — derived from the knowledge
  *  base so this list can never drift out of sync with what we support.
@@ -116,14 +119,26 @@ function rememberCookies(res: Response): void {
   if (pairs.length) cookieJar = pairs.join("; ");
 }
 
-/** Build the model-scoped Clutch API query (exported for a regression test —
- *  this is the exact parameter that fixes make-level pagination cutting off
- *  low-volume models like Mazda CX-5/Mazda3). */
+/**
+ * Build the model-scoped Clutch API query (exported for a regression test —
+ * `models[]` is the parameter that fixes make-level pagination cutting off
+ * low-volume models like Mazda CX-5/Mazda3).
+ *
+ * Deliberately mirrors exactly what the real clutch.ca frontend sends (no
+ * extra params like a custom page-size): a captured browser request for this
+ * same endpoint was `?makes[]=Toyota&models[]=Rav4&downPayment=0&isBiweekly=
+ * true&interestRate=7.99&page=0` — nothing else. An earlier version added
+ * `&pc=50` to request bigger pages; Clutch silently ignored it (page size
+ * stayed the API's default), so it did nothing useful, but a request shape no
+ * real browser session ever produces is exactly the kind of signal WAF/bot
+ * detection looks for — and this scraper started getting blocked after every
+ * 1-2 requests once that param was added. Removed.
+ */
 export function buildModelQueryUrl(make: string, model: string, page: number): string {
   return (
     `${API}/vehicles/locations/${LOCATION_ID}` +
     `?makes[]=${encodeURIComponent(make)}&models[]=${encodeURIComponent(model)}` +
-    `&pc=${PAGE_SIZE}&downPayment=0&isBiweekly=true&interestRate=7.99&page=${page}`
+    `&downPayment=0&isBiweekly=true&interestRate=7.99&page=${page}`
   );
 }
 
@@ -145,14 +160,16 @@ async function fetchModelPage(
       timeoutMs,
     });
 
-  for (let attempt = 0; attempt < 3; attempt++) {
+  // Two tries, not three: once the WAF starts challenging a request, hammering
+  // it with a third retry rarely helps and just adds more suspicious traffic.
+  for (let attempt = 0; attempt < 2; attempt++) {
     const res = await doFetch();
     rememberCookies(res);
     const text = await res.text();
     if (res.ok && text.trim().startsWith("{")) {
       return JSON.parse(text) as ClutchPage;
     }
-    if (attempt < 2) await delay(700 * (attempt + 1)); // WAF cooldown, then retry
+    if (attempt === 0) await delay(900);
   }
   return null;
 }
@@ -162,15 +179,35 @@ export const clutch: Scraper = {
   source: "Clutch.ca",
   async run(log: LogFn): Promise<ScraperRunResult> {
     const cfg = loadScrapeConfig();
-    const pagesPerModel = Math.max(1, Math.min(cfg.maxPagesPerSource, 4));
+    // Capped at 2 regardless of SCRAPE_MAX_PAGES: this scraper already makes
+    // one request per supported model (10), so paginating deep on top of that
+    // multiplies total request volume fast — and volume is exactly what trips
+    // Clutch's WAF. Most supported models fit in 1-2 pages anyway (CX-5 ~54,
+    // Mazda3 ~39 at the API's own page size); higher-volume models just get a
+    // partial-but-real sample instead of the fuller set, which is a fine
+    // trade against reliably getting *some* data for every model.
+    const pagesPerModel = Math.max(1, Math.min(cfg.maxPagesPerSource, 2));
     const listings: Listing[] = [];
     const seen = new Set<string>();
     const failedModels: string[] = [];
+    let consecutiveFailures = 0;
+    let abortedEarly = false;
 
     log("info", `Clutch.ca: querying API for ${MODEL_TARGETS.length} model(s) (≤${pagesPerModel} page(s) each)…`);
 
     for (const { make, model } of MODEL_TARGETS) {
+      if (consecutiveFailures >= MAX_CONSECUTIVE_MODEL_FAILURES) {
+        abortedEarly = true;
+        log(
+          "warn",
+          `Clutch.ca: ${consecutiveFailures} models in a row were blocked — stopping early rather than ` +
+            `hammering the rest (looks like the Clutch API is rate-limiting this network right now).`
+        );
+        break;
+      }
+
       let modelFound = 0;
+      let modelReachable = false;
       for (let page = 0; page < pagesPerModel; page++) {
         let data: ClutchPage | null;
         try {
@@ -183,6 +220,7 @@ export const clutch: Scraper = {
           if (page === 0) failedModels.push(`${make} ${model}`);
           break;
         }
+        modelReachable = true;
         if (!Array.isArray(data.vehicles) || data.vehicles.length === 0) break;
 
         for (const v of data.vehicles) {
@@ -204,12 +242,14 @@ export const clutch: Scraper = {
           }
         }
         if (page + 1 >= data.totalPages) break;
-        await delay(300); // gentle pacing to stay under the WAF rate limit
+        await delay(600); // gentle pacing to stay under the WAF rate limit
       }
-      if (modelFound === 0 && !failedModels.includes(`${make} ${model}`)) {
+
+      consecutiveFailures = modelReachable ? 0 : consecutiveFailures + 1;
+      if (modelFound === 0 && modelReachable) {
         log("warn", `Clutch.ca: ${make} ${model} — 0 listings (may be temporarily out of stock)`);
       }
-      await delay(300);
+      await delay(600);
     }
 
     const ok = listings.length > 0 || failedModels.length < MODEL_TARGETS.length;
@@ -217,7 +257,7 @@ export const clutch: Scraper = {
       listings.length > 0
         ? `${listings.length} supported-model listing(s) found` +
           (failedModels.length ? ` (${failedModels.join(", ")} unreachable)` : "")
-        : failedModels.length === MODEL_TARGETS.length
+        : failedModels.length === MODEL_TARGETS.length || abortedEarly
           ? "Clutch API unreachable — skipped"
           : "no supported-model listings in Clutch inventory right now";
     log(listings.length > 0 ? "info" : "warn", `Clutch.ca: ${note}`);
