@@ -20,6 +20,7 @@ import { matchModelFromTitle, VEHICLE_MODELS } from "../data/vehicleModels";
 import { normalizeRecord } from "./normalize";
 import { LogFn, RawVehicleRecord, Scraper, ScraperRunResult } from "./types";
 import { BROWSER_HEADERS, fetchWithTimeout, loadScrapeConfig } from "./config";
+import { closeBrowserSession, fetchJsonInSession, openBrowserSession } from "./crawl";
 
 const API = "https://api.clutch.ca/v1";
 // A Clutch fulfilment location; determines which province price is attached.
@@ -138,36 +139,99 @@ export function buildModelQueryUrl(make: string, model: string, page: number): s
   );
 }
 
-async function fetchModelPage(
-  make: string,
-  model: string,
-  page: number,
-  timeoutMs: number
-): Promise<ClutchPage | null> {
+/**
+ * Single attempt, no in-place retry: once the WAF challenges a request, a
+ * same-shape retry a moment later essentially never succeeds (verified live —
+ * it just adds latency and more suspicious traffic), and the run now has a
+ * genuinely different, more effective second tier for exactly this case (see
+ * `retryFailedModelsViaBrowser` below) — a browser-solved session, not a
+ * bare fetch repeated. Keeping this tier fast leaves that tier its budget.
+ */
+async function fetchModelPage(make: string, model: string, page: number, timeoutMs: number): Promise<ClutchPage | null> {
   const url = buildModelQueryUrl(make, model, page);
-  const doFetch = () =>
-    fetchWithTimeout(url, {
-      headers: {
-        ...BROWSER_HEADERS,
-        Origin: "https://www.clutch.ca",
-        Referer: "https://www.clutch.ca/",
-        ...(cookieJar ? { Cookie: cookieJar } : {}),
-      },
-      timeoutMs,
-    });
+  const res = await fetchWithTimeout(url, {
+    headers: {
+      ...BROWSER_HEADERS,
+      Origin: "https://www.clutch.ca",
+      Referer: "https://www.clutch.ca/",
+      ...(cookieJar ? { Cookie: cookieJar } : {}),
+    },
+    timeoutMs,
+  });
+  rememberCookies(res);
+  const text = await res.text();
+  return res.ok && text.trim().startsWith("{") ? (JSON.parse(text) as ClutchPage) : null;
+}
 
-  // Two tries, not three: once the WAF starts challenging a request, hammering
-  // it with a third retry rarely helps and just adds more suspicious traffic.
-  for (let attempt = 0; attempt < 2; attempt++) {
-    const res = await doFetch();
-    rememberCookies(res);
-    const text = await res.text();
-    if (res.ok && text.trim().startsWith("{")) {
-      return JSON.parse(text) as ClutchPage;
+/** Normalize + dedupe a page's vehicles into `listings`. Returns how many were
+ *  added. Shared by the direct-fetch path and the browser-session fallback. */
+function ingestVehicles(vehicles: ClutchVehicle[], listings: Listing[], seen: Set<string>): number {
+  let added = 0;
+  for (const v of vehicles) {
+    if (v.visibleOnSite === false) continue;
+    // Safety net: a model query can still include closely-related trims
+    // (e.g. "RAV4 Hybrid" for a RAV4 query) — matchModelFromTitle keeps only
+    // what we actually score.
+    if (!matchModelFromTitle(`${v.make?.name ?? ""} ${v.model?.name ?? ""}`)) continue;
+    const listing = normalizeRecord(clutchToRaw(v), {
+      sourceWebsite: "Clutch.ca",
+      baseUrl: "https://www.clutch.ca",
+      dealer: "Clutch",
+      province: PROVINCE,
+    });
+    if (listing && !seen.has(listing.dedupeKey)) {
+      seen.add(listing.dedupeKey);
+      listings.push(listing);
+      added++;
     }
-    if (attempt === 0) await delay(900);
   }
-  return null;
+  return added;
+}
+
+/**
+ * Retry every model that failed a direct fetch by making the SAME API call
+ * from inside a real, WAF-cleared browser page instead. One browser/page is
+ * reused across all retries (launch + navigation cost paid once). Bounded by
+ * `deadline` so this can never eat into the outer per-source timeout budget
+ * and risk losing the listings already collected from the models that DID
+ * succeed directly (the whole scraper's result is discarded if it runs over).
+ * No-ops (returns 0) if no browser is available on this host.
+ */
+async function retryFailedModelsViaBrowser(
+  failed: { make: string; model: string }[],
+  listings: Listing[],
+  seen: Set<string>,
+  deadline: number,
+  log: LogFn
+): Promise<Set<string>> {
+  const recovered = new Set<string>();
+  if (failed.length === 0 || Date.now() >= deadline) return recovered;
+
+  const session = await openBrowserSession("https://www.clutch.ca/cars", log);
+  if (!session) return recovered; // no browser on this host — graceful no-op
+
+  try {
+    log("info", `Clutch.ca: retrying ${failed.length} blocked model(s) via a real browser session…`);
+    for (const { make, model } of failed) {
+      if (Date.now() >= deadline) {
+        log("warn", "Clutch.ca: ran out of time budget for the browser retry — stopping.");
+        break;
+      }
+      const text = await fetchJsonInSession(session, buildModelQueryUrl(make, model, 0));
+      if (!text) continue;
+      try {
+        const data = JSON.parse(text) as ClutchPage;
+        const added = ingestVehicles(data.vehicles ?? [], listings, seen);
+        if (added > 0) recovered.add(`${make} ${model}`);
+      } catch {
+        /* malformed response — skip */
+      }
+      await delay(400);
+    }
+  } finally {
+    await closeBrowserSession(session);
+  }
+  return recovered;
 }
 
 export const clutch: Scraper = {
@@ -185,7 +249,12 @@ export const clutch: Scraper = {
     const pagesPerModel = Math.max(1, Math.min(cfg.maxPagesPerSource, 2));
     const listings: Listing[] = [];
     const seen = new Set<string>();
-    const failedModels: string[] = [];
+    const failedTargets: { make: string; model: string }[] = [];
+    // Leave a safety margin before the scrape service's own per-source
+    // timeout (scrapeService.ts races this whole run() against that timeout
+    // and discards the entire result — including everything already found —
+    // if it loses, so the browser-retry pass below must never risk that).
+    const deadline = Date.now() + cfg.sourceTimeoutMs - 5000;
 
     log("info", `Clutch.ca: querying API for ${MODEL_TARGETS.length} model(s) (≤${pagesPerModel} page(s) each)…`);
 
@@ -195,8 +264,9 @@ export const clutch: Scraper = {
     // WAF block, but that traded a real bug (a transient block on 2 models
     // silently zeroed out every model queried *after* them, even though
     // nothing was actually wrong with them) for a hypothetical one. Failures
-    // are logged (see `note` below) but never stop the loop.
-    for (const { make, model } of MODEL_TARGETS) {
+    // are logged and retried via a browser session below, never abandoned.
+    for (const target of MODEL_TARGETS) {
+      const { make, model } = target;
       let modelFound = 0;
       let modelReachable = false;
       for (let page = 0; page < pagesPerModel; page++) {
@@ -208,46 +278,39 @@ export const clutch: Scraper = {
           break;
         }
         if (!data) {
-          if (page === 0) failedModels.push(`${make} ${model}`);
+          if (page === 0) failedTargets.push(target);
           break;
         }
         modelReachable = true;
         if (!Array.isArray(data.vehicles) || data.vehicles.length === 0) break;
 
-        for (const v of data.vehicles) {
-          if (v.visibleOnSite === false) continue;
-          // Safety net: a model query can still include closely-related trims
-          // (e.g. "RAV4 Hybrid" for a RAV4 query) — matchModelFromTitle keeps
-          // only what we actually score.
-          if (!matchModelFromTitle(`${v.make?.name ?? ""} ${v.model?.name ?? ""}`)) continue;
-          const listing = normalizeRecord(clutchToRaw(v), {
-            sourceWebsite: "Clutch.ca",
-            baseUrl: "https://www.clutch.ca",
-            dealer: "Clutch",
-            province: PROVINCE,
-          });
-          if (listing && !seen.has(listing.dedupeKey)) {
-            seen.add(listing.dedupeKey);
-            listings.push(listing);
-            modelFound++;
-          }
-        }
+        modelFound += ingestVehicles(data.vehicles, listings, seen);
         if (page + 1 >= data.totalPages) break;
-        await delay(600); // gentle pacing to stay under the WAF rate limit
+        await delay(400); // gentle pacing to stay under the WAF rate limit
       }
 
       if (modelFound === 0 && modelReachable) {
         log("warn", `Clutch.ca: ${make} ${model} — 0 listings (may be temporarily out of stock)`);
       }
-      await delay(600); // same pacing whether this model succeeded or not
+      await delay(400); // same pacing whether this model succeeded or not
     }
 
-    const ok = listings.length > 0 || failedModels.length < MODEL_TARGETS.length;
+    // Second tier: anything the direct API call couldn't reach gets one retry
+    // through a real browser session (see retryFailedModelsViaBrowser for
+    // why this can succeed where a bare fetch can't). No-ops cleanly if this
+    // host has no browser available.
+    const recovered =
+      cfg.jsFallbackEnabled && failedTargets.length > 0
+        ? await retryFailedModelsViaBrowser(failedTargets, listings, seen, deadline, log)
+        : new Set<string>();
+    const stillFailed = failedTargets.filter((t) => !recovered.has(`${t.make} ${t.model}`));
+
+    const ok = listings.length > 0 || stillFailed.length < MODEL_TARGETS.length;
     const note =
       listings.length > 0
         ? `${listings.length} supported-model listing(s) found` +
-          (failedModels.length ? ` (${failedModels.join(", ")} unreachable)` : "")
-        : failedModels.length === MODEL_TARGETS.length
+          (stillFailed.length ? ` (${stillFailed.map((t) => `${t.make} ${t.model}`).join(", ")} unreachable)` : "")
+        : stillFailed.length === MODEL_TARGETS.length
           ? "Clutch API unreachable — skipped"
           : "no supported-model listings in Clutch inventory right now";
     log(listings.length > 0 ? "info" : "warn", `Clutch.ca: ${note}`);

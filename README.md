@@ -47,12 +47,16 @@ JSON-file store (`server/.data/db.json`) seeded with representative listings.
 > price, mileage, drivetrain, fuel) with **no browser required** — it works on
 > Render and other hosts without Chromium.
 >
-> **Everything else is best-effort.** Most Canadian car sites (AutoTrader,
-> CarGurus, the Thunder Bay dealers) render inventory client-side and/or block
-> automated access from datacenter IPs (AWS WAF, DataDome, Cloudflare), so a
-> static crawl from a server usually finds nothing on them. To render the JS
-> dealer sites **locally**, install Chromium (`npx playwright install
-> chromium`) and run with `SCRAPE_JS_FALLBACK=1`.
+> **Some sites need a browser.** CarGurus (DataDome) and a couple of JS dealer
+> sites block a plain server-side fetch outright, and a small number of Clutch
+> model queries occasionally get WAF-challenged. `render.yaml`'s build command
+> installs Chromium (`--with-deps`, so the shared libraries it needs to
+> actually *launch* are included, not just the binary — see the comment in
+> that file) so this works on Render too, no local setup needed. It's
+> best-effort by design: if the install fails or the free-tier instance can't
+> spare the memory to launch Chromium alongside the Node process, every
+> browser-dependent path no-ops cleanly and the rest of the scrape is
+> unaffected. Locally, `npm run setup` installs Chromium for you.
 >
 > **A run can never hang.** The whole run is capped at `SCRAPE_RUN_BUDGET_MS`
 > (2 min) and each source at `SCRAPE_SOURCE_TIMEOUT_MS` (30 s); tune sources and
@@ -87,7 +91,15 @@ server/src/scrapers/
 
 **Browser-free sources (work everywhere, incl. Render).** Each `dealers.json`
 entry has a `platform`:
-- **Clutch.ca** — public JSON API.
+- **Clutch.ca** — public JSON API, queried per supported model (not per make —
+  a make-level query only pulls the first few pages of a make's *whole*
+  inventory, which silently starves low-volume models like Mazda CX-5 when
+  the make sells a dozen other models too). Occasionally a model gets
+  WAF-challenged; those get one retry through a real browser session (page
+  navigates to clutch.ca first, so the site's bot challenge resolves
+  normally, then the same API call is made *from inside that page* — a bare
+  server-side fetch can get blocked in a way an in-page fetch from a
+  browser-cleared session doesn't). No-ops if no browser is available.
 - **`convertus`** (Wayne Toyota, Superior Hyundai) — the dealer site's own
   same-origin `convertus-vms/…/ajax-vehicles.php` proxy (set each dealer's `cp`
   company id).
@@ -104,9 +116,11 @@ parser pairs every VDP anchor with its own tile (the smallest ancestor holding
 a price) using element-boundary-aware text. The static pages already carry the
 tiles, so this works browser-free; the rendered fallback tops it up.
 
-**CarGurus** (DataDome anti-bot) remains best-effort — it blocks datacenter
-IPs and headless browsers alike; a residential IP or stealth rendering service
-sometimes passes. It never breaks a run.
+**CarGurus** (DataDome anti-bot) is best-effort — it uses the Playwright
+render fallback when the static pass finds nothing (needs Chromium available;
+see above), but DataDome blocks a lot of headless browsers too, so it may
+still come back empty depending on the network. It never breaks a run either
+way.
 
 **External rendering service (optional).** Set `RENDER_SERVICE_URL` (see
 `server/.env.example`) to a headless-browser/rendering API (ScrapingBee,
@@ -168,7 +182,7 @@ rating, known issues, pros and cons — the UI shows *why* a car ranks first.
 | `GET /api/scrape/history`| Past runs.                                            |
 | `GET /api/scrape/selfcheck`| Pipeline health check (extract→normalize→score).   |
 | `GET /api/meta`          | Filter options + sort keys for the UI.               |
-| `GET /api/newcars`       | Current-model lineup scraped from official OEM sites — Hyundai (browser-free) + Toyota/Honda/Mazda/Subaru (Playwright, local only). Cached 6h; `?refresh=1` forces a re-fetch. |
+| `GET /api/newcars`       | Current-model lineup scraped from official OEM sites — Hyundai (browser-free) + Toyota/Honda/Mazda/Subaru (needs the Playwright fallback; see the Chromium note above). Cached 6h; `?refresh=1` forces a re-fetch. |
 
 ## Deployment
 
@@ -177,6 +191,14 @@ rating, known issues, pros and cons — the UI shows *why* a car ranks first.
 - **Server**: any Node host (Render, Railway, Fly.io). Set `MONGODB_URI`
   (MongoDB Atlas works) and optionally `PORT`. The crawler honors
   `HTTPS_PROXY` for hosts with egress proxies.
+
+  **Render specifically**: `render.yaml` is only read when the service is
+  *first* created from a Blueprint — later commits to it do **not**
+  auto-update an already-existing service's dashboard settings. If your
+  service predates a `render.yaml` change (e.g. the Chromium build command
+  above), open the service in the Render dashboard and manually update
+  **Settings → Build Command** and **Environment** to match, or delete and
+  recreate the service from the Blueprint.
 
 ## Workspace layout
 

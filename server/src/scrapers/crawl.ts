@@ -7,8 +7,20 @@
  * `fetchWithPlaywright` — real-browser fallback, used ONLY when the Cheerio
  * pass yields nothing on a JS-rendered site. Kept deliberately small: one
  * page at a time, resources blocked, short timeout.
+ *
+ * `openBrowserSession` / `fetchJsonInSession` — a longer-lived browser page
+ * used to make an API call from WITHIN a real, WAF-cleared browser context
+ * (as opposed to a bare server-side fetch). Some APIs (Clutch) block a plain
+ * fetch from a datacenter IP even with browser-shaped headers, but accept the
+ * exact same request when it's actually issued by `fetch()` running inside a
+ * page that navigated there first — the page load lets the site's bot
+ * challenge (AWS WAF token, cookies, JS fingerprint) resolve normally, and the
+ * in-page fetch inherits all of it. One page is reused for every subsequent
+ * call so the cost (browser launch + navigation) is paid once per run, not
+ * once per request.
  */
 
+import { Browser, Page } from "playwright";
 import { CheerioCrawler, Configuration, ProxyConfiguration, log as crawleeLog, LogLevel } from "crawlee";
 import { LogFn } from "./types";
 import { fetchRenderedViaService, renderServiceConfigured } from "./config";
@@ -101,43 +113,97 @@ export async function renderPage(url: string, log: LogFn): Promise<string | null
  */
 let browserUnavailable = false;
 
-/** Real-browser fallback (Playwright/Chromium). Returns rendered HTML or null. */
-export async function fetchWithPlaywright(url: string, log: LogFn): Promise<string | null> {
+const DEFAULT_USER_AGENT =
+  "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36";
+
+/** Launch a local Chromium, or null if unavailable (logs the reason once). */
+async function launchBrowser(log: LogFn): Promise<Browser | null> {
   if (browserUnavailable) return null;
   try {
     const { chromium } = await import("playwright");
     const proxyUrl = process.env.HTTPS_PROXY ?? process.env.HTTP_PROXY;
-    const browser = await chromium.launch({
+    return await chromium.launch({
       headless: true,
       executablePath: process.env.CHROMIUM_PATH || undefined,
       proxy: proxyUrl ? { server: proxyUrl } : undefined,
     });
-    try {
-      const page = await browser.newPage({
-        userAgent:
-          "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
-        locale: "en-CA",
-      });
-      await page.route("**/*.{png,jpg,jpeg,webp,gif,svg,woff,woff2,mp4}", (r) => r.abort());
-      await page.goto(url, { waitUntil: "domcontentloaded", timeout: 30000 });
-      await page.waitForTimeout(2500); // let client-side lists hydrate
-      const html = await page.content();
-      return html;
-    } finally {
-      await browser.close();
-    }
   } catch (e) {
     const msg = (e as Error).message;
     if (/Executable doesn't exist|browserType.launch/i.test(msg)) {
       browserUnavailable = true;
       log(
         "warn",
-        "Browser fallback disabled: Chromium is not installed on this host. " +
-          "Add `npx playwright install chromium` to the build command (see README) to enable it."
+        "Browser fallback disabled: Chromium is not installed (or can't launch) on this host. " +
+          "See README for how to enable it on your deploy host."
       );
     } else {
-      log("warn", `playwright fallback failed for ${url}: ${msg.slice(0, 120)}`);
+      log("warn", `browser launch failed: ${msg.slice(0, 120)}`);
     }
     return null;
   }
+}
+
+/** Real-browser fallback (Playwright/Chromium). Returns rendered HTML or null. */
+export async function fetchWithPlaywright(url: string, log: LogFn): Promise<string | null> {
+  const browser = await launchBrowser(log);
+  if (!browser) return null;
+  try {
+    const page = await browser.newPage({ userAgent: DEFAULT_USER_AGENT, locale: "en-CA" });
+    await page.route("**/*.{png,jpg,jpeg,webp,gif,svg,woff,woff2,mp4}", (r) => r.abort());
+    await page.goto(url, { waitUntil: "domcontentloaded", timeout: 30000 });
+    await page.waitForTimeout(2500); // let client-side lists hydrate
+    return await page.content();
+  } catch (e) {
+    log("warn", `playwright fallback failed for ${url}: ${(e as Error).message.slice(0, 120)}`);
+    return null;
+  } finally {
+    await browser.close();
+  }
+}
+
+export interface BrowserSession {
+  browser: Browser;
+  page: Page;
+}
+
+/**
+ * Launch a browser, navigate once to `warmupUrl` and leave the page open —
+ * this is what lets the site's bot challenge resolve (cookies, JS
+ * fingerprint) before any API calls are made through it. Returns null if no
+ * browser is available (same graceful no-op as every other Playwright path).
+ */
+export async function openBrowserSession(warmupUrl: string, log: LogFn): Promise<BrowserSession | null> {
+  const browser = await launchBrowser(log);
+  if (!browser) return null;
+  try {
+    const page = await browser.newPage({ userAgent: DEFAULT_USER_AGENT, locale: "en-CA" });
+    await page.route("**/*.{png,jpg,jpeg,webp,gif,svg,woff,woff2,mp4}", (r) => r.abort());
+    await page.goto(warmupUrl, { waitUntil: "domcontentloaded", timeout: 20000 });
+    await page.waitForTimeout(1500); // let the challenge / cookies settle
+    return { browser, page };
+  } catch (e) {
+    log("warn", `browser session warmup failed: ${(e as Error).message.slice(0, 120)}`);
+    await browser.close().catch(() => {});
+    return null;
+  }
+}
+
+/**
+ * Fetch `url` from WITHIN the session's page (real fetch(), real cookies) and
+ * return the response body as text, or null on any non-200 / error.
+ */
+export async function fetchJsonInSession(session: BrowserSession, url: string): Promise<string | null> {
+  try {
+    const result = await session.page.evaluate(async (u: string) => {
+      const r = await fetch(u, { headers: { Accept: "application/json" }, credentials: "include" });
+      return { status: r.status, text: await r.text() };
+    }, url);
+    return result.status === 200 ? result.text : null;
+  } catch {
+    return null;
+  }
+}
+
+export async function closeBrowserSession(session: BrowserSession | null): Promise<void> {
+  if (session) await session.browser.close().catch(() => {});
 }

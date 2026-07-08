@@ -8,13 +8,16 @@ services:
     runtime: node
     plan: free
     rootDir: .
-    # No Chromium here on purpose: the primary source (Clutch.ca) is a
-    # browser-free JSON API, and Playwright's Chromium rarely launches on
-    # Render's free plan (missing system libs) — installing it just slows and
-    # flakes the build. To enable the browser fallback for the JS dealer sites,
-    # add `&& npx playwright install --with-deps chromium` and set
-    # SCRAPE_JS_FALLBACK=1 below.
-    buildCommand: npm install && npm run build -w server
+    # --with-deps installs Chromium's shared-library dependencies (libnss3,
+    # libatk, libgbm, ...) too, not just the browser binary — a plain
+    # `playwright install chromium` downloads the binary but Render's minimal
+    # base image is missing those libs, so it fails to LAUNCH at runtime
+    # (looks like "not installed" in the logs even though the download
+    # succeeded at build time). Wrapped in `|| true` so a flaky/impossible
+    # install (no apt/root in this build environment) never breaks the whole
+    # deploy — the scrape/render-fallback code already no-ops gracefully when
+    # no browser is available, same as before this was added.
+    buildCommand: npm install && (npx playwright install --with-deps chromium || true) && npm run build -w server
     startCommand: npm run start -w server
     healthCheckPath: /healthz
     envVars:
@@ -22,3 +25,11 @@ services:
         value: 20.18.0
       - key: MONGODB_URI
         sync: false
+      # Installs Chromium inside node_modules/ instead of the default
+      # per-user cache dir (~/.cache/ms-playwright) — the project directory
+      # is what actually carries over from the build step to the running
+      # service on Render; a cache dir outside it may not persist, which is
+      # the single most common reason "playwright install" succeeds at build
+      # time but the browser is reported missing at runtime.
+      - key: PLAYWRIGHT_BROWSERS_PATH
+        value: "0"

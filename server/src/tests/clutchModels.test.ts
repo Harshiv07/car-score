@@ -13,6 +13,13 @@ import assert from "node:assert/strict";
 import { buildModelQueryUrl, clutch, MODEL_TARGETS } from "../scrapers/clutch";
 import { VEHICLE_MODELS } from "../data/vehicleModels";
 
+// Force the JS/browser fallback off for these tests: a failed model now
+// triggers a real-browser retry pass (see crawl.ts's openBrowserSession),
+// which is correct scraper behaviour but would make a "unit" test slow and
+// network-dependent (it would actually launch Chromium and hit clutch.ca).
+// The browser-retry path itself is verified live, not here.
+process.env.SCRAPE_JS_FALLBACK = "0";
+
 test("every scored model gets its own Clutch query target", () => {
   assert.equal(MODEL_TARGETS.length, VEHICLE_MODELS.length);
   const has = (make: string, model: string) =>
