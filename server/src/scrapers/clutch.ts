@@ -5,11 +5,18 @@
  * price), so it works on hosts without Chromium (Render, etc.) and yields
  * accurate data rather than empty shells. The old static-HTML approach fetched
  * a client-rendered page and always found nothing.
+ *
+ * Queried **per model** (matches clutch.ca/cars/{make}-{model} search pages),
+ * not per make: a make-level query only pulls the first few pages of that
+ * make's whole inventory, and a make with many models (Mazda: CX-30, CX-50,
+ * CX-70, CX-90, Mazda3, MX-5, Mazda6, CX-5, …) can push a specific model we
+ * score (CX-5, Mazda3) past that window entirely, silently starving it of
+ * data. Querying `makes[]=Mazda&models[]=CX-5` goes straight to just that
+ * model's inventory instead.
  */
 
 import { Listing } from "../types";
-import { finalizeListing } from "../util/listingKeys";
-import { matchModelFromTitle } from "../data/vehicleModels";
+import { matchModelFromTitle, VEHICLE_MODELS } from "../data/vehicleModels";
 import { normalizeRecord } from "./normalize";
 import { LogFn, RawVehicleRecord, Scraper, ScraperRunResult } from "./types";
 import { BROWSER_HEADERS, fetchWithTimeout, loadScrapeConfig } from "./config";
@@ -19,8 +26,15 @@ const API = "https://api.clutch.ca/v1";
 // Overridable in case Clutch rotates ids.
 const LOCATION_ID = process.env.CLUTCH_LOCATION_ID || "56f159d4-49db-4a61-b2d8-d8784f10a184";
 const PROVINCE = "ON";
-// Makes we score — one query per make, then normalize keeps supported models.
-const MAKES = ["Toyota", "Honda", "Mazda", "Hyundai", "Subaru"];
+const PAGE_SIZE = 50;
+
+/** One (make, model) query per model we score — derived from the knowledge
+ *  base so this list can never drift out of sync with what we support.
+ *  Exported so a test can assert every supported model gets its own query. */
+export const MODEL_TARGETS: { make: string; model: string }[] = VEHICLE_MODELS.map((m) => ({
+  make: m.make,
+  model: m.model,
+}));
 
 interface ClutchNamed {
   name?: string | null;
@@ -87,9 +101,9 @@ const delay = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
 /**
  * The API sits behind AWS WAF, which hands out an `aws-waf-token` cookie on the
- * first hit and rate-limits rapid sequential requests. We keep the cookie (so
- * later requests are trusted) and retry once with a short backoff when a
- * response comes back empty or non-OK.
+ * first hit and rate-limits rapid sequential requests (a burst gets HTTP 202
+ * with an empty body — a challenge, not real "no results"). We keep the cookie
+ * (so later requests are trusted) and retry with backoff when that happens.
  */
 let cookieJar = "";
 
@@ -102,10 +116,24 @@ function rememberCookies(res: Response): void {
   if (pairs.length) cookieJar = pairs.join("; ");
 }
 
-async function fetchMakePage(make: string, page: number, timeoutMs: number): Promise<ClutchPage | null> {
-  const url =
+/** Build the model-scoped Clutch API query (exported for a regression test —
+ *  this is the exact parameter that fixes make-level pagination cutting off
+ *  low-volume models like Mazda CX-5/Mazda3). */
+export function buildModelQueryUrl(make: string, model: string, page: number): string {
+  return (
     `${API}/vehicles/locations/${LOCATION_ID}` +
-    `?makes[]=${encodeURIComponent(make)}&downPayment=0&isBiweekly=true&interestRate=7.99&page=${page}`;
+    `?makes[]=${encodeURIComponent(make)}&models[]=${encodeURIComponent(model)}` +
+    `&pc=${PAGE_SIZE}&downPayment=0&isBiweekly=true&interestRate=7.99&page=${page}`
+  );
+}
+
+async function fetchModelPage(
+  make: string,
+  model: string,
+  page: number,
+  timeoutMs: number
+): Promise<ClutchPage | null> {
+  const url = buildModelQueryUrl(make, model, page);
   const doFetch = () =>
     fetchWithTimeout(url, {
       headers: {
@@ -117,14 +145,14 @@ async function fetchMakePage(make: string, page: number, timeoutMs: number): Pro
       timeoutMs,
     });
 
-  for (let attempt = 0; attempt < 2; attempt++) {
+  for (let attempt = 0; attempt < 3; attempt++) {
     const res = await doFetch();
     rememberCookies(res);
     const text = await res.text();
     if (res.ok && text.trim().startsWith("{")) {
       return JSON.parse(text) as ClutchPage;
     }
-    if (attempt === 0) await delay(700); // WAF cooldown, then retry once
+    if (attempt < 2) await delay(700 * (attempt + 1)); // WAF cooldown, then retry
   }
   return null;
 }
@@ -134,28 +162,34 @@ export const clutch: Scraper = {
   source: "Clutch.ca",
   async run(log: LogFn): Promise<ScraperRunResult> {
     const cfg = loadScrapeConfig();
-    const pagesPerMake = Math.max(1, Math.min(cfg.maxPagesPerSource, 3));
+    const pagesPerModel = Math.max(1, Math.min(cfg.maxPagesPerSource, 4));
     const listings: Listing[] = [];
     const seen = new Set<string>();
-    let anyError = false;
+    const failedModels: string[] = [];
 
-    log("info", `Clutch.ca: querying API for ${MAKES.length} makes (≤${pagesPerMake} page(s) each)…`);
+    log("info", `Clutch.ca: querying API for ${MODEL_TARGETS.length} model(s) (≤${pagesPerModel} page(s) each)…`);
 
-    for (const make of MAKES) {
-      for (let page = 0; page < pagesPerMake; page++) {
+    for (const { make, model } of MODEL_TARGETS) {
+      let modelFound = 0;
+      for (let page = 0; page < pagesPerModel; page++) {
         let data: ClutchPage | null;
         try {
-          data = await fetchMakePage(make, page, cfg.requestTimeoutMs);
+          data = await fetchModelPage(make, model, page, cfg.requestTimeoutMs);
         } catch (e) {
-          anyError = true;
-          log("warn", `Clutch.ca: ${make} page ${page} failed — ${(e as Error).message.slice(0, 80)}`);
+          log("warn", `Clutch.ca: ${make} ${model} page ${page} failed — ${(e as Error).message.slice(0, 80)}`);
           break;
         }
-        if (!data || !Array.isArray(data.vehicles) || data.vehicles.length === 0) break;
+        if (!data) {
+          if (page === 0) failedModels.push(`${make} ${model}`);
+          break;
+        }
+        if (!Array.isArray(data.vehicles) || data.vehicles.length === 0) break;
 
         for (const v of data.vehicles) {
           if (v.visibleOnSite === false) continue;
-          // Cheap pre-filter so we skip normalizing makes/models we don't score.
+          // Safety net: a model query can still include closely-related trims
+          // (e.g. "RAV4 Hybrid" for a RAV4 query) — matchModelFromTitle keeps
+          // only what we actually score.
           if (!matchModelFromTitle(`${v.make?.name ?? ""} ${v.model?.name ?? ""}`)) continue;
           const listing = normalizeRecord(clutchToRaw(v), {
             sourceWebsite: "Clutch.ca",
@@ -166,19 +200,24 @@ export const clutch: Scraper = {
           if (listing && !seen.has(listing.dedupeKey)) {
             seen.add(listing.dedupeKey);
             listings.push(listing);
+            modelFound++;
           }
         }
         if (page + 1 >= data.totalPages) break;
-        await delay(250); // gentle pacing to stay under the WAF rate limit
+        await delay(300); // gentle pacing to stay under the WAF rate limit
       }
-      await delay(250);
+      if (modelFound === 0 && !failedModels.includes(`${make} ${model}`)) {
+        log("warn", `Clutch.ca: ${make} ${model} — 0 listings (may be temporarily out of stock)`);
+      }
+      await delay(300);
     }
 
-    const ok = listings.length > 0 || !anyError;
+    const ok = listings.length > 0 || failedModels.length < MODEL_TARGETS.length;
     const note =
       listings.length > 0
-        ? `${listings.length} supported-model listing(s) found`
-        : anyError
+        ? `${listings.length} supported-model listing(s) found` +
+          (failedModels.length ? ` (${failedModels.join(", ")} unreachable)` : "")
+        : failedModels.length === MODEL_TARGETS.length
           ? "Clutch API unreachable — skipped"
           : "no supported-model listings in Clutch inventory right now";
     log(listings.length > 0 ? "info" : "warn", `Clutch.ca: ${note}`);
