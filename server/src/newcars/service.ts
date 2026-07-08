@@ -102,12 +102,12 @@ function finalize(cars: NewCar[]): NewCar[] {
   return cars.sort((a, b) => a.make.localeCompare(b.make) || (b.score ?? -1) - (a.score ?? -1));
 }
 
-/** Fill in a real photo (Wikipedia) for any car whose OEM page had no image. */
+/** Fill in a real photo (Wikimedia Commons) for any car with no image yet. */
 async function enrichImages(cars: NewCar[]): Promise<NewCar[]> {
   await Promise.all(
     cars
       .filter((c) => !c.image)
-      .map((c) => fetchCarImage(c.make, c.model).then((img) => { if (img) c.image = img; })),
+      .map((c) => fetchCarImage(c.make, c.model, c.year).then((img) => { if (img) c.image = img; })),
   );
   return cars;
 }

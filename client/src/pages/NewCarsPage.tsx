@@ -1,10 +1,13 @@
 import { useMemo, useState } from "react";
+import { useSearchParams } from "react-router-dom";
 import { useNewCars } from "../api/hooks";
 import { NewCar } from "../api/types";
 import { cad, ScoreBadge, timeAgo } from "../components/ui";
 
 export function NewCarsPage() {
   const { data, isLoading } = useNewCars();
+  const [params, setParams] = useSearchParams();
+  const activeMake = params.get("make") ?? "";
 
   const byMake = useMemo(() => {
     const groups = new Map<string, NewCar[]>();
@@ -13,6 +16,8 @@ export function NewCarsPage() {
     }
     return [...groups.entries()];
   }, [data]);
+
+  const visible = activeMake ? byMake.filter(([make]) => make === activeMake) : byMake;
 
   return (
     <div className="mx-auto max-w-7xl px-4 py-8">
@@ -25,6 +30,17 @@ export function NewCarsPage() {
           powertrain and specs. Click through to build &amp; price on the OEM site.
         </p>
       </div>
+
+      {byMake.length > 0 && (
+        <BrandTabs
+          byMake={byMake}
+          total={data?.cars.length ?? 0}
+          active={activeMake}
+          onChange={(make) =>
+            setParams(make ? { make } : {}, { replace: true })
+          }
+        />
+      )}
 
       {data?.loading && (
         <div className="mt-5 flex items-center gap-2 rounded-xl border border-line bg-surface px-4 py-2.5 text-sm text-muted">
@@ -41,14 +57,16 @@ export function NewCarsPage() {
         </div>
       )}
 
-      {byMake.map(([make, cars]) => (
+      {visible.map(([make, cars]) => (
         <section key={make} className="mt-8">
-          <h2 className="mb-3 flex items-center gap-2 text-lg font-bold text-text">
-            {make}
-            <span className="nums rounded-full bg-surface-2 px-2 py-0.5 text-xs font-semibold text-muted">
-              {cars.length}
-            </span>
-          </h2>
+          {!activeMake && (
+            <h2 className="mb-3 flex items-center gap-2 text-lg font-bold text-text">
+              {make}
+              <span className="nums rounded-full bg-surface-2 px-2 py-0.5 text-xs font-semibold text-muted">
+                {cars.length}
+              </span>
+            </h2>
+          )}
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
             {cars.map((c) => (
               <NewCarCard key={c.id} car={c} />
@@ -63,11 +81,54 @@ export function NewCarsPage() {
         </div>
       )}
 
+      {activeMake && visible.length === 0 && (
+        <div className="mt-8 rounded-2xl border border-line bg-surface p-10 text-center text-muted">
+          No {activeMake} models yet.
+        </div>
+      )}
+
       {data?.fetchedAt && (
         <p className="mt-8 text-center text-xs text-faint">
           Data from official manufacturer sites · updated {timeAgo(data.fetchedAt)}
         </p>
       )}
+    </div>
+  );
+}
+
+/** Horizontally-scrollable brand pill tabs, each showing a model count. */
+function BrandTabs({
+  byMake,
+  total,
+  active,
+  onChange,
+}: {
+  byMake: [string, NewCar[]][];
+  total: number;
+  active: string;
+  onChange: (make: string) => void;
+}) {
+  const pill = (isActive: boolean) =>
+    `shrink-0 rounded-full px-3.5 py-1.5 text-sm font-semibold transition ${
+      isActive ? "bg-brand text-black shadow-sm" : "bg-surface-2 text-muted hover:text-text"
+    }`;
+  return (
+    <div role="tablist" aria-label="Filter by brand" className="mt-5 flex gap-2 overflow-x-auto pb-1">
+      <button type="button" role="tab" aria-selected={!active} onClick={() => onChange("")} className={pill(!active)}>
+        All <span className="nums opacity-70">({total})</span>
+      </button>
+      {byMake.map(([make, cars]) => (
+        <button
+          key={make}
+          type="button"
+          role="tab"
+          aria-selected={active === make}
+          onClick={() => onChange(make)}
+          className={pill(active === make)}
+        >
+          {make} <span className="nums opacity-70">({cars.length})</span>
+        </button>
+      ))}
     </div>
   );
 }

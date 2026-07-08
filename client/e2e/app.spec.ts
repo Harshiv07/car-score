@@ -44,6 +44,24 @@ test("new cars tab navigates and renders its page", async ({ page }) => {
   await expect(page.getByRole("heading", { level: 1 })).toContainText(/New\s*Cars/i);
 });
 
+test("new cars brand tabs filter the grid and write make= into the URL", async ({ page }) => {
+  await page.goto("/new-cars");
+  const tabs = page.getByRole("tab");
+  await expect(tabs.first()).toBeVisible({ timeout: 20_000 }); // first live fetch can take a moment
+  await expect(tabs.filter({ hasText: "All" })).toHaveAttribute("aria-selected", "true");
+
+  const second = tabs.nth(1); // first brand tab after "All"
+  const brandName = (await second.textContent())?.replace(/\s*\(\d+\)\s*$/, "").trim();
+  await second.click();
+  await expect(page).toHaveURL(new RegExp(`make=${encodeURIComponent(brandName ?? "")}`));
+  await expect(second).toHaveAttribute("aria-selected", "true");
+  // section headers are hidden once a single brand is isolated
+  await expect(page.locator("main h2")).toHaveCount(0);
+
+  await tabs.filter({ hasText: "All" }).click();
+  await expect(page).not.toHaveURL(/make=/);
+});
+
 test("theme switch toggles dark mode", async ({ page }) => {
   await page.goto("/");
   const html = page.locator("html");
