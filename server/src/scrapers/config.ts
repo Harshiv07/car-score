@@ -107,9 +107,19 @@ export function renderServiceConfigured(): boolean {
   return !!process.env.RENDER_SERVICE_URL;
 }
 
-export async function fetchRenderedViaService(targetUrl: string): Promise<string | null> {
+export interface RenderServiceResult {
+  html: string | null;
+  /** Why `html` is null — status code + a body snippet, or the thrown error's
+   *  message. Lets a caller log something more useful than "returned nothing"
+   *  (auth/param error vs. quota exhausted vs. the target itself blocked the
+   *  proxy's IP too — three very different problems that look identical
+   *  without this). */
+  failureReason?: string;
+}
+
+export async function fetchRenderedViaService(targetUrl: string): Promise<RenderServiceResult> {
   const template = process.env.RENDER_SERVICE_URL;
-  if (!template) return null;
+  if (!template) return { html: null, failureReason: "RENDER_SERVICE_URL not set" };
   const timeoutMs = num("RENDER_SERVICE_TIMEOUT_MS", 30_000);
   const apiKey = process.env.RENDER_SERVICE_API_KEY;
   try {
@@ -130,10 +140,18 @@ export async function fetchRenderedViaService(targetUrl: string): Promise<string
         timeoutMs,
       });
     }
-    if (!res.ok) return null;
-    const html = await res.text();
-    return html && html.length > 500 ? html : null;
-  } catch {
-    return null;
+    const body = await res.text();
+    if (!res.ok) {
+      return { html: null, failureReason: `HTTP ${res.status}: ${body.slice(0, 200).replace(/\s+/g, " ")}` };
+    }
+    if (!body || body.length <= 500) {
+      return {
+        html: null,
+        failureReason: `response too short (${body.length} bytes) to be a real page: ${body.slice(0, 200).replace(/\s+/g, " ")}`,
+      };
+    }
+    return { html: body };
+  } catch (e) {
+    return { html: null, failureReason: `request threw: ${(e as Error).message.slice(0, 150)}` };
   }
 }

@@ -99,9 +99,9 @@ export async function crawlPages(
  */
 export async function renderPage(url: string, log: LogFn): Promise<string | null> {
   if (renderServiceConfigured()) {
-    const html = await fetchRenderedViaService(url);
-    if (html) return html;
-    log("warn", `render service returned nothing for ${url}; trying local browser`);
+    const result = await fetchRenderedViaService(url);
+    if (result.html) return result.html;
+    log("warn", `render service failed for ${url} (${result.failureReason}); trying local browser`);
   }
   return fetchWithPlaywright(url, log);
 }

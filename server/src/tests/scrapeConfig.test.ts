@@ -5,7 +5,7 @@
 
 import { test, afterEach } from "node:test";
 import assert from "node:assert/strict";
-import { loadScrapeConfig } from "../scrapers/config";
+import { fetchRenderedViaService, loadScrapeConfig } from "../scrapers/config";
 import { runWithTimeout } from "../services/scrapeService";
 import { LogFn, Scraper } from "../scrapers/types";
 
@@ -16,6 +16,8 @@ const ENV_KEYS = [
   "SCRAPE_MAX_PAGES",
   "SCRAPE_SOURCES",
   "SCRAPE_JS_FALLBACK",
+  "RENDER_SERVICE_URL",
+  "RENDER_SERVICE_API_KEY",
 ];
 
 afterEach(() => {
@@ -79,4 +81,39 @@ test("a fast source returns its own result, not the timeout", async () => {
   const result = await runWithTimeout(fast, noop, 5000);
   assert.equal(result.ok, true);
   assert.equal(result.note, "done");
+});
+
+test("fetchRenderedViaService reports why it failed, not just that it did", async (t) => {
+  // Guards the bug this was built to diagnose: a bare "returned nothing" log
+  // gives no way to tell an auth/param error, a quota error and the target
+  // site blocking the rendering proxy's IP apart — three very different
+  // problems that all looked identical before this.
+  delete process.env.RENDER_SERVICE_URL;
+  const unset = await fetchRenderedViaService("https://example.com");
+  assert.equal(unset.html, null);
+  assert.match(unset.failureReason ?? "", /not set/);
+
+  process.env.RENDER_SERVICE_URL = "https://render.example/api?key=bad&url={url}";
+  t.mock.method(globalThis, "fetch", async () => new Response('{"message":"Invalid api key"}', { status: 401 }));
+  const authFail = await fetchRenderedViaService("https://example.com");
+  assert.equal(authFail.html, null);
+  assert.match(authFail.failureReason ?? "", /HTTP 401/);
+  assert.match(authFail.failureReason ?? "", /Invalid api key/);
+});
+
+test("fetchRenderedViaService treats a too-short body as a failure, not a real page", async (t) => {
+  process.env.RENDER_SERVICE_URL = "https://render.example/api?url={url}";
+  t.mock.method(globalThis, "fetch", async () => new Response("blocked", { status: 200 }));
+  const result = await fetchRenderedViaService("https://example.com");
+  assert.equal(result.html, null);
+  assert.match(result.failureReason ?? "", /too short/);
+});
+
+test("fetchRenderedViaService returns the HTML on a real success", async (t) => {
+  process.env.RENDER_SERVICE_URL = "https://render.example/api?url={url}";
+  const page = `<html><body>${"x".repeat(600)}</body></html>`;
+  t.mock.method(globalThis, "fetch", async () => new Response(page, { status: 200 }));
+  const result = await fetchRenderedViaService("https://example.com");
+  assert.equal(result.html, page);
+  assert.equal(result.failureReason, undefined);
 });
