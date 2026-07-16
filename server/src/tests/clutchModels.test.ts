@@ -92,3 +92,77 @@ test(
     }
   }
 );
+
+test(
+  "breadth first, then depth: every model gets page 0 before any model gets page 2+ (regression)",
+  { timeout: 20_000 },
+  async (t) => {
+    // "All models fetched" and "more pages per model" compete for the same
+    // tiny per-run budget (confirmed live: Clutch's WAF allows only ~3-4
+    // requests through per run, and slowing the request pacing 7x made no
+    // difference — it's a count budget, not a rate limit). Spending that
+    // budget depth-first on whichever model is queried first would starve
+    // every other model completely, so phase 1 must fetch page 0 for EVERY
+    // model before phase 2 spends any leftover budget on further pages —
+    // and phase 2 must spread those extra pages across models (round-robin),
+    // not exhaust them on a single one.
+    const DEEP = new Set(["RAV4", "Civic", "Elantra"]); // 3 models report >1 page available
+    process.env.SCRAPE_MAX_PAGES = "3";
+    t.after(() => delete process.env.SCRAPE_MAX_PAGES);
+
+    const requested: { model: string; page: number }[] = [];
+    t.mock.method(globalThis, "fetch", async (input: string | URL) => {
+      const url = new URL(input);
+      const model = url.searchParams.get("models[]") ?? "";
+      const page = Number(url.searchParams.get("page"));
+      requested.push({ model, page });
+      if (page >= 2) return new Response("", { status: 202 }); // budget exhausted from page 2 on
+      const totalPages = DEEP.has(model) ? 3 : 1;
+      return new Response(
+        JSON.stringify({
+          page,
+          pageSize: 32,
+          totalCount: totalPages * 32,
+          totalPages,
+          vehicles: [
+            {
+              id: 1,
+              year: 2022,
+              make: { name: model === "RAV4" ? "Toyota" : model === "Civic" ? "Honda" : "Hyundai" },
+              model: { name: model },
+              ["vehiclePrice-ON"]: { price: 20000 + page },
+            },
+          ],
+        }),
+        { status: 200, headers: { "content-type": "application/json" } }
+      );
+    });
+
+    const result = await clutch.run(() => {});
+
+    // Every model's page 0 was requested before ANY model's page 1 — true
+    // breadth-first ordering, not just "eventually attempted".
+    const firstPage1Index = requested.findIndex((r) => r.page === 1);
+    const page0Requests = requested.filter((r) => r.page === 0);
+    assert.equal(page0Requests.length, MODEL_TARGETS.length, "every model must get a page-0 request");
+    assert.ok(
+      requested.slice(0, MODEL_TARGETS.length).every((r) => r.page === 0),
+      "all 10 page-0 requests must happen before any page-1 request (breadth before depth)"
+    );
+    assert.ok(firstPage1Index >= MODEL_TARGETS.length - 1);
+
+    // Depth requests only ever went to the 3 models that reported more pages.
+    const page1Requests = requested.filter((r) => r.page === 1);
+    assert.ok(page1Requests.every((r) => DEEP.has(r.model)), "page-1 must only be requested for models with totalPages > 1");
+    assert.ok(page1Requests.length <= DEEP.size);
+
+    // Once page 2 starts failing, the depth pass stops entirely on the FIRST
+    // such failure — everything found at page 0/1 (breadth + first depth
+    // round) is preserved, but it must not keep trying page 2 for every deep
+    // model in turn (that would just be more failed requests for no gain).
+    const page2Attempts = requested.filter((r) => r.page === 2).length;
+    assert.ok(page2Attempts >= 1, "page 2 should have been attempted at least once (that's what signals budget exhaustion)");
+    assert.ok(page2Attempts <= 1, "must stop immediately on the first page-2 failure, not try it for every deep model");
+    assert.equal(result.listings.length, MODEL_TARGETS.length + DEEP.size, "10 from page 0 + 3 from the one successful depth round, page-2 data never ingested");
+  }
+);

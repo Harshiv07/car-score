@@ -259,14 +259,6 @@ export const clutch: Scraper = {
   source: "Clutch.ca",
   async run(log: LogFn): Promise<ScraperRunResult> {
     const cfg = loadScrapeConfig();
-    // Capped at 2 regardless of SCRAPE_MAX_PAGES: this scraper already makes
-    // one request per supported model (10), so paginating deep on top of that
-    // multiplies total request volume fast — and volume is exactly what trips
-    // Clutch's WAF. Most supported models fit in 1-2 pages anyway (CX-5 ~54,
-    // Mazda3 ~39 at the API's own page size); higher-volume models just get a
-    // partial-but-real sample instead of the fuller set, which is a fine
-    // trade against reliably getting *some* data for every model.
-    const pagesPerModel = Math.max(1, Math.min(cfg.maxPagesPerSource, 2));
     const listings: Listing[] = [];
     const seen = new Set<string>();
     const failedTargets: { make: string; model: string }[] = [];
@@ -276,45 +268,82 @@ export const clutch: Scraper = {
     // if it loses, so the browser-retry pass below must never risk that).
     const deadline = Date.now() + cfg.sourceTimeoutMs - 5000;
 
-    log("info", `Clutch.ca: querying API for ${MODEL_TARGETS.length} model(s) (≤${pagesPerModel} page(s) each)…`);
+    log("info", `Clutch.ca: querying API for ${MODEL_TARGETS.length} model(s)…`);
 
-    // Every model gets its own independent attempt — a block/failure on one
-    // model must never cost the others their turn. A prior version stopped
-    // the whole run after 2 consecutive model failures to avoid deepening a
-    // WAF block, but that traded a real bug (a transient block on 2 models
-    // silently zeroed out every model queried *after* them, even though
-    // nothing was actually wrong with them) for a hypothetical one. Failures
-    // are logged and retried via a browser session below, never abandoned.
-    // Query order rotates run-to-run (see rotatedModelTargets) so every model
-    // gets a turn benefiting from the WAF's "first few requests" allowance.
+    // Two phases, because "cover every model" and "go deep on each" compete
+    // for the SAME small budget: Clutch's WAF reliably allows only ~3-4
+    // requests through per run before throttling the rest (confirmed live —
+    // slowing the pacing from 400ms to 3000ms between requests made no
+    // difference at all, so this is a request-COUNT budget, not a rate
+    // limit pacing can work around). Spending that budget depth-first on
+    // whichever model happens to be queried first would starve every other
+    // model completely, so:
+    //
+    //   Phase 1 (breadth) — page 0 for every model, in rotated order (see
+    //   rotatedModelTargets). A block/failure on one model must never cost
+    //   the others their turn — a prior version stopped the whole run after
+    //   2 consecutive model failures to avoid deepening a WAF block, but
+    //   that traded a real bug (silently zeroing out every model queried
+    //   *after* the 2 that failed, even though nothing was wrong with them)
+    //   for a hypothetical one.
+    //
+    //   Phase 2 (depth) — ONLY if the budget stretches further than one page
+    //   each: round-robins page 1, then page 2, etc. across whichever models
+    //   reported more pages available (SCRAPE_MAX_PAGES caps how deep), so
+    //   any extra requests the WAF allows get spread across several models
+    //   instead of one model consuming them all.
+    const totalPagesByKey = new Map<string, number>();
+    const reachableInOrder: { make: string; model: string }[] = [];
+
     for (const target of rotatedModelTargets()) {
       const { make, model } = target;
-      let modelFound = 0;
-      let modelReachable = false;
-      for (let page = 0; page < pagesPerModel; page++) {
+      let data: ClutchPage | null;
+      try {
+        data = await fetchModelPage(make, model, 0, cfg.requestTimeoutMs);
+      } catch (e) {
+        log("warn", `Clutch.ca: ${make} ${model} page 0 failed — ${(e as Error).message.slice(0, 80)}`);
+        data = null;
+      }
+      if (!data) {
+        failedTargets.push(target);
+      } else {
+        const found = Array.isArray(data.vehicles) ? ingestVehicles(data.vehicles, listings, seen) : 0;
+        if (found === 0) log("warn", `Clutch.ca: ${make} ${model} — 0 listings (may be temporarily out of stock)`);
+        if (data.totalPages > 1) {
+          totalPagesByKey.set(`${make} ${model}`, data.totalPages);
+          reachableInOrder.push(target);
+        }
+      }
+      await delay(400); // gentle pacing (doesn't affect the budget, but is a good citizen)
+    }
+
+    const pageCap = Math.max(1, cfg.maxPagesPerSource); // tune via SCRAPE_MAX_PAGES; default 4
+    let page = 1;
+    depth: while (page < pageCap && totalPagesByKey.size > 0 && Date.now() < deadline) {
+      let madeProgress = false;
+      for (const { make, model } of reachableInOrder) {
+        const key = `${make} ${model}`;
+        const total = totalPagesByKey.get(key);
+        if (total == null || page >= total) continue;
+        if (Date.now() >= deadline) break depth;
         let data: ClutchPage | null;
         try {
           data = await fetchModelPage(make, model, page, cfg.requestTimeoutMs);
-        } catch (e) {
-          log("warn", `Clutch.ca: ${make} ${model} page ${page} failed — ${(e as Error).message.slice(0, 80)}`);
-          break;
+        } catch {
+          data = null;
         }
         if (!data) {
-          if (page === 0) failedTargets.push(target);
-          break;
+          // The WAF budget is spent — the breadth we already have from phase
+          // 1 stays; further depth attempts would just fail the same way.
+          log("info", `Clutch.ca: extra-page budget used up at page ${page + 1} — keeping the ${listings.length} already found.`);
+          break depth;
         }
-        modelReachable = true;
-        if (!Array.isArray(data.vehicles) || data.vehicles.length === 0) break;
-
-        modelFound += ingestVehicles(data.vehicles, listings, seen);
-        if (page + 1 >= data.totalPages) break;
-        await delay(400); // gentle pacing to stay under the WAF rate limit
+        ingestVehicles(data.vehicles ?? [], listings, seen);
+        madeProgress = true;
+        await delay(400);
       }
-
-      if (modelFound === 0 && modelReachable) {
-        log("warn", `Clutch.ca: ${make} ${model} — 0 listings (may be temporarily out of stock)`);
-      }
-      await delay(400); // same pacing whether this model succeeded or not
+      if (!madeProgress) break;
+      page++;
     }
 
     // Second tier: anything the direct API call couldn't reach gets one retry
