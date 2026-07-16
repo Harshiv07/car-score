@@ -120,7 +120,13 @@ export const autotrader: Scraper = {
   source: "AutoTrader.ca",
   async run(log: LogFn): Promise<ScraperRunResult> {
     const cfg = loadScrapeConfig();
-    const targets = TARGETS.slice(0, cfg.maxPagesPerSource);
+    // Every supported model gets its own request — this is NOT sliced by
+    // cfg.maxPagesPerSource (that knob caps how many pages a *generic* dealer
+    // scraper fetches for ONE site; here each model is already its own single,
+    // cheap page, ~0.6s each, so slicing it silently dropped 6 of the 10
+    // supported models — Mazda3, CX-5, Elantra, Tucson, Forester, Crosstrek —
+    // from ever being queried at all).
+    const targets = TARGETS;
     const listings: Listing[] = [];
     const seen = new Set<string>();
     const meta = { sourceWebsite: "AutoTrader.ca", baseUrl: "https://www.autotrader.ca", province: "ON" };

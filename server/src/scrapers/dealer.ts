@@ -7,6 +7,9 @@
  *    `cp` company id). Browser-free.
  *  - `stm` — WordPress "Motors" theme dealers (Gore Motors). Enumerates the
  *    per-vehicle pages from the theme's listings-sitemap.xml. Browser-free.
+ *  - `edealer` — eDealer-platform dealers (Half-Way Motors Mazda). The used-
+ *    inventory page embeds the whole lot as a `vehicleArray` JS object literal
+ *    directly in the server-rendered HTML — fully structured, browser-free.
  *  - `html` (default) — generic three-strategy HTML scraper, best-effort. These
  *    render client-side and/or sit behind bot challenges, so they usually only
  *    yield data with SCRAPE_JS_FALLBACK=1 and Chromium installed.
@@ -17,13 +20,14 @@ import { Scraper } from "./types";
 import { makeScraper } from "./genericScraper";
 import { makeConvertusScraper } from "./convertus";
 import { makeStmMotorsScraper } from "./stmMotors";
+import { makeEdealerScraper } from "./edealer";
 
 interface DealerEntry {
   key: string;
   name: string;
   city: string;
   province: string;
-  platform?: "convertus" | "stm" | "html";
+  platform?: "convertus" | "stm" | "edealer" | "html";
   cp?: number;
   domain?: string;
   urls?: string[];
@@ -58,6 +62,15 @@ export const dealerScrapers: Scraper[] = (dealersConfig.dealers as DealerEntry[]
       key: d.key,
       source: d.name,
       domain: dealerDomain(d),
+      city: d.city,
+      province: d.province,
+    });
+  }
+  if (d.platform === "edealer" && d.urls?.[0]) {
+    return makeEdealerScraper({
+      key: d.key,
+      source: d.name,
+      url: d.urls[0],
       city: d.city,
       province: d.province,
     });

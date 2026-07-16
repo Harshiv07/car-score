@@ -36,6 +36,26 @@ export const MODEL_TARGETS: { make: string; model: string }[] = VEHICLE_MODELS.m
   model: m.model,
 }));
 
+/**
+ * Rotate the query order by a time-bucketed offset so the model that goes
+ * *first* changes from run to run. In practice Clutch's WAF reliably allows
+ * only the first ~3 requests of a run through before throttling the rest
+ * (confirmed live and in production logs: RAV4/Corolla/Civic — the first 3 in
+ * MODEL_TARGETS — succeed every time, the other 7 fail every time) — a static
+ * order means those first 3 always win and the same 7 always lose, run after
+ * run, regardless of the browser-retry tier. Rotating means every model gets
+ * a turn being "first" over successive runs (each ~COOLDOWN_MS apart), so
+ * every model accumulates real Clutch coverage over time instead of the same
+ * 7 being permanently starved.
+ */
+export function rotatedModelTargets(
+  now: number = Date.now(),
+  bucketMs = 10 * 60 * 1000 // mirrors scrapeService.ts's COOLDOWN_MS — not imported to avoid a circular dependency
+): typeof MODEL_TARGETS {
+  const offset = Math.floor(now / bucketMs) % MODEL_TARGETS.length;
+  return [...MODEL_TARGETS.slice(offset), ...MODEL_TARGETS.slice(0, offset)];
+}
+
 interface ClutchNamed {
   name?: string | null;
 }
@@ -265,7 +285,9 @@ export const clutch: Scraper = {
     // silently zeroed out every model queried *after* them, even though
     // nothing was actually wrong with them) for a hypothetical one. Failures
     // are logged and retried via a browser session below, never abandoned.
-    for (const target of MODEL_TARGETS) {
+    // Query order rotates run-to-run (see rotatedModelTargets) so every model
+    // gets a turn benefiting from the WAF's "first few requests" allowance.
+    for (const target of rotatedModelTargets()) {
       const { make, model } = target;
       let modelFound = 0;
       let modelReachable = false;

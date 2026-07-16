@@ -83,6 +83,7 @@ server/src/scrapers/
   clutch.ts        # Clutch.ca — public JSON API (browser-free)
   convertus.ts     # Convertus VMS dealers (Wayne Toyota, Superior Hyundai) — browser-free JSON proxy
   stmMotors.ts     # STM Motors dealers (Gore Motors) — browser-free via listings-sitemap.xml
+  edealer.ts       # eDealer-platform dealers (Half-Way Motors Mazda) — browser-free, embedded JS object
   autotrader.ts    # AutoTrader.ca search pages per model (best-effort HTML)
   cargurus.ts      # CarGurus.ca (best-effort — DataDome anti-bot)
   dealer.ts        # dealership sites, configurable via src/config/dealers.json
@@ -94,18 +95,30 @@ entry has a `platform`:
 - **Clutch.ca** — public JSON API, queried per supported model (not per make —
   a make-level query only pulls the first few pages of a make's *whole*
   inventory, which silently starves low-volume models like Mazda CX-5 when
-  the make sells a dozen other models too). Occasionally a model gets
-  WAF-challenged; those get one retry through a real browser session (page
-  navigates to clutch.ca first, so the site's bot challenge resolves
-  normally, then the same API call is made *from inside that page* — a bare
-  server-side fetch can get blocked in a way an in-page fetch from a
+  the make sells a dozen other models too), in a rotating order (see below).
+  A model that gets WAF-challenged gets one retry through a real browser
+  session (page navigates to clutch.ca first, so the site's bot challenge
+  resolves normally, then the same API call is made *from inside that page* —
+  a bare server-side fetch can get blocked in a way an in-page fetch from a
   browser-cleared session doesn't). No-ops if no browser is available.
+  Clutch's WAF reliably allows only the first few requests of a run through
+  before throttling the rest, so a fixed query order would let the same 2-3
+  models win every single run and permanently starve the other 7 — the query
+  order rotates by a time bucket (`rotatedModelTargets`) so a different model
+  is "first" each run, and every model accumulates real Clutch coverage over
+  successive runs instead.
 - **`convertus`** (Wayne Toyota, Superior Hyundai) — the dealer site's own
   same-origin `convertus-vms/…/ajax-vehicles.php` proxy (set each dealer's `cp`
   company id).
 - **`stm`** (Gore Motors) — the WordPress Motors theme publishes a
   `listings-sitemap.xml`; we read the per-vehicle pages it lists (slug carries
   year-make-model, page carries price + mileage).
+- **`edealer`** (Half-Way Motors Mazda) — the used-inventory page embeds the
+  whole lot as a `var vehicleArray = {...}` JS object literal directly in the
+  static HTML; no rendering needed. These sites commonly serve a shared
+  multi-brand feed (a dealer group's used lot mixes trade-ins across sibling
+  stores on one page), so each vehicle is attributed to its own `dealerName`
+  rather than the configured dealer's name.
 
 All return complete, structured vehicles (year, price, km, VIN where available,
 drivetrain, fuel).
@@ -114,7 +127,19 @@ drivetrain, fuel).
 result `<article>` links to a VDP and shows year/price/km as text, so the
 parser pairs every VDP anchor with its own tile (the smallest ancestor holding
 a price) using element-boundary-aware text. The static pages already carry the
-tiles, so this works browser-free; the rendered fallback tops it up.
+tiles, so this works browser-free; the rendered fallback tops it up. Every
+supported model gets its own request — this is anchored to `TARGETS`
+directly, not sliced by `SCRAPE_MAX_PAGES` (that knob caps a *generic* dealer
+scraper's page count; reusing it here once silently dropped 6 of the 10
+supported models from ever being queried at all).
+
+**Model matching** (`matchModelFromTitle` in `data/vehicleModels.ts`) uses
+word-boundary-aware alias matching, not a plain substring check — a real
+Mazda **CX-50** was being mismatched as our **CX-5** because `"cx-50"` simply
+contains `"cx-5"` as a text prefix. A couple of same-nameplate-different-model
+collisions (e.g. Toyota **Corolla Cross**, a different Toyota model/platform
+from the Corolla we score) need an explicit exclusion since both spans are
+genuinely word-bounded; see `FALSE_POSITIVE_FOLLOWERS`.
 
 **CarGurus** (DataDome anti-bot) is best-effort — it uses the Playwright
 render fallback when the static pass finds nothing (needs Chromium available;

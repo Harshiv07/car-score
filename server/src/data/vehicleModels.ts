@@ -468,20 +468,43 @@ export function getModelInfo(make: string, model: string): VehicleModelInfo | nu
 }
 
 /**
+ * Real dealer/site data occasionally names a DIFFERENT model that happens to
+ * share a scored model's alias as a text prefix or whole-word match — e.g. a
+ * "CX-50" is not our "CX-5" (a plain `.includes("cx-5")` matched it anyway:
+ * "cx-50" contains "cx-5" as a substring), and a "Corolla Cross" is not our
+ * "Corolla" (a genuinely different Toyota model/platform, and this one IS
+ * still a whole, word-bounded match of "corolla" so boundary-checking alone
+ * can't catch it — it needs an explicit exclusion). Keyed by "make model"
+ * lowercase.
+ */
+const FALSE_POSITIVE_FOLLOWERS: Record<string, RegExp> = {
+  "toyota corolla": /\bcorolla\s*cross\b/i,
+};
+
+/** Does `alias` occur in `text` as a real token — not as a text-prefix of a
+ *  longer, different token (e.g. "cx-5" inside "cx-50")? */
+function aliasMatches(text: string, alias: string): boolean {
+  const escaped = alias.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  return new RegExp(`${escaped}(?![a-z0-9])`, "i").test(text);
+}
+
+/**
  * Match a free-form scraped title (e.g. "2020 Toyota RAV4 XLE AWD") to a
  * supported model. Returns null for anything we don't score — those listings
  * are dropped by the crawler.
  */
 export function matchModelFromTitle(title: string): VehicleModelInfo | null {
   const t = title.toLowerCase();
+  const eligible = (m: VehicleModelInfo) => !FALSE_POSITIVE_FOLLOWERS[`${m.make} ${m.model}`.toLowerCase()]?.test(t);
   for (const m of VEHICLE_MODELS) {
-    if (!t.includes(m.make.toLowerCase())) continue;
-    if (m.aliases.some((a) => t.includes(a))) return m;
+    if (!t.includes(m.make.toLowerCase()) || !eligible(m)) continue;
+    if (m.aliases.some((a) => aliasMatches(t, a))) return m;
   }
   // Mazda3 listings sometimes omit a space ("Mazda3") which already matches,
   // but CX-5 style names can appear without the make word ("CX-5 GT").
   for (const m of VEHICLE_MODELS) {
-    if (m.aliases.some((a) => a.length > 3 && t.includes(a))) return m;
+    if (!eligible(m)) continue;
+    if (m.aliases.some((a) => a.length > 3 && aliasMatches(t, a))) return m;
   }
   return null;
 }

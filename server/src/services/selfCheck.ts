@@ -15,6 +15,7 @@ import { normalizeRecord } from "../scrapers/normalize";
 import { scoreListing } from "../scoring/engine";
 import { clutchToRaw } from "../scrapers/clutch";
 import { convertusToRaw } from "../scrapers/convertus";
+import { edealerToRaw } from "../scrapers/edealer";
 import { Listing } from "../types";
 
 /** A supported model (Corolla) with a full JSON-LD record, plus an F-150 that
@@ -100,8 +101,33 @@ export function verifyPipeline(): PipelineReport {
     convertusListing ? `mapped ${convertusListing.title} (${convertusListing.drivetrain})` : "Convertus mapping produced null"
   );
 
+  // 3c. eDealer (Half-Way Motors Mazda-style) mapping produces a valid
+  // supported listing, AND correctly rejects a text-prefix collision
+  // (CX-50 is not our CX-5 — a real bug found live: a plain substring match
+  // on "cx-5" matched inside "cx-50" until matchModelFromTitle was fixed).
+  const edealerListing = normalizeRecord(
+    edealerToRaw({ year: "2024", make: "Mazda", model: "CX-5", trim: "GT", driveTrain: "All Wheel Drive", fuelType: "Gasoline", mileage: "22000", price: 34998, vin: "JM3KFBCM4S0123456", detailUrl: "/used/vehicle/2024-mazda-cx-5-gt-id1.htm" }),
+    { sourceWebsite: "Half-Way Motors Mazda", baseUrl: "https://example.com", dealer: "Half-Way Motors Mazda" }
+  );
+  const edealerFalsePositive = normalizeRecord(
+    edealerToRaw({ year: "2025", make: "Mazda", model: "CX-50", trim: "GT", driveTrain: "All Wheel Drive", fuelType: "Gasoline", mileage: "12000", price: 42998, vin: "JM3KFBCM4S0999999", detailUrl: "/used/vehicle/2025-mazda-cx-50-gt-id2.htm" }),
+    { sourceWebsite: "Half-Way Motors Mazda", baseUrl: "https://example.com", dealer: "Half-Way Motors Mazda" }
+  );
+  add(
+    "edealer-map",
+    !!edealerListing && edealerListing.model === "CX-5" && edealerListing.mileageKm === 22000 && edealerFalsePositive === null,
+    edealerListing
+      ? `mapped ${edealerListing.title} @ $${edealerListing.price}; correctly rejected CX-50 as not-CX-5: ${edealerFalsePositive === null}`
+      : "eDealer mapping produced null"
+  );
+
   // 4. Scoring yields a full 0–100 score for every normalized listing.
-  const pool = [...normalized, ...(clutchListing ? [clutchListing] : []), ...(convertusListing ? [convertusListing] : [])];
+  const pool = [
+    ...normalized,
+    ...(clutchListing ? [clutchListing] : []),
+    ...(convertusListing ? [convertusListing] : []),
+    ...(edealerListing ? [edealerListing] : []),
+  ];
   const scored = pool.map((l) => scoreListing(l, pool));
   const allScored =
     scored.length > 0 &&
