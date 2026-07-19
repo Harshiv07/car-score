@@ -59,9 +59,13 @@ JSON-file store (`server/.data/db.json`) seeded with representative listings.
 > unaffected. Locally, `npm run setup` installs Chromium for you.
 >
 > **A run can never hang.** The whole run is capped at `SCRAPE_RUN_BUDGET_MS`
-> (2 min) and each source at `SCRAPE_SOURCE_TIMEOUT_MS` (30 s); tune sources and
-> page counts via env vars (see `server/.env.example`). The API keeps serving
-> listings while a scrape is in progress.
+> (4 min) and each source at `SCRAPE_SOURCE_TIMEOUT_MS` (1 min); tune sources
+> and page counts via env vars (see `server/.env.example`). These favor more
+> data over raw speed — a scrape runs as a background job (the client polls
+> `/api/scrape/status`, not a blocking request), so there's no reason to keep
+> it artificially short; tighten them back down if you want the original
+> fast/shallow behaviour. The API keeps serving listings while a scrape is in
+> progress either way.
 
 ### Production (MongoDB)
 
