@@ -87,24 +87,44 @@ export async function fetchWithTimeout(
   }
 }
 
-/* ---- external rendering service ----------------------------------------- */
+/* ---- external rendering service: Apify --------------------------------- */
 /*
  * A headless-browser / rendering service lets us render JS-heavy sites
- * (AutoTrader, the OEM new-car pages, JS dealer sites) from a host without a
- * local Chromium (e.g. Render). Configure with:
+ * (CarGurus, the OEM new-car pages, JS dealer sites) from a host without a
+ * local Chromium (e.g. Render) — Apify runs the actual browser on its own
+ * infrastructure and hands back whatever the page function extracts. The
+ * specific reason to use Apify rather than a generic rendering API: its
+ * Proxy product includes residential IPs, which is the one lever that can
+ * plausibly get past a site that blocks by IP reputation (CarGurus's
+ * DataDome) rather than by browser/JS fingerprinting — a plain datacenter
+ * IP gets the same 403 whether or not a real browser is behind it, confirmed
+ * live earlier (see cargurus.ts's comment).
  *
- *   RENDER_SERVICE_URL   a template that returns the rendered HTML for a target
- *                        URL. Two shapes are supported:
- *                          - contains "{url}"  → GET, {url} replaced with the
- *                            URL-encoded target (ScrapingBee, ScraperAPI, …),
- *                            e.g. https://app.scrapingbee.com/api/v1/?api_key=KEY&render_js=true&url={url}
- *                          - no "{url}"        → POST { url } as JSON
- *                            (Browserless /content, etc.)
- *   RENDER_SERVICE_API_KEY  optional; sent as `x-api-key` / bearer on POST mode.
- *   RENDER_SERVICE_TIMEOUT_MS  optional per-render cap (default 30000).
+ * Uses the `apify/web-scraper` actor (Puppeteer-based, official, stable) with
+ * a minimal pageFunction that just returns the rendered HTML — deliberately
+ * NOT one of Apify's higher-level "content crawler" actors, which extract
+ * readable text/markdown and typically strip the `<script>` JSON-LD blocks
+ * and embedded state objects this app's extractor relies on.
+ *
+ * Configure with:
+ *   APIFY_TOKEN            required — your Apify API token.
+ *   APIFY_ACTOR_ID         optional — default "apify~web-scraper" (~ separates
+ *                          the username/actor-name in Apify's URL paths).
+ *   APIFY_PROXY_GROUPS     optional — comma list of Apify Proxy groups,
+ *                          default "RESIDENTIAL". Set to "NONE" to disable
+ *                          proxying (cheaper/faster, but back to a
+ *                          datacenter-ish IP — only useful for JS-rendering
+ *                          needs that aren't also being IP-blocked).
+ *   APIFY_PROXY_COUNTRY    optional — 2-letter country code (e.g. "CA") to
+ *                          bias the residential IP toward; unset = any.
+ *   RENDER_SERVICE_TIMEOUT_MS  optional per-render cap (default 45000 — an
+ *                          actor run has more overhead than a direct API
+ *                          call: cold start, navigation, the page function).
  */
+const APIFY_BASE = "https://api.apify.com/v2";
+
 export function renderServiceConfigured(): boolean {
-  return !!process.env.RENDER_SERVICE_URL;
+  return !!process.env.APIFY_TOKEN;
 }
 
 export interface RenderServiceResult {
@@ -117,40 +137,74 @@ export interface RenderServiceResult {
   failureReason?: string;
 }
 
+/** JS run inside the actor's browser page — kept intentionally minimal: wait
+ *  briefly for client-side rendering, then hand back the raw HTML as-is so
+ *  this app's own 3-strategy extractor (JSON-LD / state-blob / DOM cards)
+ *  runs against it exactly like any other rendered page. */
+const PAGE_FUNCTION = `async function pageFunction(context) {
+  const { page, request } = context;
+  await page.waitForTimeout(2500);
+  return { url: request.url, html: await page.content() };
+}`;
+
 export async function fetchRenderedViaService(targetUrl: string): Promise<RenderServiceResult> {
-  const template = process.env.RENDER_SERVICE_URL;
-  if (!template) return { html: null, failureReason: "RENDER_SERVICE_URL not set" };
-  const timeoutMs = num("RENDER_SERVICE_TIMEOUT_MS", 30_000);
-  const apiKey = process.env.RENDER_SERVICE_API_KEY;
+  const token = process.env.APIFY_TOKEN;
+  if (!token) return { html: null, failureReason: "APIFY_TOKEN not set" };
+
+  const actorId = process.env.APIFY_ACTOR_ID || "apify~web-scraper";
+  const groups = (process.env.APIFY_PROXY_GROUPS ?? "RESIDENTIAL").trim();
+  const country = process.env.APIFY_PROXY_COUNTRY?.trim();
+  const timeoutMs = num("RENDER_SERVICE_TIMEOUT_MS", 45_000);
+
+  const proxyConfiguration =
+    groups.toUpperCase() === "NONE"
+      ? { useApifyProxy: false }
+      : {
+          useApifyProxy: true,
+          apifyProxyGroups: groups.split(",").map((g) => g.trim()).filter(Boolean),
+          ...(country ? { apifyProxyCountry: country } : {}),
+        };
+
+  const runUrl =
+    `${APIFY_BASE}/acts/${actorId}/run-sync-get-dataset-items` +
+    `?token=${encodeURIComponent(token)}&timeout=${Math.ceil(timeoutMs / 1000)}`;
+
   try {
-    let res: Response;
-    if (template.includes("{url}")) {
-      res = await fetchWithTimeout(template.replace("{url}", encodeURIComponent(targetUrl)), {
-        headers: BROWSER_HEADERS,
-        timeoutMs,
-      });
-    } else {
-      res = await fetchWithTimeout(template, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          ...(apiKey ? { "x-api-key": apiKey, Authorization: `Bearer ${apiKey}` } : {}),
-        },
-        body: JSON.stringify({ url: targetUrl, gotoOptions: { waitUntil: "networkidle2" } }),
-        timeoutMs,
-      });
-    }
+    const res = await fetchWithTimeout(runUrl, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        startUrls: [{ url: targetUrl }],
+        pageFunction: PAGE_FUNCTION,
+        proxyConfiguration,
+        maxPagesPerCrawl: 1,
+        maxResultsPerCrawl: 1,
+        maxCrawlingDepth: 0,
+      }),
+      timeoutMs,
+    });
     const body = await res.text();
     if (!res.ok) {
-      return { html: null, failureReason: `HTTP ${res.status}: ${body.slice(0, 200).replace(/\s+/g, " ")}` };
+      return { html: null, failureReason: `HTTP ${res.status}: ${body.slice(0, 300).replace(/\s+/g, " ")}` };
     }
-    if (!body || body.length <= 500) {
+    let items: unknown;
+    try {
+      items = JSON.parse(body);
+    } catch {
+      return { html: null, failureReason: `non-JSON response: ${body.slice(0, 200).replace(/\s+/g, " ")}` };
+    }
+    const first = Array.isArray(items) ? (items[0] as Record<string, unknown> | undefined) : undefined;
+    const html = typeof first?.html === "string" ? first.html : null;
+    if (!html || html.length <= 500) {
+      // Surface the actual shape we got back — Apify actor output fields can
+      // vary by version, and guessing silently is exactly how the LAST
+      // rendering-service integration went undiagnosed for multiple rounds.
       return {
         html: null,
-        failureReason: `response too short (${body.length} bytes) to be a real page: ${body.slice(0, 200).replace(/\s+/g, " ")}`,
+        failureReason: `no usable "html" field in the actor's dataset item: ${JSON.stringify(first).slice(0, 300)}`,
       };
     }
-    return { html: body };
+    return { html };
   } catch (e) {
     return { html: null, failureReason: `request threw: ${(e as Error).message.slice(0, 150)}` };
   }

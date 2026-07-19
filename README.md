@@ -141,18 +141,25 @@ collisions (e.g. Toyota **Corolla Cross**, a different Toyota model/platform
 from the Corolla we score) need an explicit exclusion since both spans are
 genuinely word-bounded; see `FALSE_POSITIVE_FOLLOWERS`.
 
-**CarGurus** (DataDome anti-bot) is best-effort — it uses the Playwright
-render fallback when the static pass finds nothing (needs Chromium available;
-see above), but DataDome blocks a lot of headless browsers too, so it may
-still come back empty depending on the network. It never breaks a run either
-way.
+**CarGurus** (DataDome anti-bot) is best-effort — it uses the render fallback
+when the static pass finds nothing, but DataDome blocks primarily on **IP
+reputation** (known datacenter/hosting ranges get a 403 before any JS
+challenge or browser fingerprint is even checked — confirmed live: a plain
+`fetch()` and a full local Chromium session got the identical 403 from the
+same IP). A local Chromium alone doesn't fix that; it needs a *residential*
+IP, which is what the Apify rendering service below is configured for. It
+never breaks a run either way — no listings from CarGurus is a normal,
+handled outcome, not a failure.
 
-**External rendering service (optional).** Set `RENDER_SERVICE_URL` (see
-`server/.env.example`) to a headless-browser/rendering API (ScrapingBee,
-Browserless, ScraperAPI, …) and the JS fallback runs through it — so the JS
-dealer sites, the OEM new-car pages and AutoTrader can be rendered from a host
-without a local Chromium (Render). Falls back to a local Playwright browser when
-no service is set.
+**External rendering service: Apify (optional).** Set `APIFY_TOKEN` (see
+`server/.env.example`) and the JS fallback runs through Apify's
+`apify/web-scraper` actor — Apify runs the actual browser on its own
+infrastructure, so CarGurus, the JS dealer sites, the OEM new-car pages and
+AutoTrader can all be rendered from a host without a local Chromium (Render).
+By default it also routes through Apify's **residential** proxy pool
+(`APIFY_PROXY_GROUPS=RESIDENTIAL`), the specific lever for IP-reputation-based
+blocks like CarGurus's. Falls back to a local Playwright browser when no
+token is set.
 
 The HTML sources run three extraction strategies per page (JSON-LD → embedded
 state blobs → DOM cards) and keep the strategy with the most **usable** records
