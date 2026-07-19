@@ -2,22 +2,35 @@
  * eDealer-platform dealers (e.g. Half-Way Motors Mazda) — a widely used
  * Canadian dealer website builder (static.edealer.ca / v3inventory.edealer.ca).
  *
- * The used-inventory page embeds the FULL inventory as a plain JS object
- * literal (`var vehicleArray = {...}`) directly in the server-rendered HTML —
- * no client-side rendering needed, so this is fully browser-free. Each entry
- * is already fully structured: VIN, year/make/model/trim, drivetrain, fuel,
- * mileage, price, colours, a VDP url and images.
+ * The used-inventory page has been observed embedding the inventory two
+ * different ways — both directly in the server-rendered HTML, no client-side
+ * rendering needed:
+ *   1. A plain JS object literal (`var vehicleArray = {...}`) — richer (VIN,
+ *      drivetrain, fuel, colours, a per-vehicle `dealerName`, images), tried
+ *      first.
+ *   2. Standard schema.org JSON-LD (`@type: "Car"/"Offer"`, ...) — seen after
+ *      this specific dealer's site was updated mid-development (the
+ *      vehicleArray blob vanished entirely; verified live). Falls back to
+ *      this app's shared 3-strategy extractor (extract.ts), which already
+ *      parses it correctly with zero changes needed there.
+ * Trying both on every run — rather than picking one and hoping it stays —
+ * means this scraper survives either format without needing to know in
+ * advance which one a given eDealer instance (or a future platform update)
+ * happens to be using.
  *
  * These sites commonly serve a shared multi-brand feed (a dealer group's used
  * lot mixes trade-ins of every make, sometimes across sibling stores under one
- * inventory page) — each vehicle carries its OWN `dealerName`, which is used
+ * inventory page) — format 1 carries each vehicle's OWN `dealerName`, used
  * per-listing instead of the configured dealer's name, so a unit actually
- * being sold by a sibling store is attributed correctly.
+ * being sold by a sibling store is attributed correctly. Format 2 (the
+ * generic extractor) doesn't expose that, so those listings fall back to the
+ * configured dealer's name, same as every other generic-extraction scraper.
  */
 
 import { Listing } from "../types";
 import { matchModelFromTitle } from "../data/vehicleModels";
 import { normalizeRecord } from "./normalize";
+import { extractListings } from "./extract";
 import { LogFn, RawVehicleRecord, Scraper, ScraperRunResult } from "./types";
 import { BROWSER_HEADERS, fetchWithTimeout, loadScrapeConfig } from "./config";
 
@@ -150,35 +163,62 @@ export function makeEdealerScraper(dealer: EdealerDealer): Scraper {
         return { key: dealer.key, source: dealer.source, listings: [], ok: false, note: "inventory page unreachable" };
       }
 
-      const vehicles = extractVehicleArray(html);
-      if (vehicles.length === 0) {
-        const note = html ? "no inventory data found on the page (site may have changed)" : "inventory page unreachable";
-        log("warn", `${dealer.source}: ${note}`);
-        return { key: dealer.key, source: dealer.source, listings: [], ok: !!html, note };
+      if (!html) {
+        log("warn", `${dealer.source}: inventory page unreachable`);
+        return { key: dealer.key, source: dealer.source, listings: [], ok: false, note: "inventory page unreachable" };
       }
 
-      for (const v of vehicles) {
-        if (!matchModelFromTitle(`${v.make ?? ""} ${v.model ?? ""}`)) continue;
-        const listing = normalizeRecord(edealerToRaw(v), {
-          sourceWebsite: dealer.source,
-          baseUrl,
-          // Multi-brand shared feeds: attribute to the vehicle's OWN selling
-          // dealer, not the configured one, when they differ.
-          dealer: v.dealerName || v.sellerName || dealer.source,
-          city: dealer.city ?? null,
-          province: dealer.province ?? null,
-        });
-        if (listing && !seen.has(listing.dedupeKey)) {
-          seen.add(listing.dedupeKey);
-          listings.push(listing);
+      const vehicles = extractVehicleArray(html);
+      let totalSeen = vehicles.length;
+      if (vehicles.length > 0) {
+        for (const v of vehicles) {
+          if (!matchModelFromTitle(`${v.make ?? ""} ${v.model ?? ""}`)) continue;
+          const listing = normalizeRecord(edealerToRaw(v), {
+            sourceWebsite: dealer.source,
+            baseUrl,
+            // Multi-brand shared feeds: attribute to the vehicle's OWN selling
+            // dealer, not the configured one, when they differ.
+            dealer: v.dealerName || v.sellerName || dealer.source,
+            city: dealer.city ?? null,
+            province: dealer.province ?? null,
+          });
+          if (listing && !seen.has(listing.dedupeKey)) {
+            seen.add(listing.dedupeKey);
+            listings.push(listing);
+          }
         }
+      } else {
+        // The vehicleArray blob wasn't there — try the shared JSON-LD/state-
+        // blob/DOM-card extractor on the SAME already-fetched HTML before
+        // giving up (no extra request).
+        const raw = extractListings(html);
+        totalSeen = raw.length;
+        for (const r of raw) {
+          const listing = normalizeRecord(r, {
+            sourceWebsite: dealer.source,
+            baseUrl,
+            dealer: dealer.source,
+            city: dealer.city ?? null,
+            province: dealer.province ?? null,
+          });
+          if (listing && !seen.has(listing.dedupeKey)) {
+            seen.add(listing.dedupeKey);
+            listings.push(listing);
+          }
+        }
+      }
+
+      if (totalSeen === 0) {
+        const note = "no inventory data found on the page (site may have changed)";
+        log("warn", `${dealer.source}: ${note}`);
+        return { key: dealer.key, source: dealer.source, listings: [], ok: false, note };
       }
 
       const ok = true; // a reachable page with a parseable feed is a successful run either way
       const note =
         listings.length > 0
           ? `${listings.length} supported-model listing(s) found`
-          : `no supported-model listings among ${vehicles.length} in current inventory`;
+          : `no supported-model listings among ${totalSeen} in current inventory`;
       log(listings.length > 0 ? "info" : "warn", `${dealer.source}: ${note}`);
       return { key: dealer.key, source: dealer.source, listings, ok, note };
     },

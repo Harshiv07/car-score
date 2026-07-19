@@ -9,7 +9,7 @@
 
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { edealerToRaw, extractVehicleArray } from "../scrapers/edealer";
+import { edealerToRaw, extractVehicleArray, makeEdealerScraper } from "../scrapers/edealer";
 import { normalizeRecord } from "../scrapers/normalize";
 
 const PAGE = `<!doctype html><html><head></head><body>
@@ -81,4 +81,60 @@ test("a sibling-dealer vehicle on the shared feed is attributed to ITS OWN deale
   const bronco = vehicles.find((v) => v.model === "Bronco Sport")!;
   assert.equal(bronco.dealerName, "Half-Way Motors Nissan");
   assert.notEqual(bronco.dealerName, "Half Way Motors Mazda");
+});
+
+/**
+ * Regression: this specific dealer's site was observed live mid-development
+ * dropping the `vehicleArray` blob entirely (an eDealer platform/template
+ * update) in favour of standard schema.org JSON-LD — same inventory, totally
+ * different embedding. The custom parser above can't read this shape at all,
+ * so the scraper must fall back to the app's shared 3-strategy extractor
+ * (extract.ts) on the SAME html rather than reporting "unreachable". Fixture
+ * mirrors the real JSON-LD captured from halfwaymotorsmazda.com/used/,
+ * trimmed to the fields that matter.
+ */
+const JSONLD_PAGE = `<!doctype html><html><head>
+<script type="application/ld+json">
+[
+  {"@context":"https://schema.org","@type":"Car","name":"2021 Toyota RAV4 XLE AWD",
+   "brand":{"@type":"Brand","name":"Toyota"},"model":"RAV4",
+   "vehicleIdentificationNumber":"2T3P1RFV8MC123456","vehicleModelDate":2021,
+   "mileageFromOdometer":{"@type":"QuantitativeValue","unitCode":"KMT","value":48210},
+   "offers":{"@type":"Offer","price":29998,"priceCurrency":"CAD",
+     "seller":{"@type":"Organization","name":"Half-Way Motors Mazda"}},
+   "url":"https://www.halfwaymotorsmazda.com/used/vehicle/2021-toyota-rav4-xle-id1.htm"},
+  {"@context":"https://schema.org","@type":"Car","name":"2025 Mazda CX-50 GT AWD",
+   "brand":{"@type":"Brand","name":"Mazda"},"model":"CX-50",
+   "vehicleIdentificationNumber":"7MMVABDM1SN300731","vehicleModelDate":2025,
+   "mileageFromOdometer":{"@type":"QuantitativeValue","unitCode":"KMT","value":32059},
+   "offers":{"@type":"Offer","price":42998,"priceCurrency":"CAD"},
+   "url":"https://www.halfwaymotorsmazda.com/used/vehicle/2025-mazda-cx-50-gt-id2.htm"}
+]
+</script></head><body></body></html>`;
+
+test("falls back to the shared extractor and finds real listings when vehicleArray is absent but JSON-LD is present", async (t) => {
+  t.mock.method(globalThis, "fetch", async () => new Response(JSONLD_PAGE, { status: 200 }));
+  const scraper = makeEdealerScraper({ key: "test", source: "Half-Way Motors Mazda", url: "https://www.halfwaymotorsmazda.com/used/" });
+  const result = await scraper.run(() => {});
+  assert.equal(result.ok, true);
+  assert.equal(result.listings.length, 1, "only the RAV4 is one of our 10 supported models; CX-50 is dropped");
+  assert.equal(result.listings[0].model, "RAV4");
+  assert.equal(result.listings[0].price, 29998);
+  assert.equal(result.listings[0].mileageKm, 48210);
+});
+
+test("reports a clear failure when the page has neither vehicleArray nor JSON-LD (genuine site change)", async (t) => {
+  t.mock.method(globalThis, "fetch", async () => new Response("<html><body>redesigned, no inventory data</body></html>", { status: 200 }));
+  const scraper = makeEdealerScraper({ key: "test", source: "Half-Way Motors Mazda", url: "https://www.halfwaymotorsmazda.com/used/" });
+  const result = await scraper.run(() => {});
+  assert.equal(result.ok, false);
+  assert.match(result.note, /site may have changed/);
+});
+
+test("reports the page as unreachable on a non-200 response, not a silent empty result", async (t) => {
+  t.mock.method(globalThis, "fetch", async () => new Response("", { status: 503 }));
+  const scraper = makeEdealerScraper({ key: "test", source: "Half-Way Motors Mazda", url: "https://www.halfwaymotorsmazda.com/used/" });
+  const result = await scraper.run(() => {});
+  assert.equal(result.ok, false);
+  assert.equal(result.note, "inventory page unreachable");
 });
