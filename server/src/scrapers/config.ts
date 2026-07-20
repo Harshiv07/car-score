@@ -48,8 +48,13 @@ export interface ScrapeConfig {
   /** AutoTrader: pages of ~20 Ontario listings to pull per model (browser-free
    *  via &page=N). 6 × 10 models ≈ 800+. */
   autotraderPagesPerModel: number;
-  /** Clutch: max pages to attempt on the single all-models query before the
-   *  WAF challenges (it stops at ~4-6 anyway; this is just an upper bound). */
+  /** Clutch: max pages to attempt on the single all-models query before
+   *  switching to per-model top-up requests. Deliberately small: verified
+   *  live on Render that the WAF's whole per-run budget is only ~6-8
+   *  requests, and main pagination was spending every last one of them,
+   *  leaving the top-up phase (which targets the specific models that need
+   *  it most) nothing to work with. Stopping main pagination early reserves
+   *  budget for that more targeted spend. */
   clutchMaxPages: number;
 }
 
@@ -76,7 +81,7 @@ export function loadScrapeConfig(): ScrapeConfig {
     jsFallbackEnabled: process.env.SCRAPE_JS_FALLBACK !== "0",
     enabledSourceKeys: list("SCRAPE_SOURCES"),
     autotraderPagesPerModel: num("AUTOTRADER_PAGES_PER_MODEL", 6),
-    clutchMaxPages: num("CLUTCH_MAX_PAGES", 8),
+    clutchMaxPages: num("CLUTCH_MAX_PAGES", 3),
   };
 }
 

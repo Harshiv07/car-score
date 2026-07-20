@@ -119,20 +119,32 @@ entry has a `platform`:
 - **Clutch.ca** — public JSON API, queried as **one combined request listing
   all 5 makes + 10 supported models at once**, then paginated. The API returns
   each page as a mix of every requested model (a single query's `totalCount`
-  is ~778 across the supported models, and page 0 alone already spans
+  is ~750-800 across the supported models, and page 0 alone already spans
   RAV4/CR-V/CX-5/Elantra/Corolla/Civic/…), so every model gets *some* coverage
   from every run. This replaced an earlier per-model-query design: api.clutch.ca
-  sits behind an AWS WAF that allows only ~4-6 requests through per run before
-  returning an empty HTTP 202 challenge (confirmed live — pacing 400ms vs
-  3000ms between requests made zero difference, so it's a request-COUNT
-  budget, not a rate limit pacing can work around). Per-model, that budget
-  bought ~6 models full coverage and left the other 4 with nothing, every
-  single run; the combined query spends the same handful of requests on a
-  slice of *all 10* instead. `CLUTCH_MAX_PAGES` caps how many pages are
-  attempted (default 8; the WAF stops it well before that in practice). When a
-  real browser is available (local dev with Chromium), a bonus tier continues
-  pagination from inside a WAF-cleared browser page for the pages the bare
-  fetch couldn't reach — no-op on Render.
+  sits behind an AWS WAF that allows only **~6-8 requests total per run**
+  before returning an empty HTTP 202 challenge (confirmed live, including on
+  the deployed Render host — pacing 400ms vs 3000ms between requests made zero
+  difference, so it's a request-COUNT budget, not a rate limit pacing can work
+  around). `CLUTCH_MAX_PAGES` (default **3**) deliberately stops the combined
+  query early — verified live it was otherwise spending the *entire* budget on
+  breadth and leaving nothing for the next step — so most of the tiny budget
+  is reserved for `topUpUnderrepresentedModels`: one single-model request per
+  model that's still short (most-deficient first), since a shared request for
+  multiple thin models just reproduces the same cross-model skew inside that
+  smaller subset (verified live), while a single-model request gets an entire
+  page to itself and reliably returns that model's real count.
+  On a host with a real browser (local dev with Chromium — **not** Render
+  today, confirmed live: "Chromium is not installed"), a bonus tier continues
+  the combined-query pagination from inside a WAF-cleared browser page, and
+  the top-up step gets two further fallbacks reusing that same session: an
+  in-page `fetch()`, then — if that's also blocked — a genuine navigation to
+  the model's own product page (`clutch.ca/cars/{make}-{model}`) with vehicle
+  cards read straight off the rendered DOM. That last tier isn't a different
+  data source (the page populates itself via the same API call), but a full
+  navigation is a different request pattern than an injected fetch and was
+  verified live to succeed — Forester 13/13, Mazda3 31/31 — after the other
+  two tiers had already been blocked in the same run.
 - **`convertus`** (Wayne Toyota, Superior Hyundai) — the dealer site's own
   same-origin `convertus-vms/…/ajax-vehicles.php` proxy (set each dealer's `cp`
   company id).

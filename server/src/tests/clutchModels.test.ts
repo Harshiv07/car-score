@@ -14,6 +14,9 @@ import {
   clutch,
   MIN_PER_MODEL,
   MODEL_TARGETS,
+  parseProductCard,
+  productPageSlug,
+  productPageUrl,
   shouldContinueViaBrowser,
 } from "../scrapers/clutch";
 import { VEHICLE_MODELS } from "../data/vehicleModels";
@@ -261,6 +264,132 @@ test("shouldContinueViaBrowser tries the browser tier even when page 0 itself wa
   // No browser available on this host (e.g. Render) — never attempt it.
   assert.equal(shouldContinueViaBrowser(0, 1, false), false);
   assert.equal(shouldContinueViaBrowser(2, 10, false), false);
+});
+
+test("productPageSlug/productPageUrl match clutch.ca's real URLs exactly", () => {
+  // Every example is a URL the user pasted from browsing the live site.
+  assert.equal(productPageSlug({ make: "Subaru", model: "Forester" }), "subaru-forester");
+  assert.equal(productPageSlug({ make: "Toyota", model: "RAV4" }), "toyota-rav4");
+  assert.equal(productPageSlug({ make: "Mazda", model: "Mazda3" }), "mazda-mazda3");
+  assert.equal(productPageSlug({ make: "Mazda", model: "CX-5" }), "mazda-cx-5");
+  assert.equal(productPageSlug({ make: "Honda", model: "CR-V" }), "honda-cr-v");
+  assert.equal(productPageSlug({ make: "Honda", model: "Civic" }), "honda-civic");
+  assert.equal(productPageSlug({ make: "Hyundai", model: "Elantra" }), "hyundai-elantra");
+
+  assert.equal(productPageUrl({ make: "Subaru", model: "Forester" }, 1), "https://www.clutch.ca/cars/subaru-forester");
+  assert.equal(productPageUrl({ make: "Hyundai", model: "Tucson" }, 2), "https://www.clutch.ca/cars/hyundai-tucson?page=2");
+  assert.equal(productPageUrl({ make: "Toyota", model: "RAV4" }, 3), "https://www.clutch.ca/cars/toyota-rav4?page=3");
+});
+
+test("parseProductCard reads real clutch.ca card markup (regression, captured live)", () => {
+  const target = { make: "Hyundai", model: "Elantra" };
+
+  // A plain card.
+  const plain = parseProductCard(
+    {
+      href: "/vehicles/110068",
+      leaves: [
+        "Compare",
+        "favorite",
+        "2022 Hyundai Elantra",
+        "Preferred",
+        "•",
+        "40,410 km",
+        "$20,290",
+        "$144/biweekly",
+        "$0 down",
+        "$149 shipping",
+        "Excl. HST & Licensing; Incl. OMVIC Fee",
+      ],
+    },
+    target
+  );
+  assert.equal(plain?.year, 2022);
+  assert.equal(plain?.make, "Hyundai");
+  assert.equal(plain?.model, "Elantra");
+  assert.equal(plain?.trim, "Preferred");
+  assert.equal(plain?.km, 40410);
+  assert.equal(plain?.price, 20290);
+  assert.equal(plain?.url, "https://www.clutch.ca/vehicles/110068");
+
+  // A sale card: two price leaves — must take the current (first) price, not
+  // the strikethrough original.
+  const sale = parseProductCard(
+    {
+      href: "/vehicles/101539",
+      leaves: [
+        "Compare",
+        "Sale",
+        "favorite",
+        "2024 Hyundai Elantra",
+        "Luxury",
+        "•",
+        "27,409 km",
+        "$23,490",
+        "$24,790",
+        "$165/biweekly",
+        "$0 down",
+        "$149 shipping",
+        "Excl. HST & Licensing; Incl. OMVIC Fee",
+      ],
+    },
+    target
+  );
+  assert.equal(sale?.price, 23490, "must take the current price, not the strikethrough original");
+  assert.equal(sale?.trim, "Luxury");
+
+  // A "N+ views today" badge sits between "Compare" and "favorite" — must not
+  // be mistaken for the trim.
+  const withViewsBadge = parseProductCard(
+    {
+      href: "/vehicles/113383",
+      leaves: [
+        "Compare",
+        "60+ views today",
+        "favorite",
+        "2021 Hyundai Elantra",
+        "N Line",
+        "•",
+        "62,348 km",
+        "$19,890",
+        "$141/biweekly",
+        "$0 down",
+        "$149 shipping",
+        "Excl. HST & Licensing; Incl. OMVIC Fee",
+      ],
+    },
+    target
+  );
+  assert.equal(withViewsBadge?.trim, "N Line");
+  assert.equal(withViewsBadge?.year, 2021);
+
+  // A multi-word trim with punctuation.
+  const complexTrim = parseProductCard(
+    {
+      href: "/vehicles/113912",
+      leaves: [
+        "Compare",
+        "favorite",
+        "2022 Hyundai Elantra",
+        "Preferred w/Sun & Tech Package",
+        "•",
+        "117,044 km",
+        "$17,990",
+        "$129/biweekly",
+        "$0 down",
+        "$149 shipping",
+        "Excl. HST & Licensing; Incl. OMVIC Fee",
+      ],
+    },
+    target
+  );
+  assert.equal(complexTrim?.trim, "Preferred w/Sun & Tech Package");
+
+  // No usable href → no listing (can't build a link).
+  assert.equal(parseProductCard({ href: "", leaves: ["2022 Hyundai Elantra", "Preferred"] }, target), null);
+
+  // No year leaf at all → not a vehicle card.
+  assert.equal(parseProductCard({ href: "/vehicles/1", leaves: ["Compare", "favorite"] }, target), null);
 });
 
 test("buildModelsQueryUrl scopes to an arbitrary subset (used by the top-up phase)", () => {

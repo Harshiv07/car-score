@@ -27,15 +27,30 @@
  *
  * When a real browser IS available (local dev with Chromium), a bonus tier
  * continues pagination from inside a WAF-cleared browser page to pull the
- * remaining pages the bare-fetch WAF budget couldn't. No-op on Render.
+ * remaining pages the bare-fetch WAF budget couldn't. No-op on Render today
+ * (verified live from the deployed host: "Chromium is not installed" — this
+ * whole tier, and the two below, are inert there until Chromium or a working
+ * RENDER_SERVICE_URL is available on that host).
+ *
+ * The top-up phase itself has two further fallback tiers once the bare fetch
+ * is blocked, both reusing that one browser session: an in-page fetch() call
+ * (inherits the browser's solved WAF challenge), then — if that's ALSO
+ * blocked — a genuine navigation to the model's own product page
+ * (clutch.ca/cars/{slug}) with the vehicle cards read straight from the
+ * rendered DOM. That last tier is not a different data source (the product
+ * page populates itself via the exact same api.clutch.ca call), but a full
+ * page navigation is a different request pattern than an injected fetch, and
+ * was verified live to succeed — Forester 13/13, Mazda3 31/31 — in a run
+ * where the first two tiers had already been blocked.
  */
 
+import type { Page } from "playwright";
 import { Listing } from "../types";
 import { matchModelFromTitle, VEHICLE_MODELS } from "../data/vehicleModels";
 import { normalizeRecord } from "./normalize";
 import { LogFn, RawVehicleRecord, Scraper, ScraperRunResult } from "./types";
 import { BROWSER_HEADERS, fetchWithTimeout, loadScrapeConfig } from "./config";
-import { closeBrowserSession, fetchJsonInSession, openBrowserSession } from "./crawl";
+import { BrowserSession, closeBrowserSession, fetchJsonInSession, openBrowserSession } from "./crawl";
 
 const API = "https://api.clutch.ca/v1";
 // Brampton, ON — verified live (clutch.ca/v1/locations) this only changes
@@ -164,6 +179,20 @@ export function buildAllModelsQueryUrl(page: number): string {
   return buildModelsQueryUrl(MODEL_TARGETS, page);
 }
 
+/** clutch.ca's own per-model product page slug — verified against every
+ *  model this app tracks (e.g. "Honda CR-V" → "honda-cr-v", "Mazda Mazda3" →
+ *  "mazda-mazda3"): lowercase make + "-" + lowercase model, no other changes. */
+export function productPageSlug(t: { make: string; model: string }): string {
+  return `${t.make.toLowerCase()}-${t.model.toLowerCase()}`;
+}
+
+/** Page 1 has no `page` param; page 2+ adds `?page=N` — matches clutch.ca's
+ *  own URLs exactly (e.g. clutch.ca/cars/hyundai-tucson?page=2). */
+export function productPageUrl(t: { make: string; model: string }, page: number): string {
+  const base = `https://www.clutch.ca/cars/${productPageSlug(t)}`;
+  return page > 1 ? `${base}?page=${page}` : base;
+}
+
 async function fetchPageAt(url: string, timeoutMs: number): Promise<ClutchPage | null> {
   const res = await fetchWithTimeout(url, {
     headers: {
@@ -282,6 +311,157 @@ function findLowModels(listings: Listing[]): { make: string; model: string }[] {
   );
 }
 
+export interface ProductCard {
+  href: string;
+  /** Every leaf (childless) element's trimmed text, in DOM order. Reading it
+   *  this way instead of by CSS selector is deliberate: clutch.ca's markup is
+   *  MUI-generated with hashed class names (e.g. "css-15krxls") that can
+   *  change on any of their deploys, but the leaf-by-leaf text content — a
+   *  badge, "2022 Hyundai Elantra", a trim, "•", "40,410 km", "$20,290", the
+   *  biweekly/down-payment/shipping/legal lines — is stable and verified
+   *  live across 32 real cards, including sale (two price leaves), no-trim,
+   *  and "N+ views today" badge variants. */
+  leaves: string[];
+}
+
+// Evaluated in the browser page as a plain string, not passed as a function
+// reference: tsx/esbuild injects a `__name(...)` wrapper around nested named
+// functions to preserve `.name`, and Playwright's function-serialization
+// sends that compiled source as-is — `__name` doesn't exist in the isolated
+// page context, so the nested `function leafTexts(){}` below threw
+// "ReferenceError: __name is not defined" the moment it ran in-page
+// (verified live). A string body sidesteps the transform entirely.
+const EXTRACT_PRODUCT_CARDS_JS = `(() => {
+  function leafTexts(el) {
+    var out = [];
+    function walk(node) {
+      if (node.children.length === 0) {
+        var t = (node.textContent || "").trim();
+        if (t) out.push(t);
+      } else {
+        Array.prototype.forEach.call(node.children, walk);
+      }
+    }
+    walk(el);
+    return out;
+  }
+  return Array.prototype.slice.call(document.querySelectorAll('a[href*="/vehicles/"]')).map(function (a) {
+    return { href: a.getAttribute("href") || "", leaves: leafTexts(a) };
+  });
+})()`;
+
+/** Runs inside the browser page: reads every vehicle card (an `<a
+ *  href="/vehicles/{id}">` wrapping the whole tile) into its leaf texts. */
+async function extractProductCards(page: Page): Promise<ProductCard[]> {
+  return page.evaluate(EXTRACT_PRODUCT_CARDS_JS);
+}
+
+/**
+ * Parse one card's leaves into a raw vehicle record. make/model come from the
+ * calling context (the product page is already scoped to one model) rather
+ * than being parsed out of "2022 Hyundai Elantra"-style text, which would be
+ * ambiguous for multi-word makes/models. Verified live against 32 real Elantra
+ * cards: year is always the first leaf starting with a plausible year (never
+ * collides with mileage/price leaves, which start with digits-then-comma or
+ * "$"); the first "$N,NNN" leaf is the current price even on sale listings,
+ * where a second (strikethrough original) price leaf follows it; trim is
+ * whatever leaf comes right after the year, skipping badge leaves ("Compare",
+ * "Sale", "favorite", "N+ views today") — or null if the card has none.
+ */
+export function parseProductCard(card: ProductCard, target: { make: string; model: string }): RawVehicleRecord | null {
+  const yearLeaf = card.leaves.find((l) => /^(19|20)\d{2}\b/.test(l));
+  if (!yearLeaf) return null;
+  const year = Number(yearLeaf.slice(0, 4));
+  const kmLeaf = card.leaves.find((l) => /^[\d,]+\s*km$/i.test(l));
+  const km = kmLeaf ? Number(kmLeaf.replace(/[^\d]/g, "")) : null;
+  const priceLeaf = card.leaves.find((l) => /^\$[\d,]+$/.test(l));
+  const price = priceLeaf ? Number(priceLeaf.replace(/[^\d]/g, "")) : null;
+
+  let trim: string | null = null;
+  for (let i = card.leaves.indexOf(yearLeaf) + 1; i < card.leaves.length; i++) {
+    const l = card.leaves[i];
+    if (l === "•") break;
+    if (l !== "Compare" && l !== "Sale" && l !== "favorite" && !/views today$/.test(l)) {
+      trim = l;
+      break;
+    }
+  }
+
+  const idMatch = card.href.match(/\/vehicles\/(\d+)/);
+  const url = idMatch ? `https://www.clutch.ca/vehicles/${idMatch[1]}` : card.href ? `https://www.clutch.ca${card.href}` : null;
+  if (!url) return null;
+
+  return {
+    title: [year, target.make, target.model, trim].filter(Boolean).join(" "),
+    make: target.make,
+    model: target.model,
+    trim,
+    year,
+    price,
+    km,
+    drivetrain: null,
+    fuel: null,
+    url,
+    image: null,
+  };
+}
+
+/**
+ * Last-resort top-up tier: navigate a real browser to the model's own product
+ * page (clutch.ca/cars/{slug}) and read the rendered vehicle cards straight
+ * from the DOM, instead of calling the API. Important honesty check: this is
+ * NOT an independently-blockable data source — the product page populates
+ * itself by making the exact same api.clutch.ca call internally, so if that
+ * call is blocked the page shows no cards either. What's genuinely different
+ * is the request pattern: a full page navigation (loading the real JS bundle,
+ * running the site's own bootstrap) versus this file's other tiers, which
+ * inject a fetch() into an already-loaded page. Whether that distinction ever
+ * matters to the WAF is untested — this exists to give it a real chance
+ * rather than assume either way. Reuses the given session; stops at the first
+ * model whose page renders no cards (further navigations would likely fail
+ * the same way).
+ */
+async function topUpViaProductPageNavigation(
+  session: BrowserSession,
+  targets: { make: string; model: string }[],
+  listings: Listing[],
+  seen: Set<string>,
+  deadline: number,
+  log: LogFn
+): Promise<number> {
+  let added = 0;
+  for (const t of targets) {
+    if (Date.now() >= deadline) break;
+    let cards: ProductCard[];
+    try {
+      await session.page.goto(productPageUrl(t, 1), { waitUntil: "domcontentloaded", timeout: 20000 });
+      await session.page.waitForTimeout(1500);
+      cards = await extractProductCards(session.page);
+    } catch (e) {
+      log("warn", `Clutch.ca: product-page navigation failed for ${t.model} — ${(e as Error).message.slice(0, 80)}`);
+      break;
+    }
+    if (cards.length === 0) break; // no cards rendered — blocked or empty, further models would fail too
+    for (const card of cards) {
+      const raw = parseProductCard(card, t);
+      if (!raw) continue;
+      const listing = normalizeRecord(raw, {
+        sourceWebsite: "Clutch.ca",
+        baseUrl: "https://www.clutch.ca",
+        dealer: "Clutch",
+        province: PROVINCE,
+      });
+      if (listing && !seen.has(listing.dedupeKey)) {
+        seen.add(listing.dedupeKey);
+        listings.push(listing);
+        added++;
+      }
+    }
+    await delay(400);
+  }
+  return added;
+}
+
 /**
  * The combined query's cross-model sort is NOT proportional — verified live,
  * repeatably: Toyota/Honda/Hyundai models consistently land 15-40 listings
@@ -347,6 +527,17 @@ async function topUpUnderrepresentedModels(
           } catch {
             /* malformed — skip */
           }
+        }
+
+        // Still short after both API-shaped tiers? Try the product pages
+        // themselves, reusing this same session (no extra browser launch).
+        const stillLowAfterFetch = findLowModels(listings);
+        if (stillLowAfterFetch.length > 0 && Date.now() < deadline) {
+          log(
+            "info",
+            `Clutch.ca: in-session fetch top-up blocked or incomplete — trying product-page navigation for ${stillLowAfterFetch.length} still-low model(s)…`
+          );
+          await topUpViaProductPageNavigation(session, stillLowAfterFetch, listings, seen, deadline, log);
         }
       } finally {
         await closeBrowserSession(session);
