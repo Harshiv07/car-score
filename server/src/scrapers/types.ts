@@ -11,6 +11,10 @@ export interface RawVehicleRecord {
   price?: unknown;
   km?: unknown;
   drivetrain?: string | null;
+  /** Explicit fuel text (e.g. "Gasoline", "Hybrid") when the source states it,
+   *  so it doesn't have to be smuggled through the title (which pollutes trim
+   *  extraction). normalize prefers this over inferring from the title text. */
+  fuel?: string | null;
   vin?: string | null;
   trim?: string | null;
   url?: string | null;

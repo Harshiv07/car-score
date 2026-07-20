@@ -108,7 +108,9 @@ export function normalizeRecord(raw: RawVehicleRecord, meta: NormalizeMeta): Lis
     drivetrain: inferDrivetrain(combinedText),
     engine: raw.engine ?? null,
     transmission: raw.transmission ?? null,
-    fuelType: inferFuelType(combinedText),
+    // Prefer an explicit fuel string (kept out of the title so it can't be
+    // mistaken for a trim); fall back to inferring from the combined text.
+    fuelType: inferFuelType(raw.fuel ? raw.fuel : combinedText),
     vin: raw.vin && /^[A-HJ-NPR-Z0-9]{11,17}$/i.test(raw.vin.trim()) ? raw.vin.trim().toUpperCase() : null,
     price: Math.round(price),
     mileageKm: parseKm(raw.km),

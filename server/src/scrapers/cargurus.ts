@@ -38,6 +38,13 @@
  * first one is blocked, only the first model is tried up front; the rest
  * only run if that one actually returns real data (i.e. this environment
  * genuinely isn't blocked right now).
+ *
+ * A later pass looked for ANY browser-free path and found none: the search
+ * endpoint, `/sitemap.xml` and the sitemap index are all DataDome-403; the
+ * homepage loads but embeds no listing data; individual VDP links return a
+ * data-less stub. There is simply no server-rendered / API / sitemap route to
+ * the listing data — it only exists behind the DataDome-gated search. So this
+ * stays best-effort by design; AutoTrader + Clutch carry the listing count.
  */
 
 import { Listing } from "../types";

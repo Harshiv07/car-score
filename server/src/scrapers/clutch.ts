@@ -1,18 +1,25 @@
 /**
  * Clutch.ca — online used-car retailer, scraped through its public JSON API
- * (api.clutch.ca). This is a browser-free source: it returns fully structured
- * vehicles (year, make, model, trim, mileage, drivetrain, fuel, province
- * price), so it works on hosts without Chromium (Render, etc.) and yields
- * accurate data rather than empty shells. The old static-HTML approach fetched
- * a client-rendered page and always found nothing.
+ * (api.clutch.ca). Browser-free: it returns fully structured vehicles (year,
+ * make, model, trim, mileage, drivetrain, fuel, province price), so it works on
+ * hosts without Chromium (Render, etc.).
  *
- * Queried **per model** (matches clutch.ca/cars/{make}-{model} search pages),
- * not per make: a make-level query only pulls the first few pages of that
- * make's whole inventory, and a make with many models (Mazda: CX-30, CX-50,
- * CX-70, CX-90, Mazda3, MX-5, Mazda6, CX-5, …) can push a specific model we
- * score (CX-5, Mazda3) past that window entirely, silently starving it of
- * data. Querying `makes[]=Mazda&models[]=CX-5` goes straight to just that
- * model's inventory instead.
+ * Queried as ONE combined request listing all 5 makes + all 10 supported models
+ * at once (`makes[]`×5, `models[]`×10), then paginated. The API returns every
+ * page as a MIX of all requested models (e.g. page 0 already spans RAV4, CR-V,
+ * CX-5, Elantra, Corolla, Civic…), so every model is represented on every run.
+ * This replaced a per-model approach whose problem was the WAF: api.clutch.ca
+ * sits behind AWS WAF that allows only ~4-6 requests per run before returning
+ * an empty HTTP 202 challenge — and slowing the pacing doesn't help (verified:
+ * 400ms vs 3000ms between requests made no difference; it's a request-COUNT
+ * budget, not a rate limit). Per-model, that budget bought ~6 complete models
+ * and left the other 4 with nothing; the combined query spends the same ~5
+ * pages on a proportional slice of ALL 10 models instead (`totalCount` ≈ 778
+ * across the supported models; ~5 pages × 32 ≈ 160 covering everything).
+ *
+ * When a real browser IS available (local dev with Chromium), a bonus tier
+ * continues pagination from inside a WAF-cleared browser page to pull the
+ * remaining pages the bare-fetch WAF budget couldn't. No-op on Render.
  */
 
 import { Listing } from "../types";
@@ -27,34 +34,15 @@ const API = "https://api.clutch.ca/v1";
 // Overridable in case Clutch rotates ids.
 const LOCATION_ID = process.env.CLUTCH_LOCATION_ID || "56f159d4-49db-4a61-b2d8-d8784f10a184";
 const PROVINCE = "ON";
+// Hard ceiling on browser-tier continuation (~778 / 32 ≈ 25 pages = everything).
+const ABSOLUTE_MAX_PAGES = 30;
 
-/** One (make, model) query per model we score — derived from the knowledge
- *  base so this list can never drift out of sync with what we support.
- *  Exported so a test can assert every supported model gets its own query. */
+/** The supported models, derived from the knowledge base so this can never
+ *  drift out of sync with what we score. Exported for the query builder + test. */
 export const MODEL_TARGETS: { make: string; model: string }[] = VEHICLE_MODELS.map((m) => ({
   make: m.make,
   model: m.model,
 }));
-
-/**
- * Rotate the query order by a time-bucketed offset so the model that goes
- * *first* changes from run to run. In practice Clutch's WAF reliably allows
- * only the first ~3 requests of a run through before throttling the rest
- * (confirmed live and in production logs: RAV4/Corolla/Civic — the first 3 in
- * MODEL_TARGETS — succeed every time, the other 7 fail every time) — a static
- * order means those first 3 always win and the same 7 always lose, run after
- * run, regardless of the browser-retry tier. Rotating means every model gets
- * a turn being "first" over successive runs (each ~COOLDOWN_MS apart), so
- * every model accumulates real Clutch coverage over time instead of the same
- * 7 being permanently starved.
- */
-export function rotatedModelTargets(
-  now: number = Date.now(),
-  bucketMs = 10 * 60 * 1000 // mirrors scrapeService.ts's COOLDOWN_MS — not imported to avoid a circular dependency
-): typeof MODEL_TARGETS {
-  const offset = Math.floor(now / bucketMs) % MODEL_TARGETS.length;
-  return [...MODEL_TARGETS.slice(offset), ...MODEL_TARGETS.slice(0, offset)];
-}
 
 interface ClutchNamed {
   name?: string | null;
@@ -98,13 +86,10 @@ export function clutchToRaw(v: ClutchVehicle): RawVehicleRecord {
   const drive = v.drivetrain?.name ?? "";
   const fuel = v.fuelType?.name ?? "";
   const year = v.year ?? "";
-  // Deep-link to the exact vehicle detail page (e.g. clutch.ca/vehicles/111414)
-  // rather than a generic model search.
+  // Deep-link to the exact vehicle detail page (e.g. clutch.ca/vehicles/111414).
   const url = v.id != null ? `https://www.clutch.ca/vehicles/${v.id}` : "https://www.clutch.ca/cars";
   return {
-    // Put drivetrain + fuel in the title text so the normalizer's inference
-    // (AWD / Hybrid) picks them up.
-    title: [year, make, model, trim, drive, fuel].filter(Boolean).join(" "),
+    title: [year, make, model, trim].filter(Boolean).join(" "),
     make,
     model,
     trim: trim || null,
@@ -112,6 +97,7 @@ export function clutchToRaw(v: ClutchVehicle): RawVehicleRecord {
     price: priceOf(v),
     km: typeof v.mileage === "number" ? v.mileage : null,
     drivetrain: drive || null,
+    fuel: fuel || null,
     url,
     image: v.cardPhotoUrl ?? null,
   };
@@ -121,9 +107,7 @@ const delay = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
 /**
  * The API sits behind AWS WAF, which hands out an `aws-waf-token` cookie on the
- * first hit and rate-limits rapid sequential requests (a burst gets HTTP 202
- * with an empty body — a challenge, not real "no results"). We keep the cookie
- * (so later requests are trusted) and retry with backoff when that happens.
+ * first hit. We keep the cookie so later requests in the same run are trusted.
  */
 let cookieJar = "";
 
@@ -137,39 +121,27 @@ function rememberCookies(res: Response): void {
 }
 
 /**
- * Build the model-scoped Clutch API query (exported for a regression test —
- * `models[]` is the parameter that fixes make-level pagination cutting off
- * low-volume models like Mazda CX-5/Mazda3).
- *
- * Deliberately mirrors exactly what the real clutch.ca frontend sends (no
- * extra params like a custom page-size): a captured browser request for this
- * same endpoint was `?makes[]=Toyota&models[]=Rav4&downPayment=0&isBiweekly=
- * true&interestRate=7.99&page=0` — nothing else. An earlier version added
- * `&pc=50` to request bigger pages; Clutch silently ignored it (page size
- * stayed the API's default), so it did nothing useful, but a request shape no
- * real browser session ever produces is exactly the kind of signal WAF/bot
- * detection looks for — and this scraper started getting blocked after every
- * 1-2 requests once that param was added. Removed.
+ * Build the combined all-models Clutch API query for one page. Every supported
+ * make + model is listed so a single paginated query returns a mix of all of
+ * them. Exported for a regression test. The non-page params mirror exactly what
+ * the real clutch.ca frontend sends — nothing extra, since a request shape no
+ * real browser produces is exactly what WAF/bot detection flags.
  */
-export function buildModelQueryUrl(make: string, model: string, page: number): string {
-  return (
-    `${API}/vehicles/locations/${LOCATION_ID}` +
-    `?makes[]=${encodeURIComponent(make)}&models[]=${encodeURIComponent(model)}` +
-    `&downPayment=0&isBiweekly=true&interestRate=7.99&page=${page}`
-  );
+export function buildAllModelsQueryUrl(page: number): string {
+  const makes = [...new Set(MODEL_TARGETS.map((t) => t.make))];
+  const models = MODEL_TARGETS.map((t) => t.model);
+  const p = new URLSearchParams();
+  for (const mk of makes) p.append("makes[]", mk);
+  for (const md of models) p.append("models[]", md);
+  p.set("downPayment", "0");
+  p.set("isBiweekly", "true");
+  p.set("interestRate", "7.99");
+  p.set("page", String(page));
+  return `${API}/vehicles/locations/${LOCATION_ID}?${p.toString()}`;
 }
 
-/**
- * Single attempt, no in-place retry: once the WAF challenges a request, a
- * same-shape retry a moment later essentially never succeeds (verified live —
- * it just adds latency and more suspicious traffic), and the run now has a
- * genuinely different, more effective second tier for exactly this case (see
- * `retryFailedModelsViaBrowser` below) — a browser-solved session, not a
- * bare fetch repeated. Keeping this tier fast leaves that tier its budget.
- */
-async function fetchModelPage(make: string, model: string, page: number, timeoutMs: number): Promise<ClutchPage | null> {
-  const url = buildModelQueryUrl(make, model, page);
-  const res = await fetchWithTimeout(url, {
+async function fetchPage(page: number, timeoutMs: number): Promise<ClutchPage | null> {
+  const res = await fetchWithTimeout(buildAllModelsQueryUrl(page), {
     headers: {
       ...BROWSER_HEADERS,
       Origin: "https://www.clutch.ca",
@@ -184,14 +156,13 @@ async function fetchModelPage(make: string, model: string, page: number, timeout
 }
 
 /** Normalize + dedupe a page's vehicles into `listings`. Returns how many were
- *  added. Shared by the direct-fetch path and the browser-session fallback. */
+ *  added. `matchModelFromTitle` keeps only the models we score (drops the
+ *  "Corolla Cross"/"Civic Sedan"-style near-matches the combined query pulls in,
+ *  keeps "RAV4 Hybrid" → RAV4). */
 function ingestVehicles(vehicles: ClutchVehicle[], listings: Listing[], seen: Set<string>): number {
   let added = 0;
   for (const v of vehicles) {
     if (v.visibleOnSite === false) continue;
-    // Safety net: a model query can still include closely-related trims
-    // (e.g. "RAV4 Hybrid" for a RAV4 query) — matchModelFromTitle keeps only
-    // what we actually score.
     if (!matchModelFromTitle(`${v.make?.name ?? ""} ${v.model?.name ?? ""}`)) continue;
     const listing = normalizeRecord(clutchToRaw(v), {
       sourceWebsite: "Clutch.ca",
@@ -209,49 +180,44 @@ function ingestVehicles(vehicles: ClutchVehicle[], listings: Listing[], seen: Se
 }
 
 /**
- * Retry every model that failed a direct fetch by making the SAME API call
- * from inside a real, WAF-cleared browser page instead. One browser/page is
- * reused across all retries (launch + navigation cost paid once). Bounded by
- * `deadline` so this can never eat into the outer per-source timeout budget
- * and risk losing the listings already collected from the models that DID
- * succeed directly (the whole scraper's result is discarded if it runs over).
- * No-ops (returns 0) if no browser is available on this host.
+ * Bonus tier: once the bare-fetch WAF budget is spent, continue paginating from
+ * inside a real, WAF-cleared browser page (the in-page fetch inherits the
+ * browser's solved challenge). Pulls pages `[startPage, totalPages)` up to a
+ * hard cap / deadline. No-ops if no browser is available (Render) or if the
+ * browser is itself blocked. Verified to be a genuine bonus only where a
+ * browser + unflagged IP exist (local dev); harmless everywhere else.
  */
-async function retryFailedModelsViaBrowser(
-  failed: { make: string; model: string }[],
+async function continueViaBrowser(
+  startPage: number,
+  totalPages: number,
   listings: Listing[],
   seen: Set<string>,
   deadline: number,
   log: LogFn
-): Promise<Set<string>> {
-  const recovered = new Set<string>();
-  if (failed.length === 0 || Date.now() >= deadline) return recovered;
-
+): Promise<number> {
+  const lastPage = Math.min(totalPages, ABSOLUTE_MAX_PAGES);
+  if (startPage >= lastPage || Date.now() >= deadline) return 0;
   const session = await openBrowserSession("https://www.clutch.ca/cars", log);
-  if (!session) return recovered; // no browser on this host — graceful no-op
+  if (!session) return 0; // no browser on this host — graceful no-op
 
+  let added = 0;
   try {
-    log("info", `Clutch.ca: retrying ${failed.length} blocked model(s) via a real browser session…`);
-    for (const { make, model } of failed) {
-      if (Date.now() >= deadline) {
-        log("warn", "Clutch.ca: ran out of time budget for the browser retry — stopping.");
-        break;
-      }
-      const text = await fetchJsonInSession(session, buildModelQueryUrl(make, model, 0));
-      if (!text) continue;
+    log("info", `Clutch.ca: continuing pagination via a real browser session (page ${startPage}+)…`);
+    for (let page = startPage; page < lastPage && Date.now() < deadline; page++) {
+      const text = await fetchJsonInSession(session, buildAllModelsQueryUrl(page));
+      if (!text) break; // browser is blocked too — stop
       try {
         const data = JSON.parse(text) as ClutchPage;
-        const added = ingestVehicles(data.vehicles ?? [], listings, seen);
-        if (added > 0) recovered.add(`${make} ${model}`);
+        added += ingestVehicles(data.vehicles ?? [], listings, seen);
       } catch {
-        /* malformed response — skip */
+        break;
       }
       await delay(400);
     }
   } finally {
     await closeBrowserSession(session);
   }
-  return recovered;
+  return added;
 }
 
 export const clutch: Scraper = {
@@ -259,112 +225,50 @@ export const clutch: Scraper = {
   source: "Clutch.ca",
   async run(log: LogFn): Promise<ScraperRunResult> {
     const cfg = loadScrapeConfig();
+    const maxPages = Math.max(1, cfg.clutchMaxPages);
+    const deadline = Date.now() + cfg.sourceTimeoutMs - 5000;
     const listings: Listing[] = [];
     const seen = new Set<string>();
-    const failedTargets: { make: string; model: string }[] = [];
-    // Leave a safety margin before the scrape service's own per-source
-    // timeout (scrapeService.ts races this whole run() against that timeout
-    // and discards the entire result — including everything already found —
-    // if it loses, so the browser-retry pass below must never risk that).
-    const deadline = Date.now() + cfg.sourceTimeoutMs - 5000;
 
-    log("info", `Clutch.ca: querying API for ${MODEL_TARGETS.length} model(s)…`);
+    log("info", `Clutch.ca: querying all ${MODEL_TARGETS.length} models in one combined request…`);
 
-    // Two phases, because "cover every model" and "go deep on each" compete
-    // for the SAME small budget: Clutch's WAF reliably allows only ~3-4
-    // requests through per run before throttling the rest (confirmed live —
-    // slowing the pacing from 400ms to 3000ms between requests made no
-    // difference at all, so this is a request-COUNT budget, not a rate
-    // limit pacing can work around). Spending that budget depth-first on
-    // whichever model happens to be queried first would starve every other
-    // model completely, so:
-    //
-    //   Phase 1 (breadth) — page 0 for every model, in rotated order (see
-    //   rotatedModelTargets). A block/failure on one model must never cost
-    //   the others their turn — a prior version stopped the whole run after
-    //   2 consecutive model failures to avoid deepening a WAF block, but
-    //   that traded a real bug (silently zeroing out every model queried
-    //   *after* the 2 that failed, even though nothing was wrong with them)
-    //   for a hypothetical one.
-    //
-    //   Phase 2 (depth) — ONLY if the budget stretches further than one page
-    //   each: round-robins page 1, then page 2, etc. across whichever models
-    //   reported more pages available (SCRAPE_MAX_PAGES caps how deep), so
-    //   any extra requests the WAF allows get spread across several models
-    //   instead of one model consuming them all.
-    const totalPagesByKey = new Map<string, number>();
-    const reachableInOrder: { make: string; model: string }[] = [];
-
-    for (const target of rotatedModelTargets()) {
-      const { make, model } = target;
+    // Bare-fetch pagination until the WAF challenges (a null page after page 0),
+    // the page cap, the last real page, or the deadline.
+    let page = 0;
+    let totalPages = 1;
+    let blockedMidway = false;
+    for (; page < maxPages && Date.now() < deadline; page++) {
       let data: ClutchPage | null;
       try {
-        data = await fetchModelPage(make, model, 0, cfg.requestTimeoutMs);
+        data = await fetchPage(page, cfg.requestTimeoutMs);
       } catch (e) {
-        log("warn", `Clutch.ca: ${make} ${model} page 0 failed — ${(e as Error).message.slice(0, 80)}`);
+        log("warn", `Clutch.ca: page ${page} failed — ${(e as Error).message.slice(0, 80)}`);
         data = null;
       }
       if (!data) {
-        failedTargets.push(target);
-      } else {
-        const found = Array.isArray(data.vehicles) ? ingestVehicles(data.vehicles, listings, seen) : 0;
-        if (found === 0) log("warn", `Clutch.ca: ${make} ${model} — 0 listings (may be temporarily out of stock)`);
-        if (data.totalPages > 1) {
-          totalPagesByKey.set(`${make} ${model}`, data.totalPages);
-          reachableInOrder.push(target);
-        }
+        blockedMidway = page > 0; // page 0 failing = unreachable, not "budget spent"
+        break;
       }
-      await delay(400); // gentle pacing (doesn't affect the budget, but is a good citizen)
+      totalPages = data.totalPages ?? totalPages;
+      ingestVehicles(data.vehicles ?? [], listings, seen);
+      if (page + 1 >= totalPages) {
+        page += 1; // consumed the last real page
+        break;
+      }
+      await delay(400);
     }
 
-    const pageCap = Math.max(1, cfg.maxPagesPerSource); // tune via SCRAPE_MAX_PAGES; default 4
-    let page = 1;
-    depth: while (page < pageCap && totalPagesByKey.size > 0 && Date.now() < deadline) {
-      let madeProgress = false;
-      for (const { make, model } of reachableInOrder) {
-        const key = `${make} ${model}`;
-        const total = totalPagesByKey.get(key);
-        if (total == null || page >= total) continue;
-        if (Date.now() >= deadline) break depth;
-        let data: ClutchPage | null;
-        try {
-          data = await fetchModelPage(make, model, page, cfg.requestTimeoutMs);
-        } catch {
-          data = null;
-        }
-        if (!data) {
-          // The WAF budget is spent — the breadth we already have from phase
-          // 1 stays; further depth attempts would just fail the same way.
-          log("info", `Clutch.ca: extra-page budget used up at page ${page + 1} — keeping the ${listings.length} already found.`);
-          break depth;
-        }
-        ingestVehicles(data.vehicles ?? [], listings, seen);
-        madeProgress = true;
-        await delay(400);
-      }
-      if (!madeProgress) break;
-      page++;
+    // If more pages exist than the WAF let us fetch, try to finish via a browser.
+    if ((blockedMidway || page >= maxPages) && page < totalPages && cfg.jsFallbackEnabled) {
+      await continueViaBrowser(page, totalPages, listings, seen, deadline, log);
     }
 
-    // Second tier: anything the direct API call couldn't reach gets one retry
-    // through a real browser session (see retryFailedModelsViaBrowser for
-    // why this can succeed where a bare fetch can't). No-ops cleanly if this
-    // host has no browser available.
-    const recovered =
-      cfg.jsFallbackEnabled && failedTargets.length > 0
-        ? await retryFailedModelsViaBrowser(failedTargets, listings, seen, deadline, log)
-        : new Set<string>();
-    const stillFailed = failedTargets.filter((t) => !recovered.has(`${t.make} ${t.model}`));
-
-    const ok = listings.length > 0 || stillFailed.length < MODEL_TARGETS.length;
-    const note =
-      listings.length > 0
-        ? `${listings.length} supported-model listing(s) found` +
-          (stillFailed.length ? ` (${stillFailed.map((t) => `${t.make} ${t.model}`).join(", ")} unreachable)` : "")
-        : stillFailed.length === MODEL_TARGETS.length
-          ? "Clutch API unreachable — skipped"
-          : "no supported-model listings in Clutch inventory right now";
-    log(listings.length > 0 ? "info" : "warn", `Clutch.ca: ${note}`);
+    const models = new Set(listings.map((l) => `${l.make} ${l.model}`));
+    const ok = listings.length > 0;
+    const note = listings.length
+      ? `${listings.length} listing(s) across ${models.size}/${MODEL_TARGETS.length} models`
+      : "Clutch API unreachable — skipped";
+    log(ok ? "info" : "warn", `Clutch.ca: ${note}`);
     return { key: "clutch", source: "Clutch.ca", listings, ok, note };
   },
 };
