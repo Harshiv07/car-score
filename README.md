@@ -47,21 +47,31 @@ JSON-file store (`server/.data/db.json`) seeded with representative listings.
 > price, mileage, drivetrain, fuel) with **no browser required** — it works on
 > Render and other hosts without Chromium.
 >
-> **Some sites need a browser.** CarGurus (DataDome) and a couple of JS dealer
-> sites block a plain server-side fetch outright, and a small number of Clutch
-> model queries occasionally get WAF-challenged. `render.yaml`'s build command
-> installs Chromium (`--with-deps`, so the shared libraries it needs to
-> actually *launch* are included, not just the binary — see the comment in
-> that file) so this works on Render too, no local setup needed. It's
-> best-effort by design: if the install fails or the free-tier instance can't
-> spare the memory to launch Chromium alongside the Node process, every
+> **Some sites need a browser.** A couple of JS dealer sites block a plain
+> server-side fetch outright, and a small number of Clutch model queries
+> occasionally get WAF-challenged. `render.yaml`'s build command installs
+> Chromium (`--with-deps`, so the shared libraries it needs to actually
+> *launch* are included, not just the binary — see the comment in that file)
+> so this works on Render too, no local setup needed. It's best-effort by
+> design: if the install fails or the free-tier instance can't spare the
+> memory to launch Chromium alongside the Node process, every
 > browser-dependent path no-ops cleanly and the rest of the scrape is
 > unaffected. Locally, `npm run setup` installs Chromium for you.
 >
+> **CarGurus needs more than a browser.** It sits behind DataDome, which
+> blocks primarily on IP reputation — a plain fetch, a full local Chromium
+> session and a generic rendering service (ScrapingBee) all got an identical
+> 403/empty result from the same IP, browser or not. What gets past it (see
+> `cargurus.ts`) is [Scrapfly](https://scrapfly.io)'s ASP mode, which routes
+> through non-datacenter proxies — set `SCRAPFLY_API_KEY` to enable it;
+> unset, this source cleanly reports itself as skipped rather than failing
+> the run.
+>
 > **A run can never hang.** The whole run is capped at `SCRAPE_RUN_BUDGET_MS`
-> (2 min) and each source at `SCRAPE_SOURCE_TIMEOUT_MS` (30 s); tune sources and
-> page counts via env vars (see `server/.env.example`). The API keeps serving
-> listings while a scrape is in progress.
+> (3 min) and each source at `SCRAPE_SOURCE_TIMEOUT_MS` (90 s — CarGurus's
+> Scrapfly-rendered per-model calls take real wall-clock time, ~7-10s each);
+> tune sources and page counts via env vars (see `server/.env.example`). The
+> API keeps serving listings while a scrape is in progress.
 
 ### Production (MongoDB)
 
@@ -85,7 +95,7 @@ server/src/scrapers/
   stmMotors.ts     # STM Motors dealers (Gore Motors) — browser-free via listings-sitemap.xml
   edealer.ts       # eDealer-platform dealers (Half-Way Motors Mazda) — browser-free, embedded JS object
   autotrader.ts    # AutoTrader.ca search pages per model (best-effort HTML)
-  cargurus.ts      # CarGurus.ca (best-effort — DataDome anti-bot)
+  cargurus.ts      # CarGurus.ca — via Scrapfly (opt-in, needs SCRAPFLY_API_KEY)
   dealer.ts        # dealership sites, configurable via src/config/dealers.json
   config.ts        # env-driven run budget, timeouts, source allow-list
 ```
@@ -141,11 +151,21 @@ collisions (e.g. Toyota **Corolla Cross**, a different Toyota model/platform
 from the Corolla we score) need an explicit exclusion since both spans are
 genuinely word-bounded; see `FALSE_POSITIVE_FOLLOWERS`.
 
-**CarGurus** (DataDome anti-bot) is best-effort — it uses the Playwright
-render fallback when the static pass finds nothing (needs Chromium available;
-see above), but DataDome blocks a lot of headless browsers too, so it may
-still come back empty depending on the network. It never breaks a run either
-way.
+**CarGurus** (`cargurus.ts`) is queried per model too, the same way as Clutch —
+CarGurus's own `makeModelTrimPaths` filter (an internal make/model id pair,
+e.g. `m7/d306` for Toyota RAV4; resolved live, see `MODEL_PATHS`), not an
+unfiltered "used cars near X" search, since an unfiltered page returns
+whatever the sort order surfaces first — mostly not our 10 supported models.
+Rendered through [Scrapfly](https://scrapfly.io)'s ASP mode (see above) and
+parsed from the page's embedded Remix router context
+(`window.__remixContext…state.loaderData["routes/($intl).search"].search
+.tiles`) — the current cargurus.ca is a Remix app, so the listings aren't in
+JSON-LD or any of extract.ts's generic strategies. Two models query
+concurrently (a higher concurrency measurably slowed down Scrapfly's own
+per-call latency for one account rather than speeding the run up — verified
+live) with a longer-than-usual per-request timeout, since a real ASP+JS-render
+call takes several seconds. Skips itself cleanly (not a failure) when
+`SCRAPFLY_API_KEY` isn't set.
 
 **External rendering service (optional).** Set `RENDER_SERVICE_URL` (see
 `server/.env.example`) to a headless-browser/rendering API (ScrapingBee,

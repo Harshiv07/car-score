@@ -49,8 +49,15 @@ export interface ScrapeConfig {
 
 export function loadScrapeConfig(): ScrapeConfig {
   return {
-    runBudgetMs: num("SCRAPE_RUN_BUDGET_MS", 120_000),
-    sourceTimeoutMs: num("SCRAPE_SOURCE_TIMEOUT_MS", 30_000),
+    // Raised from 120s/30s: CarGurus (via Scrapfly's ASP+JS-rendering tier —
+    // see cargurus.ts) needs real wall-clock time per model, verified live —
+    // ~7-10s per call, so covering all 10 supported models needs up to ~90s
+    // even with concurrency. A higher ceiling costs nothing for the sources
+    // that finish in seconds (Clutch, AutoTrader, the dealer scrapers all
+    // still return as soon as they're done); it only helps CarGurus actually
+    // reach every model instead of running out of room partway through.
+    runBudgetMs: num("SCRAPE_RUN_BUDGET_MS", 180_000),
+    sourceTimeoutMs: num("SCRAPE_SOURCE_TIMEOUT_MS", 90_000),
     requestTimeoutMs: num("SCRAPE_REQUEST_TIMEOUT_MS", 12_000),
     maxPagesPerSource: num("SCRAPE_MAX_PAGES", 4),
     concurrency: num("SCRAPE_CONCURRENCY", 4),

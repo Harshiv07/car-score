@@ -16,6 +16,7 @@ import { scoreListing } from "../scoring/engine";
 import { clutchToRaw } from "../scrapers/clutch";
 import { convertusToRaw } from "../scrapers/convertus";
 import { edealerToRaw } from "../scrapers/edealer";
+import { cargurusTileToRaw } from "../scrapers/cargurus";
 import { Listing } from "../types";
 
 /** A supported model (Corolla) with a full JSON-LD record, plus an F-150 that
@@ -121,12 +122,37 @@ export function verifyPipeline(): PipelineReport {
       : "eDealer mapping produced null"
   );
 
+  // 3d. CarGurus (Scrapfly-rendered Remix tile) mapping produces a valid
+  // supported listing with an exact-VDP url, not a generic search link.
+  const cargurusListing = normalizeRecord(
+    cargurusTileToRaw({
+      data: {
+        id: 449331565,
+        vin: "2T3R1RFV2LC102476",
+        localizedDrivetrain: "All-Wheel Drive",
+        mileageData: { value: 74218 },
+        priceData: { current: 36488 },
+        ontologyData: { makeName: "Toyota", modelName: "RAV4", trimName: "Trail", carYear: 2021 },
+      },
+    })!,
+    { sourceWebsite: "CarGurus.ca", baseUrl: "https://www.cargurus.ca", dealer: "SelfCheck Motors", province: "ON" }
+  );
+  add(
+    "cargurus-map",
+    !!cargurusListing &&
+      cargurusListing.model === "RAV4" &&
+      cargurusListing.mileageKm === 74218 &&
+      cargurusListing.listingUrl === "https://www.cargurus.ca/details/449331565",
+    cargurusListing ? `mapped ${cargurusListing.title} @ $${cargurusListing.price}` : "CarGurus mapping produced null"
+  );
+
   // 4. Scoring yields a full 0–100 score for every normalized listing.
   const pool = [
     ...normalized,
     ...(clutchListing ? [clutchListing] : []),
     ...(convertusListing ? [convertusListing] : []),
     ...(edealerListing ? [edealerListing] : []),
+    ...(cargurusListing ? [cargurusListing] : []),
   ];
   const scored = pool.map((l) => scoreListing(l, pool));
   const allScored =

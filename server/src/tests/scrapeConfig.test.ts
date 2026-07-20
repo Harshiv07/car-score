@@ -26,7 +26,12 @@ afterEach(() => {
 
 test("config has fast, safe defaults", () => {
   const c = loadScrapeConfig();
-  assert.equal(c.runBudgetMs, 120_000, "default run budget is 2 minutes");
+  // 180s/90s: CarGurus's Scrapfly-rendered per-model calls take real
+  // wall-clock time (~7-10s each, verified live) — a higher ceiling is free
+  // for the sources that finish in seconds, so this isn't the "no source
+  // should ever be slow" assumption the original 120s/30s encoded.
+  assert.equal(c.runBudgetMs, 180_000, "default run budget is 3 minutes");
+  assert.equal(c.sourceTimeoutMs, 90_000, "default per-source cap is 90s");
   assert.ok(c.sourceTimeoutMs <= c.runBudgetMs);
   assert.equal(c.jsFallbackEnabled, true, "rendered fallback on by default (fails fast without a browser)");
   assert.equal(c.enabledSourceKeys, null, "all sources by default");
@@ -53,7 +58,7 @@ test("bad env values fall back to defaults instead of NaN", () => {
   process.env.SCRAPE_RUN_BUDGET_MS = "not-a-number";
   process.env.SCRAPE_MAX_PAGES = "-5";
   const c = loadScrapeConfig();
-  assert.equal(c.runBudgetMs, 120_000);
+  assert.equal(c.runBudgetMs, 180_000);
   assert.equal(c.maxPagesPerSource, 4);
 });
 
