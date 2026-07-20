@@ -16,19 +16,17 @@ const ENV_KEYS = [
   "SCRAPE_MAX_PAGES",
   "SCRAPE_SOURCES",
   "SCRAPE_JS_FALLBACK",
-  "APIFY_TOKEN",
-  "APIFY_ACTOR_ID",
-  "APIFY_PROXY_GROUPS",
-  "APIFY_PROXY_COUNTRY",
+  "RENDER_SERVICE_URL",
+  "RENDER_SERVICE_API_KEY",
 ];
 
 afterEach(() => {
   for (const k of ENV_KEYS) delete process.env[k];
 });
 
-test("config has safe defaults that favor more data over raw speed", () => {
+test("config has fast, safe defaults", () => {
   const c = loadScrapeConfig();
-  assert.equal(c.runBudgetMs, 240_000, "default run budget is 4 minutes — a background job, not a blocking request");
+  assert.equal(c.runBudgetMs, 120_000, "default run budget is 2 minutes");
   assert.ok(c.sourceTimeoutMs <= c.runBudgetMs);
   assert.equal(c.jsFallbackEnabled, true, "rendered fallback on by default (fails fast without a browser)");
   assert.equal(c.enabledSourceKeys, null, "all sources by default");
@@ -55,7 +53,7 @@ test("bad env values fall back to defaults instead of NaN", () => {
   process.env.SCRAPE_RUN_BUDGET_MS = "not-a-number";
   process.env.SCRAPE_MAX_PAGES = "-5";
   const c = loadScrapeConfig();
-  assert.equal(c.runBudgetMs, 240_000);
+  assert.equal(c.runBudgetMs, 120_000);
   assert.equal(c.maxPagesPerSource, 4);
 });
 
@@ -86,76 +84,35 @@ test("a fast source returns its own result, not the timeout", async () => {
 });
 
 test("fetchRenderedViaService reports why it failed, not just that it did", async (t) => {
-  // Guards the exact bug the ScrapingBee integration went through undiagnosed
-  // for multiple rounds: a bare "returned nothing" log gives no way to tell
-  // an auth/param error, a quota error and the target blocking the proxy's
-  // IP apart — three very different problems that look identical without this.
-  delete process.env.APIFY_TOKEN;
+  // Guards the bug this was built to diagnose: a bare "returned nothing" log
+  // gives no way to tell an auth/param error, a quota error and the target
+  // site blocking the rendering proxy's IP apart — three very different
+  // problems that all looked identical before this.
+  delete process.env.RENDER_SERVICE_URL;
   const unset = await fetchRenderedViaService("https://example.com");
   assert.equal(unset.html, null);
-  assert.match(unset.failureReason ?? "", /APIFY_TOKEN not set/);
+  assert.match(unset.failureReason ?? "", /not set/);
 
-  process.env.APIFY_TOKEN = "bad-token";
-  t.mock.method(globalThis, "fetch", async () => new Response('{"error":{"type":"token-not-found"}}', { status: 401 }));
+  process.env.RENDER_SERVICE_URL = "https://render.example/api?key=bad&url={url}";
+  t.mock.method(globalThis, "fetch", async () => new Response('{"message":"Invalid api key"}', { status: 401 }));
   const authFail = await fetchRenderedViaService("https://example.com");
   assert.equal(authFail.html, null);
   assert.match(authFail.failureReason ?? "", /HTTP 401/);
-  assert.match(authFail.failureReason ?? "", /token-not-found/);
+  assert.match(authFail.failureReason ?? "", /Invalid api key/);
 });
 
-test("fetchRenderedViaService calls the configured actor with token, target url and residential proxy by default", async (t) => {
-  process.env.APIFY_TOKEN = "tok_123";
-  let calledUrl = "";
-  let calledBody: any;
-  t.mock.method(globalThis, "fetch", async (input: string | URL, init?: RequestInit) => {
-    calledUrl = String(input);
-    calledBody = JSON.parse(String(init?.body));
-    return new Response(JSON.stringify([{ url: "https://example.com", html: `<html>${"x".repeat(600)}</html>` }]), { status: 200 });
-  });
-  await fetchRenderedViaService("https://example.com/cars");
-
-  assert.match(calledUrl, /^https:\/\/api\.apify\.com\/v2\/acts\/apify~web-scraper\/run-sync-get-dataset-items\?/);
-  assert.match(calledUrl, /token=tok_123/);
-  assert.deepEqual(calledBody.startUrls, [{ url: "https://example.com/cars" }]);
-  assert.deepEqual(calledBody.proxyConfiguration, { useApifyProxy: true, apifyProxyGroups: ["RESIDENTIAL"] });
-});
-
-test("APIFY_ACTOR_ID, APIFY_PROXY_COUNTRY and APIFY_PROXY_GROUPS=NONE are respected", async (t) => {
-  process.env.APIFY_TOKEN = "tok_123";
-  process.env.APIFY_ACTOR_ID = "custom~actor";
-  process.env.APIFY_PROXY_COUNTRY = "CA";
-  let calledUrl = "";
-  let calledBody: any;
-  t.mock.method(globalThis, "fetch", async (input: string | URL, init?: RequestInit) => {
-    calledUrl = String(input);
-    calledBody = JSON.parse(String(init?.body));
-    return new Response(JSON.stringify([{ html: `<html>${"x".repeat(600)}</html>` }]), { status: 200 });
-  });
-  await fetchRenderedViaService("https://example.com");
-  assert.match(calledUrl, /\/acts\/custom~actor\//);
-  assert.deepEqual(calledBody.proxyConfiguration, { useApifyProxy: true, apifyProxyGroups: ["RESIDENTIAL"], apifyProxyCountry: "CA" });
-
-  process.env.APIFY_PROXY_GROUPS = "NONE";
-  await fetchRenderedViaService("https://example.com");
-  assert.deepEqual(calledBody.proxyConfiguration, { useApifyProxy: false });
-});
-
-test("fetchRenderedViaService surfaces the actual dataset item when it has no usable html field", async (t) => {
-  // Apify actor output field names can vary by version — silently guessing
-  // wrong is exactly how the previous rendering-service integration went
-  // undiagnosed for multiple rounds. Must show the real shape received.
-  process.env.APIFY_TOKEN = "tok_123";
-  t.mock.method(globalThis, "fetch", async () => new Response(JSON.stringify([{ url: "https://example.com", "#error": true }]), { status: 200 }));
+test("fetchRenderedViaService treats a too-short body as a failure, not a real page", async (t) => {
+  process.env.RENDER_SERVICE_URL = "https://render.example/api?url={url}";
+  t.mock.method(globalThis, "fetch", async () => new Response("blocked", { status: 200 }));
   const result = await fetchRenderedViaService("https://example.com");
   assert.equal(result.html, null);
-  assert.match(result.failureReason ?? "", /no usable "html" field/);
-  assert.match(result.failureReason ?? "", /#error/);
+  assert.match(result.failureReason ?? "", /too short/);
 });
 
 test("fetchRenderedViaService returns the HTML on a real success", async (t) => {
-  process.env.APIFY_TOKEN = "tok_123";
+  process.env.RENDER_SERVICE_URL = "https://render.example/api?url={url}";
   const page = `<html><body>${"x".repeat(600)}</body></html>`;
-  t.mock.method(globalThis, "fetch", async () => new Response(JSON.stringify([{ url: "https://example.com", html: page }]), { status: 200 }));
+  t.mock.method(globalThis, "fetch", async () => new Response(page, { status: 200 }));
   const result = await fetchRenderedViaService("https://example.com");
   assert.equal(result.html, page);
   assert.equal(result.failureReason, undefined);

@@ -19,7 +19,7 @@ import { Listing } from "../types";
 import { matchModelFromTitle, VEHICLE_MODELS } from "../data/vehicleModels";
 import { normalizeRecord } from "./normalize";
 import { LogFn, RawVehicleRecord, Scraper, ScraperRunResult } from "./types";
-import { BROWSER_HEADERS, fetchViaApifyInPageFetch, fetchWithTimeout, loadScrapeConfig, renderServiceConfigured } from "./config";
+import { BROWSER_HEADERS, fetchWithTimeout, loadScrapeConfig } from "./config";
 import { closeBrowserSession, fetchJsonInSession, openBrowserSession } from "./crawl";
 
 const API = "https://api.clutch.ca/v1";
@@ -208,38 +208,14 @@ function ingestVehicles(vehicles: ClutchVehicle[], listings: Listing[], seen: Se
   return added;
 }
 
-/** Parse one ClutchPage response and ingest it; returns whether it added anything. */
-function ingestClutchResponseText(text: string, listings: Listing[], seen: Set<string>): boolean {
-  try {
-    const data = JSON.parse(text) as ClutchPage;
-    return ingestVehicles(data.vehicles ?? [], listings, seen) > 0;
-  } catch {
-    return false; // malformed response — skip
-  }
-}
-
 /**
  * Retry every model that failed a direct fetch by making the SAME API call
- * from inside a real, WAF-cleared browser page instead — a bare server-side
- * fetch gets blocked in a way an in-page fetch from a browser-cleared session
- * doesn't (confirmed live: even a copied WAF cookie replayed on a plain fetch
- * client still fails — modern WAFs bind the challenge to the underlying
- * TLS/connection fingerprint, not just the cookie, so the fetch has to
- * happen from literally inside the same browser connection).
- *
- * Two tiers, tried in the same order `renderPage()` uses elsewhere in this
- * codebase (external service, then local browser):
- *   1. Apify (if APIFY_TOKEN is set) — runs on Apify's own infrastructure
- *      with a residential proxy by default, so this works even when this
- *      host (Render) has no local Chromium at all.
- *   2. A local Playwright browser session — reused across all retries in
- *      this tier (launch + navigation cost paid once), for whatever Apify
- *      didn't recover or when Apify isn't configured. No-ops if this host
- *      has no browser either.
- * Bounded by `deadline` throughout so this can never eat into the outer
- * per-source timeout budget and risk losing the listings already collected
- * from the models that DID succeed directly (the whole scraper's result is
- * discarded if it runs over).
+ * from inside a real, WAF-cleared browser page instead. One browser/page is
+ * reused across all retries (launch + navigation cost paid once). Bounded by
+ * `deadline` so this can never eat into the outer per-source timeout budget
+ * and risk losing the listings already collected from the models that DID
+ * succeed directly (the whole scraper's result is discarded if it runs over).
+ * No-ops (returns 0) if no browser is available on this host.
  */
 async function retryFailedModelsViaBrowser(
   failed: { make: string; model: string }[],
@@ -250,39 +226,26 @@ async function retryFailedModelsViaBrowser(
 ): Promise<Set<string>> {
   const recovered = new Set<string>();
   if (failed.length === 0 || Date.now() >= deadline) return recovered;
-  const warmupUrl = "https://www.clutch.ca/cars";
 
-  if (renderServiceConfigured()) {
-    log("info", `Clutch.ca: retrying ${failed.length} blocked model(s) via Apify (residential proxy)…`);
-    for (const { make, model } of failed) {
-      if (Date.now() >= deadline) {
-        log("warn", "Clutch.ca: ran out of time budget for the Apify retry — stopping.");
-        break;
-      }
-      const { text, failureReason } = await fetchViaApifyInPageFetch(warmupUrl, buildModelQueryUrl(make, model, 0));
-      if (!text) {
-        log("warn", `Clutch.ca: ${make} ${model} via Apify — ${failureReason}`);
-        continue;
-      }
-      if (ingestClutchResponseText(text, listings, seen)) recovered.add(`${make} ${model}`);
-    }
-  }
-
-  const stillFailed = failed.filter((t) => !recovered.has(`${t.make} ${t.model}`));
-  if (stillFailed.length === 0 || Date.now() >= deadline) return recovered;
-
-  const session = await openBrowserSession(warmupUrl, log);
-  if (!session) return recovered; // no local browser either — keep whatever Apify recovered
+  const session = await openBrowserSession("https://www.clutch.ca/cars", log);
+  if (!session) return recovered; // no browser on this host — graceful no-op
 
   try {
-    log("info", `Clutch.ca: retrying ${stillFailed.length} still-blocked model(s) via a local browser session…`);
-    for (const { make, model } of stillFailed) {
+    log("info", `Clutch.ca: retrying ${failed.length} blocked model(s) via a real browser session…`);
+    for (const { make, model } of failed) {
       if (Date.now() >= deadline) {
         log("warn", "Clutch.ca: ran out of time budget for the browser retry — stopping.");
         break;
       }
       const text = await fetchJsonInSession(session, buildModelQueryUrl(make, model, 0));
-      if (text && ingestClutchResponseText(text, listings, seen)) recovered.add(`${make} ${model}`);
+      if (!text) continue;
+      try {
+        const data = JSON.parse(text) as ClutchPage;
+        const added = ingestVehicles(data.vehicles ?? [], listings, seen);
+        if (added > 0) recovered.add(`${make} ${model}`);
+      } catch {
+        /* malformed response — skip */
+      }
       await delay(400);
     }
   } finally {
