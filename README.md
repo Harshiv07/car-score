@@ -48,10 +48,11 @@ local JSON-file store (`server/.data/db.json`), empty until a scrape (or
 `db:seed-snapshot`) populates it — the app never auto-seeds fabricated demo
 data, only real scraped listings.
 
-> **The primary source is browser-free.** `Clutch.ca` is scraped through its
-> public JSON API, so it returns fully-structured, accurate listings (year,
-> price, mileage, drivetrain, fuel) with **no browser required** — it works on
-> Render and other hosts without Chromium.
+> **The two anchor sources are browser-free.** `AutoTrader.ca` (Ontario, paged
+> via its embedded `__NEXT_DATA__` JSON) and `Clutch.ca` (a combined API query
+> across every supported model) together return **1,000+ listings per run**
+> with **no browser required** — they work on Render and other hosts without
+> Chromium.
 >
 > **Some sites need a browser.** A couple of JS dealer sites block a plain
 > server-side fetch outright, and a small number of Clutch model queries
@@ -115,21 +116,23 @@ server/src/scrapers/
 
 **Browser-free sources (work everywhere, incl. Render).** Each `dealers.json`
 entry has a `platform`:
-- **Clutch.ca** — public JSON API, queried per supported model (not per make —
-  a make-level query only pulls the first few pages of a make's *whole*
-  inventory, which silently starves low-volume models like Mazda CX-5 when
-  the make sells a dozen other models too), in a rotating order (see below).
-  A model that gets WAF-challenged gets one retry through a real browser
-  session (page navigates to clutch.ca first, so the site's bot challenge
-  resolves normally, then the same API call is made *from inside that page* —
-  a bare server-side fetch can get blocked in a way an in-page fetch from a
-  browser-cleared session doesn't). No-ops if no browser is available.
-  Clutch's WAF reliably allows only the first few requests of a run through
-  before throttling the rest, so a fixed query order would let the same 2-3
-  models win every single run and permanently starve the other 7 — the query
-  order rotates by a time bucket (`rotatedModelTargets`) so a different model
-  is "first" each run, and every model accumulates real Clutch coverage over
-  successive runs instead.
+- **Clutch.ca** — public JSON API, queried as **one combined request listing
+  all 5 makes + 10 supported models at once**, then paginated. The API returns
+  each page as a mix of every requested model (a single query's `totalCount`
+  is ~778 across the supported models, and page 0 alone already spans
+  RAV4/CR-V/CX-5/Elantra/Corolla/Civic/…), so every model gets *some* coverage
+  from every run. This replaced an earlier per-model-query design: api.clutch.ca
+  sits behind an AWS WAF that allows only ~4-6 requests through per run before
+  returning an empty HTTP 202 challenge (confirmed live — pacing 400ms vs
+  3000ms between requests made zero difference, so it's a request-COUNT
+  budget, not a rate limit pacing can work around). Per-model, that budget
+  bought ~6 models full coverage and left the other 4 with nothing, every
+  single run; the combined query spends the same handful of requests on a
+  slice of *all 10* instead. `CLUTCH_MAX_PAGES` caps how many pages are
+  attempted (default 8; the WAF stops it well before that in practice). When a
+  real browser is available (local dev with Chromium), a bonus tier continues
+  pagination from inside a WAF-cleared browser page for the pages the bare
+  fetch couldn't reach — no-op on Render.
 - **`convertus`** (Wayne Toyota, Superior Hyundai) — the dealer site's own
   same-origin `convertus-vms/…/ajax-vehicles.php` proxy (set each dealer's `cp`
   company id).
@@ -146,15 +149,26 @@ entry has a `platform`:
 All return complete, structured vehicles (year, price, km, VIN where available,
 drivetrain, fuel).
 
-**AutoTrader** is scraped with a bespoke tile parser (`autotrader.ts`): each
-result `<article>` links to a VDP and shows year/price/km as text, so the
-parser pairs every VDP anchor with its own tile (the smallest ancestor holding
-a price) using element-boundary-aware text. The static pages already carry the
-tiles, so this works browser-free; the rendered fallback tops it up. Every
-supported model gets its own request — this is anchored to `TARGETS`
-directly, not sliced by `SCRAPE_MAX_PAGES` (that knob caps a *generic* dealer
-scraper's page count; reusing it here once silently dropped 6 of the 10
-supported models from ever being queried at all).
+**AutoTrader** (`autotrader.ts`) is the largest source (1,000+ Ontario listings
+per run) and is fully browser-free. AutoTrader.ca is a Next.js app (AutoScout24
+backend) whose server-rendered HTML embeds a clean, fully-structured
+`"listings":[…]` array inside `__NEXT_DATA__` — real year/price/km/trim/fuel/
+transmission plus the listing's true province and city, and a working VDP url.
+Two things make this scale, both verified live: pagination works browser-free
+via `&page=N` (each page is a genuinely different set of listings — the older
+`rcs=` param does *not* paginate, which is why the previous tile-based
+approach was stuck at ~20 listings per model regardless of requested page
+size), and dropping the `prx=-1` "national" param filters results to Ontario
+server-side. `AUTOTRADER_PAGES_PER_MODEL` (default 6) controls how many pages
+per model to fetch; fetching is two-phase — page 1 of every model first, then
+page 2..N interleaved across models up to each model's real page count — so a
+low-volume model never starves a high-volume one's depth or vice versa.
+`modelVersionInput` (the closest thing to a "trim" field) is dealer free text
+and often marketing copy rather than a real trim (`"RAV4 Blowout Sale - 30+ in
+stock"`); it's sanitized to the first clean segment, with any drivetrain token
+(AWD/FWD/…) pulled out before the cleanup so it isn't lost. The older visible-
+tile text parser (`parseAutotraderTiles`) is kept as a fallback for any page
+where the `__NEXT_DATA__` blob can't be extracted (a future markup change).
 
 **Model matching** (`matchModelFromTitle` in `data/vehicleModels.ts`) uses
 word-boundary-aware alias matching, not a plain substring check — a real
@@ -164,20 +178,22 @@ collisions (e.g. Toyota **Corolla Cross**, a different Toyota model/platform
 from the Corolla we score) need an explicit exclusion since both spans are
 genuinely word-bounded; see `FALSE_POSITIVE_FOLLOWERS`.
 
-**CarGurus** (`cargurus.ts`) is queried per model too, the same way as Clutch —
-CarGurus's own `makeModelTrimPaths` filter (an internal make/model id pair,
-e.g. `m7/d306` for Toyota RAV4; resolved live, see `MODEL_PATHS`), not an
-unfiltered "used cars near X" search, since an unfiltered page returns
-whatever the sort order surfaces first — mostly not our 10 supported models.
-Rendered through the same free browser fallback (`renderPage()`) every other
-JS source uses, and parsed from the page's embedded Remix router context
-(`window.__remixContext…state.loaderData["routes/($intl).search"].search
-.tiles`) — the current cargurus.ca is a Remix app, so the listings aren't in
-JSON-LD or any of extract.ts's generic strategies. DataDome blocks this
-source far more often than it lets it through (see above), so only the
-*first* model is tried up front; the other 9 only run if that one actually
-returns real data, to avoid nine more slow, doomed browser launches on a
-blocked run.
+**CarGurus** (`cargurus.ts`) is queried per model via CarGurus's own
+`makeModelTrimPaths` filter (an internal make/model id pair, e.g. `m7/d306`
+for Toyota RAV4; resolved live, see `MODEL_PATHS`), not an unfiltered "used
+cars near X" search, since an unfiltered page returns whatever the sort order
+surfaces first — mostly not our 10 supported models. Rendered through the same
+free browser fallback (`renderPage()`) every other JS source uses, and parsed
+from the page's embedded Remix router context (`window.__remixContext…
+state.loaderData["routes/($intl).search"].search.tiles`) — the current
+cargurus.ca is a Remix app, so the listings aren't in JSON-LD or any of
+extract.ts's generic strategies. There is no browser-free path to this data:
+the search endpoint, the sitemap and the sitemap index are all DataDome-403,
+the homepage embeds no listing data, and an individual VDP link returns a
+data-less stub (all checked live). So only the *first* model is tried up
+front; the other 9 only run if that one actually returns real data, to avoid
+nine more slow, doomed browser launches on a blocked run. AutoTrader + Clutch
+carry the listing count; CarGurus stays a bonus if it ever runs unblocked.
 
 **External rendering service (optional).** Set `RENDER_SERVICE_URL` (see
 `server/.env.example`) to a headless-browser/rendering API (ScrapingBee,
@@ -234,7 +250,7 @@ rating, known issues, pros and cons — the UI shows *why* a car ranks first.
 | ------------------------ | ---------------------------------------------------- |
 | `GET /api/listings`      | Filtered + sorted leaderboard. Filters: price, year, mileage, brand, model, province, city, drivetrain, fuel, CPO-only, dealer-only, source, score range. Sorts: score, deal, mileage, price, reliability, newest, resale. |
 | `GET /api/listings/:id`  | Full detail: breakdown, ownership estimate, known issues, alternatives, external links (AutoTrader, CarGurus, CARFAX when VIN known). |
-| `POST /api/scrape`       | Run the crawler (10-min cooldown, ≤2-min hard budget). |
+| `POST /api/scrape`       | Run the crawler (10-min cooldown, ≤3-min hard budget). |
 | `GET /api/scrape/status` | Progress, live logs, cooldown state.                 |
 | `GET /api/scrape/history`| Past runs.                                            |
 | `GET /api/scrape/selfcheck`| Pipeline health check (extract→normalize→score).   |
