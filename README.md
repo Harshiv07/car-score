@@ -55,15 +55,18 @@ data, only real scraped listings.
 > Chromium.
 >
 > **Some sites need a browser.** A couple of JS dealer sites block a plain
-> server-side fetch outright, and a small number of Clutch model queries
-> occasionally get WAF-challenged. `render.yaml`'s build command installs
-> Chromium (`--with-deps`, so the shared libraries it needs to actually
-> *launch* are included, not just the binary — see the comment in that file)
-> so this works on Render too, no local setup needed. It's best-effort by
-> design: if the install fails or the free-tier instance can't spare the
-> memory to launch Chromium alongside the Node process, every
-> browser-dependent path no-ops cleanly and the rest of the scrape is
-> unaffected. Locally, `npm run setup` installs Chromium for you.
+> server-side fetch outright, and Clutch falls back to it for models the WAF
+> challenges (see `clutch.ts`'s docblock). Locally, `npm run setup` installs
+> Chromium for you. On Render, this needs the **Docker** runtime (see
+> `./Dockerfile` + `render.yaml`) — Render's *native* Node runtime build
+> sandbox has no apt/root access, so `playwright install --with-deps` could
+> download the Chromium binary but not its shared-library dependencies; the
+> browser ended up on disk but failed to *launch* at runtime (confirmed live
+> in production: "Chromium is not installed (or can't launch)"). A Docker
+> build runs as root, so the same install genuinely works there. It's still
+> best-effort by design: if the free-tier instance can't spare the memory to
+> launch Chromium alongside the Node process, every browser-dependent path
+> no-ops cleanly and the rest of the scrape is unaffected.
 >
 > **CarGurus is best-effort, on purpose.** It sits behind DataDome, which
 > blocks primarily on IP reputation, not bot fingerprint — three different
@@ -279,11 +282,17 @@ rating, known issues, pros and cons — the UI shows *why* a car ranks first.
 
   **Render specifically**: `render.yaml` is only read when the service is
   *first* created from a Blueprint — later commits to it do **not**
-  auto-update an already-existing service's dashboard settings. If your
-  service predates a `render.yaml` change (e.g. the Chromium build command
-  above), open the service in the Render dashboard and manually update
-  **Settings → Build Command** and **Environment** to match, or delete and
-  recreate the service from the Blueprint.
+  auto-update an already-existing service's dashboard settings. This
+  particularly matters now: `render.yaml` deploys the API via the **Docker**
+  runtime (`./Dockerfile`) instead of Render's native Node runtime, so a
+  real, launchable Chromium is available for the browser-fallback paths (see
+  the Chromium note above). Render does not convert an existing service's
+  runtime type in place — a service created before this change needs to be
+  **deleted and recreated from the Blueprint** (New → Blueprint → this repo)
+  for the Docker runtime to take effect; a same-named service should get the
+  same `*.onrender.com` URL back, but confirm it after. `MONGODB_URI` is
+  deliberately `sync: false` (not stored in the YAML) and will need to be
+  re-entered in the new service's Environment tab.
 
 ## Workspace layout
 
