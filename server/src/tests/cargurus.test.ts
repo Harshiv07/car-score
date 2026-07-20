@@ -1,14 +1,15 @@
 /**
- * CarGurus.ca via Scrapfly — network-independent. The fixture below mirrors
- * the real `window.__remixContext` structure captured live from
- * cargurus.ca's current Remix-based search page (verified: 89 real, accurate
- * listings fetched for 4 models before the test Scrapfly account's quota ran
- * out from this session's discovery + verification work — see git history).
+ * CarGurus.ca — network-independent. The fixture below mirrors the real
+ * `window.__remixContext` structure captured live from cargurus.ca's current
+ * Remix-based search page (verified live before this scraper existed: 89
+ * real, accurate listings fetched for 4 models — see git history for the
+ * discovery steps and why this is now browser-only, best-effort, rather than
+ * calling a paid unblocking service).
  */
 
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { cargurusTileToRaw, extractRemixSearch, fetchViaScrapfly, MODEL_PATHS, scrapflyConfigured } from "../scrapers/cargurus";
+import { cargurusTileToRaw, extractRemixSearch, MODEL_PATHS } from "../scrapers/cargurus";
 import { normalizeRecord } from "../scrapers/normalize";
 import { VEHICLE_MODELS } from "../data/vehicleModels";
 
@@ -90,43 +91,4 @@ test("a mapped tile normalizes end-to-end into an accurate, supported-model List
   assert.equal(listing!.drivetrain, "AWD");
   assert.equal(listing!.dealer, "Mark Wilson's Better Used Cars");
   assert.equal(listing!.isDealer, true);
-});
-
-test("scrapflyConfigured reflects SCRAPFLY_API_KEY", () => {
-  const original = process.env.SCRAPFLY_API_KEY;
-  delete process.env.SCRAPFLY_API_KEY;
-  assert.equal(scrapflyConfigured(), false);
-  process.env.SCRAPFLY_API_KEY = "scp-test-key";
-  assert.equal(scrapflyConfigured(), true);
-  if (original === undefined) delete process.env.SCRAPFLY_API_KEY;
-  else process.env.SCRAPFLY_API_KEY = original;
-});
-
-test("fetchViaScrapfly reports the reason on failure, not just that it failed", async (t) => {
-  delete process.env.SCRAPFLY_API_KEY;
-  const unset = await fetchViaScrapfly("https://example.com", 5000);
-  assert.equal(unset.html, null);
-  assert.match(unset.failureReason ?? "", /not set/);
-
-  process.env.SCRAPFLY_API_KEY = "scp-test-key";
-  t.mock.method(globalThis, "fetch", async () =>
-    new Response(
-      JSON.stringify({ result: { error: { code: "ERR::SCRAPE::QUOTA_LIMIT_REACHED", http_code: 429 } } }),
-      { status: 429 }
-    )
-  );
-  const quotaFail = await fetchViaScrapfly("https://example.com", 5000);
-  assert.equal(quotaFail.html, null);
-  assert.match(quotaFail.failureReason ?? "", /HTTP 429/);
-  assert.match(quotaFail.failureReason ?? "", /QUOTA_LIMIT_REACHED/);
-  delete process.env.SCRAPFLY_API_KEY;
-});
-
-test("fetchViaScrapfly returns the HTML on a real success", async (t) => {
-  process.env.SCRAPFLY_API_KEY = "scp-test-key";
-  t.mock.method(globalThis, "fetch", async () => new Response(PAGE + "x".repeat(2000), { status: 200 }));
-  const result = await fetchViaScrapfly("https://example.com", 5000);
-  assert.ok(result.html);
-  assert.ok(result.html!.includes("__remixContext"));
-  delete process.env.SCRAPFLY_API_KEY;
 });

@@ -26,10 +26,10 @@ afterEach(() => {
 
 test("config has fast, safe defaults", () => {
   const c = loadScrapeConfig();
-  // 180s/90s: CarGurus's Scrapfly-rendered per-model calls take real
-  // wall-clock time (~7-10s each, verified live) — a higher ceiling is free
-  // for the sources that finish in seconds, so this isn't the "no source
-  // should ever be slow" assumption the original 120s/30s encoded.
+  // 180s/90s: CarGurus's per-model browser renders take real wall-clock time
+  // on the rare unblocked run — a higher ceiling is free for the sources
+  // that finish in seconds, so this isn't the "no source should ever be
+  // slow" assumption the original 120s/30s encoded.
   assert.equal(c.runBudgetMs, 180_000, "default run budget is 3 minutes");
   assert.equal(c.sourceTimeoutMs, 90_000, "default per-source cap is 90s");
   assert.ok(c.sourceTimeoutMs <= c.runBudgetMs);

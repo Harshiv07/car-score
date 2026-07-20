@@ -1,30 +1,51 @@
 /**
- * CarGurus.ca — via Scrapfly (scrapfly.io), a paid scraping API whose ASP
- * ("anti-scraping protection") mode routes through non-datacenter proxies.
- * That's the one lever that can plausibly get past CarGurus's DataDome, which
- * blocks primarily on IP reputation — confirmed dead ends first: a plain
- * fetch, a full local Chromium session, and ScrapingBee's standard rendering
- * tier all got an identical 403/empty-result from the same IP. Verified live
- * against the real API before wiring this in (see git history) rather than
- * assuming it would work.
+ * CarGurus.ca — best-effort, browser-only (no paid unblocking service).
  *
- * CarGurus's current site is a Remix app: the search results aren't in
- * JSON-LD or any of extract.ts's generic strategies, they're inside
- * `window.__remixContext.state.loaderData["routes/($intl).search"].search`,
- * server-rendered directly into the HTML (no extra request needed once the
- * page itself is rendered). Queried **per model** via CarGurus's own
- * `makeModelTrimPaths` filter (an internal "m<make>/d<model>" id pair,
- * resolved once live per model — see MODEL_PATHS) rather than paginating an
- * unfiltered "used cars near X" search, for the same reason Clutch is queried
- * per model: an unfiltered page returns whatever the sort order surfaces
- * first, which is mostly NOT our 10 supported models.
+ * CarGurus sits behind DataDome, which blocks primarily on IP reputation, not
+ * bot fingerprint. Verified directly, live, before settling on this design —
+ * three different open-source techniques were tried from this environment and
+ * all three got an identical DataDome 403 (confirmed via the response body
+ * containing DataDome's own challenge script, `var dd={'rt':'i','cid':...`):
+ *   1. Plain Playwright/Chromium.
+ *   2. Crawlee's PlaywrightCrawler with realistic fingerprint injection
+ *      (navigator/WebGL/device spoofing via @crawlee/browser-pool).
+ *   3. playwright-extra + puppeteer-extra-plugin-stealth (patches the CDP
+ *      automation signatures — the same technique undetected-chromedriver
+ *      uses for Selenium, and what crawl4ai's stealth layer is built on).
+ * Puppeteer and Selenium automate the same Chromium via the same CDP protocol
+ * Playwright does, so they aren't a different detection surface; Scrapy
+ * doesn't execute JS at all, and this data only exists after Remix hydration.
+ * None of the "look more like a human browser" techniques change the one
+ * thing that actually matters here — the IP the request comes from — so none
+ * of them were kept as a dependency (this used to call Scrapfly, a paid
+ * service whose non-datacenter proxy tier *did* get through; removed by
+ * request in favour of this free-but-honestly-best-effort approach).
+ *
+ * The reverse-engineered parts are kept because they're real, verified work
+ * independent of the blocking problem: CarGurus's current site is a Remix
+ * app, and the search results are server-rendered directly into
+ * `window.__remixContext.state.loaderData["routes/($intl).search"].search`
+ * — not in JSON-LD or any of extract.ts's generic strategies. Queried
+ * **per model** via CarGurus's own `makeModelTrimPaths` filter (an internal
+ * "m<make>/d<model>" id pair — see MODEL_PATHS) rather than an unfiltered
+ * "used cars near X" search, because an unfiltered page returns whatever the
+ * sort surfaces first: on a live test page, 1 of our 10 supported models out
+ * of 24 results. The moment this runs from an IP DataDome doesn't flag (a
+ * residential connection, a future unblocking mechanism, whatever), this
+ * will correctly pull real, accurate data with no code changes needed.
+ *
+ * To avoid burning a full browser launch on 9 more doomed attempts once the
+ * first one is blocked, only the first model is tried up front; the rest
+ * only run if that one actually returns real data (i.e. this environment
+ * genuinely isn't blocked right now).
  */
 
 import { Listing } from "../types";
 import { matchModelFromTitle } from "../data/vehicleModels";
 import { normalizeRecord } from "./normalize";
+import { renderPage } from "./crawl";
 import { LogFn, RawVehicleRecord, Scraper, ScraperRunResult } from "./types";
-import { fetchWithTimeout, loadScrapeConfig } from "./config";
+import { loadScrapeConfig } from "./config";
 
 const ZIP = "P7B"; // Thunder Bay
 const DISTANCE = 250; // km
@@ -35,7 +56,7 @@ const SEARCH_BASE = "https://www.cargurus.ca/Cars/inventorylisting/viewDetailsFi
  * resolved live by selecting each make and reading its nested model facet
  * (see git history for the exact discovery steps). These are CarGurus's own
  * ontology ids, not expected to change often, but if a model starts coming
- * back empty, re-resolve it: fetch `${SEARCH_BASE}?zip=P7B&distance=250
+ * back empty, re-resolve it: render `${SEARCH_BASE}?zip=P7B&distance=250
  * &makeModelTrimPaths=<makeId>` (e.g. m7 for Toyota) and read
  * `search.filters.MAKE_MODEL.filters[].filters[]` from the same
  * __remixContext blob this scraper parses.
@@ -52,42 +73,6 @@ export const MODEL_PATHS: Record<string, string> = {
   "Subaru Forester": "m53/d374",
   "Subaru Crosstrek": "m53/d2387",
 };
-
-export function scrapflyConfigured(): boolean {
-  return !!process.env.SCRAPFLY_API_KEY;
-}
-
-interface ScrapflyResult {
-  html: string | null;
-  failureReason?: string;
-}
-
-/** Render one URL through Scrapfly's ASP+JS-rendering tier. */
-export async function fetchViaScrapfly(targetUrl: string, timeoutMs: number): Promise<ScrapflyResult> {
-  const apiKey = process.env.SCRAPFLY_API_KEY;
-  if (!apiKey) return { html: null, failureReason: "SCRAPFLY_API_KEY not set" };
-  const url =
-    "https://api.scrapfly.io/scrape?" +
-    new URLSearchParams({
-      key: apiKey,
-      url: targetUrl,
-      render_js: "true",
-      asp: "true",
-      proxified_response: "true", // raw HTML back, no JSON envelope to unwrap
-      country: "ca",
-    }).toString();
-  try {
-    const res = await fetchWithTimeout(url, { timeoutMs });
-    const body = await res.text();
-    if (!res.ok) return { html: null, failureReason: `HTTP ${res.status}: ${body.slice(0, 200).replace(/\s+/g, " ")}` };
-    if (!body || body.length < 2000) {
-      return { html: null, failureReason: `response too short (${body.length} bytes): ${body.slice(0, 200).replace(/\s+/g, " ")}` };
-    }
-    return { html: body };
-  } catch (e) {
-    return { html: null, failureReason: `request threw: ${(e as Error).message.slice(0, 150)}` };
-  }
-}
 
 interface CargurusTile {
   data?: {
@@ -204,117 +189,79 @@ function ingestTiles(tiles: CargurusTile[], listings: Listing[], seen: Set<strin
   return added;
 }
 
-const delay = (ms: number) => new Promise((r) => setTimeout(r, ms));
+function modelUrl(path: string, page: number): string {
+  return (
+    `${SEARCH_BASE}?` +
+    new URLSearchParams({
+      sourceContext: "carGurusHomePageModel",
+      zip: ZIP,
+      distance: String(DISTANCE),
+      makeModelTrimPaths: path,
+      page: String(page),
+    }).toString()
+  );
+}
 
-/** Fetch and ingest every page for one model. Mutates `listings`/`seen`/
- *  `failedModels` directly — safe under concurrency since JS only ever runs
- *  one of these bodies at a time between `await` points. */
+/** Render + ingest every page for one model. Returns how many listings were
+ *  added (0 doesn't necessarily mean blocked — could be genuinely no stock;
+ *  `reachable` tells the two apart). */
 async function runModel(
   modelKey: string,
   path: string,
   pagesPerModel: number,
-  requestTimeoutMs: number,
   listings: Listing[],
   seen: Set<string>,
-  failedModels: string[],
   log: LogFn
-): Promise<void> {
-  let modelFound = 0;
-  let modelReachable = false;
+): Promise<{ added: number; reachable: boolean }> {
+  let added = 0;
+  let reachable = false;
   for (let page = 1; page <= pagesPerModel; page++) {
-    const target =
-      `${SEARCH_BASE}?` +
-      new URLSearchParams({
-        sourceContext: "carGurusHomePageModel",
-        zip: ZIP,
-        distance: String(DISTANCE),
-        makeModelTrimPaths: path,
-        page: String(page),
-      }).toString();
-    const result = await fetchViaScrapfly(target, requestTimeoutMs);
-    if (!result.html) {
-      if (page === 1) {
-        failedModels.push(modelKey);
-        log("warn", `CarGurus.ca: ${modelKey} — ${result.failureReason}`);
-      }
-      break;
-    }
-    const search = extractRemixSearch(result.html);
-    if (!search) {
-      if (page === 1) {
-        failedModels.push(modelKey);
-        log("warn", `CarGurus.ca: ${modelKey} — page rendered but no search data found (site may have changed)`);
-      }
-      break;
-    }
-    modelReachable = true;
-    modelFound += ingestTiles(search.tiles, listings, seen);
+    const html = await renderPage(modelUrl(path, page), log);
+    if (!html) break;
+    const search = extractRemixSearch(html);
+    if (!search) break;
+    reachable = true;
+    added += ingestTiles(search.tiles, listings, seen);
     if (page >= search.pageCount) break;
-    await delay(300);
   }
-  if (modelFound === 0 && modelReachable) {
-    log("warn", `CarGurus.ca: ${modelKey} — 0 listings (may be temporarily out of stock nearby)`);
-  }
+  return { added, reachable };
 }
 
 export const cargurus: Scraper = {
   key: "cargurus",
   source: "CarGurus.ca",
   async run(log: LogFn): Promise<ScraperRunResult> {
-    if (!scrapflyConfigured()) {
-      const note = "Scrapfly not configured (SCRAPFLY_API_KEY unset) — best-effort source, skipped";
+    const cfg = loadScrapeConfig();
+    if (!cfg.jsFallbackEnabled) {
+      const note = "browser fallback disabled (SCRAPE_JS_FALLBACK=0) — best-effort source, skipped";
       log("warn", `CarGurus.ca: ${note}`);
       return { key: "cargurus", source: "CarGurus.ca", listings: [], ok: true, note };
     }
-
-    const cfg = loadScrapeConfig();
-    // One page (24 listings) per model by default: each Scrapfly call costs
-    // real API credits (ASP + JS rendering), so this defaults conservative
-    // rather than burning quota on deep pagination no one asked for.
-    // SCRAPE_MAX_PAGES raises it if you want more depth.
     const pagesPerModel = Math.max(1, Math.min(cfg.maxPagesPerSource, 3));
-    // Leave a safety margin before scrapeService.ts's own per-source timeout
-    // (it races this whole run() against that timeout and discards the
-    // ENTIRE result — including every model already found — if it loses).
-    // CarGurus's real per-call latency is high enough that this matters more
-    // here than almost anywhere else in the app: stop launching new batches
-    // once close to the limit and return whatever's already in hand instead
-    // of risking losing it all to the outer race.
-    const deadline = Date.now() + cfg.sourceTimeoutMs - 8000;
     const listings: Listing[] = [];
     const seen = new Set<string>();
     const failedModels: string[] = [];
     const entries = Object.entries(MODEL_PATHS);
 
-    log("info", `CarGurus.ca: querying ${entries.length} model(s) via Scrapfly (≤${pagesPerModel} page(s) each)…`);
+    log("info", `CarGurus.ca: trying ${entries[0][0]} first (best-effort — see README for why)…`);
+    const [firstKey, firstPath] = entries[0];
+    const first = await runModel(firstKey, firstPath, pagesPerModel, listings, seen, log);
 
-    // Concurrency, not just a longer budget: unlike Clutch's hard WAF request-
-    // count wall, Scrapfly is a paid, reliable service where the real
-    // constraint is wall-clock time — each ASP+JS-render call took ~7s
-    // running one at a time (verified live: 4/10 models completed sequentially
-    // inside the default 30s per-source budget before it ran out), so all 10
-    // sequentially needs real concurrency to fit. Concurrency=4 (matching
-    // cfg.concurrency) was tried and several calls then aborted on the
-    // generic 12s request timeout; that session also hit the account's
-    // Scrapfly quota shortly after, so it's not certain how much of that
-    // slowdown was genuine per-account throttling under concurrent load vs.
-    // approaching the quota wall — a smaller concurrency with a timeout long
-    // enough to absorb either is the safer default either way.
-    const CONCURRENCY = 2;
-    const REQUEST_TIMEOUT_MS = 25_000;
-    for (let i = 0; i < entries.length; i += CONCURRENCY) {
-      if (Date.now() >= deadline) {
-        const remaining = entries.slice(i).map(([k]) => k);
-        failedModels.push(...remaining);
-        log("warn", `CarGurus.ca: ran out of time budget — stopping with ${listings.length} already found.`);
-        break;
-      }
-      const batch = entries.slice(i, i + CONCURRENCY);
-      await Promise.all(
-        batch.map(([modelKey, path]) =>
-          runModel(modelKey, path, pagesPerModel, REQUEST_TIMEOUT_MS, listings, seen, failedModels, log)
-        )
-      );
+    if (!first.reachable) {
+      // This environment's IP is blocked right now — trying the other 9
+      // would just be 9 more slow, doomed browser launches. Stop here; the
+      // dealer/Clutch/AutoTrader sources this run already has (or will get)
+      // are unaffected either way.
+      const note = "no listings extracted (source appears to block automated access from this network) — best-effort source, skipped";
+      log("warn", `CarGurus.ca: ${note}`);
+      return { key: "cargurus", source: "CarGurus.ca", listings: [], ok: true, note };
+    }
+    if (first.added === 0) failedModels.push(firstKey); // reachable but nothing matched right now — track, don't alarm
+
+    log("info", `CarGurus.ca: reachable from this network — querying the remaining ${entries.length - 1} model(s)…`);
+    for (const [modelKey, path] of entries.slice(1)) {
+      const { added, reachable } = await runModel(modelKey, path, pagesPerModel, listings, seen, log);
+      if (!reachable || added === 0) failedModels.push(modelKey);
     }
 
     const ok = listings.length > 0 || failedModels.length < entries.length;
@@ -322,7 +269,7 @@ export const cargurus: Scraper = {
       listings.length > 0
         ? `${listings.length} supported-model listing(s) found` +
           (failedModels.length ? ` (${failedModels.join(", ")} unreachable)` : "")
-        : "no listings extracted (Scrapfly could not reach CarGurus for any model)";
+        : "no supported-model listings found across any model";
     log(listings.length > 0 ? "info" : "warn", `CarGurus.ca: ${note}`);
     return { key: "cargurus", source: "CarGurus.ca", listings, ok, note };
   },

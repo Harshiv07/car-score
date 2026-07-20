@@ -122,7 +122,7 @@ export function verifyPipeline(): PipelineReport {
       : "eDealer mapping produced null"
   );
 
-  // 3d. CarGurus (Scrapfly-rendered Remix tile) mapping produces a valid
+  // 3d. CarGurus (Remix tile, from a rendered page) mapping produces a valid
   // supported listing with an exact-VDP url, not a generic search link.
   const cargurusListing = normalizeRecord(
     cargurusTileToRaw({

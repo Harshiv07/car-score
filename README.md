@@ -58,19 +58,26 @@ JSON-file store (`server/.data/db.json`) seeded with representative listings.
 > browser-dependent path no-ops cleanly and the rest of the scrape is
 > unaffected. Locally, `npm run setup` installs Chromium for you.
 >
-> **CarGurus needs more than a browser.** It sits behind DataDome, which
-> blocks primarily on IP reputation — a plain fetch, a full local Chromium
-> session and a generic rendering service (ScrapingBee) all got an identical
-> 403/empty result from the same IP, browser or not. What gets past it (see
-> `cargurus.ts`) is [Scrapfly](https://scrapfly.io)'s ASP mode, which routes
-> through non-datacenter proxies — set `SCRAPFLY_API_KEY` to enable it;
-> unset, this source cleanly reports itself as skipped rather than failing
-> the run.
+> **CarGurus is best-effort, on purpose.** It sits behind DataDome, which
+> blocks primarily on IP reputation, not bot fingerprint — three different
+> open-source techniques were verified live and all three got an identical
+> 403 from the same IP: plain Playwright, Crawlee's `PlaywrightCrawler` with
+> realistic fingerprint injection, and `playwright-extra` +
+> `puppeteer-extra-plugin-stealth` (CDP-signature patching, the same category
+> of technique `undetected-chromedriver`/Selenium and `crawl4ai` use). None of
+> them change the one thing that actually matters — the IP the request comes
+> from — so none were kept as a dependency; there's no free substitute for a
+> paid non-datacenter proxy here. `cargurus.ts` keeps the real, verified
+> reverse-engineering work (the exact per-model search URLs, and a parser for
+> the Remix-app data CarGurus's current site embeds — see the file's
+> docblock) wired to the same free browser fallback every other JS source
+> uses, and fails fast: it tries one model, and only spends time on the
+> other 9 if that one actually returns real data.
 >
 > **A run can never hang.** The whole run is capped at `SCRAPE_RUN_BUDGET_MS`
 > (3 min) and each source at `SCRAPE_SOURCE_TIMEOUT_MS` (90 s — CarGurus's
-> Scrapfly-rendered per-model calls take real wall-clock time, ~7-10s each);
-> tune sources and page counts via env vars (see `server/.env.example`). The
+> per-model browser renders take real wall-clock time on the rare unblocked
+> run); tune sources and page counts via env vars (see `server/.env.example`). The
 > API keeps serving listings while a scrape is in progress.
 
 ### Production (MongoDB)
@@ -95,7 +102,7 @@ server/src/scrapers/
   stmMotors.ts     # STM Motors dealers (Gore Motors) — browser-free via listings-sitemap.xml
   edealer.ts       # eDealer-platform dealers (Half-Way Motors Mazda) — browser-free, embedded JS object
   autotrader.ts    # AutoTrader.ca search pages per model (best-effort HTML)
-  cargurus.ts      # CarGurus.ca — via Scrapfly (opt-in, needs SCRAPFLY_API_KEY)
+  cargurus.ts      # CarGurus.ca — browser-rendered, best-effort (DataDome)
   dealer.ts        # dealership sites, configurable via src/config/dealers.json
   config.ts        # env-driven run budget, timeouts, source allow-list
 ```
@@ -156,16 +163,15 @@ CarGurus's own `makeModelTrimPaths` filter (an internal make/model id pair,
 e.g. `m7/d306` for Toyota RAV4; resolved live, see `MODEL_PATHS`), not an
 unfiltered "used cars near X" search, since an unfiltered page returns
 whatever the sort order surfaces first — mostly not our 10 supported models.
-Rendered through [Scrapfly](https://scrapfly.io)'s ASP mode (see above) and
-parsed from the page's embedded Remix router context
+Rendered through the same free browser fallback (`renderPage()`) every other
+JS source uses, and parsed from the page's embedded Remix router context
 (`window.__remixContext…state.loaderData["routes/($intl).search"].search
 .tiles`) — the current cargurus.ca is a Remix app, so the listings aren't in
-JSON-LD or any of extract.ts's generic strategies. Two models query
-concurrently (a higher concurrency measurably slowed down Scrapfly's own
-per-call latency for one account rather than speeding the run up — verified
-live) with a longer-than-usual per-request timeout, since a real ASP+JS-render
-call takes several seconds. Skips itself cleanly (not a failure) when
-`SCRAPFLY_API_KEY` isn't set.
+JSON-LD or any of extract.ts's generic strategies. DataDome blocks this
+source far more often than it lets it through (see above), so only the
+*first* model is tried up front; the other 9 only run if that one actually
+returns real data, to avoid nine more slow, doomed browser launches on a
+blocked run.
 
 **External rendering service (optional).** Set `RENDER_SERVICE_URL` (see
 `server/.env.example`) to a headless-browser/rendering API (ScrapingBee,

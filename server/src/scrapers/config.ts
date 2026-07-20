@@ -49,13 +49,14 @@ export interface ScrapeConfig {
 
 export function loadScrapeConfig(): ScrapeConfig {
   return {
-    // Raised from 120s/30s: CarGurus (via Scrapfly's ASP+JS-rendering tier —
-    // see cargurus.ts) needs real wall-clock time per model, verified live —
-    // ~7-10s per call, so covering all 10 supported models needs up to ~90s
-    // even with concurrency. A higher ceiling costs nothing for the sources
-    // that finish in seconds (Clutch, AutoTrader, the dealer scrapers all
-    // still return as soon as they're done); it only helps CarGurus actually
-    // reach every model instead of running out of room partway through.
+    // Raised from 120s/30s: CarGurus (see cargurus.ts) renders each model
+    // through a real local browser (Playwright launch + navigate + render),
+    // which takes real wall-clock time per call — on the rare run where this
+    // network isn't DataDome-blocked, covering all 10 supported models
+    // sequentially needs real room. A higher ceiling costs nothing for the
+    // sources that finish in seconds (Clutch, AutoTrader, the dealer
+    // scrapers all still return as soon as they're done); CarGurus itself
+    // fails fast (one model, then stops) on the far more common blocked run.
     runBudgetMs: num("SCRAPE_RUN_BUDGET_MS", 180_000),
     sourceTimeoutMs: num("SCRAPE_SOURCE_TIMEOUT_MS", 90_000),
     requestTimeoutMs: num("SCRAPE_REQUEST_TIMEOUT_MS", 12_000),
