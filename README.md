@@ -37,10 +37,16 @@ npm test -w server        # unit + pipeline test suite (no network needed)
 npm run test:e2e          # Playwright e2e UI tests (boots API + client itself)
 npm run scrape:check -w server          # confirm the pipeline is healthy (no network)
 npm run scrape:check -w server -- --live # + probe each source over the network
+npm run scrape:snapshot -w server    # run every scraper once, write real results to
+                                      #   server/src/data/listingsSnapshot.json
+npm run db:seed-snapshot -w server   # load that snapshot into whatever storage is
+                                      #   configured (safe to re-run — upserts)
 ```
 
 No database needed for development — without `MONGODB_URI` the server uses a
-JSON-file store (`server/.data/db.json`) seeded with representative listings.
+local JSON-file store (`server/.data/db.json`), empty until a scrape (or
+`db:seed-snapshot`) populates it — the app never auto-seeds fabricated demo
+data, only real scraped listings.
 
 > **The primary source is browser-free.** `Clutch.ca` is scraped through its
 > public JSON API, so it returns fully-structured, accurate listings (year,
