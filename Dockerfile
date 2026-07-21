@@ -27,6 +27,12 @@ COPY . .
 
 RUN npx playwright install --with-deps chromium
 
+# Crawlee (used by autotrader.ts, genericScraper.ts, stmMotors.ts) shells out
+# to the `ps` command for its internal memory monitoring — confirmed live via
+# "spawn ps ENOENT" in production, since node:20-slim doesn't include procps
+# (the package that provides ps) by default.
+RUN apt-get update && apt-get install -y --no-install-recommends procps && rm -rf /var/lib/apt/lists/*
+
 RUN npm run build -w server
 
 ENV NODE_ENV=production
