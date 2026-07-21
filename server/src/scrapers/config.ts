@@ -7,7 +7,10 @@
  * mechanism the task calls for: "reduce the number of sites or pages to confirm
  * that it is able to scrape data".
  *
- *   SCRAPE_RUN_BUDGET_MS    hard cap on the whole run (default 120000 = 2 min)
+ *   SCRAPE_RUN_BUDGET_MS    hard cap on the whole run (default 480000 = 8 min —
+ *                           Clutch's browser-session tiers can each take
+ *                           30-45s to launch Chromium + navigate, and
+ *                           AutoTrader alone needs ~90s for its full run)
  *   SCRAPE_SOURCE_TIMEOUT_MS per-source cap (default 30000)
  *   SCRAPE_MAX_PAGES        max pages/URLs fetched per source (default 4)
  *   SCRAPE_SOURCES          comma list to include, e.g. "clutch,autotrader"
@@ -68,7 +71,7 @@ export function loadScrapeConfig(): ScrapeConfig {
     // sources that finish in seconds (Clutch, AutoTrader, the dealer
     // scrapers all still return as soon as they're done); CarGurus itself
     // fails fast (one model, then stops) on the far more common blocked run.
-    runBudgetMs: num("SCRAPE_RUN_BUDGET_MS", 180_000),
+    runBudgetMs: num("SCRAPE_RUN_BUDGET_MS", 480_000),
     sourceTimeoutMs: num("SCRAPE_SOURCE_TIMEOUT_MS", 90_000),
     requestTimeoutMs: num("SCRAPE_REQUEST_TIMEOUT_MS", 12_000),
     maxPagesPerSource: num("SCRAPE_MAX_PAGES", 4),

@@ -85,7 +85,9 @@ data, only real scraped listings.
 > other 9 if that one actually returns real data.
 >
 > **A run can never hang.** The whole run is capped at `SCRAPE_RUN_BUDGET_MS`
-> (3 min) and each source at `SCRAPE_SOURCE_TIMEOUT_MS` (90 s — CarGurus's
+> (8 min — Clutch's browser-session tiers can each take 30-45s to launch
+> Chromium, and AutoTrader alone needs ~90s) and each source at
+> `SCRAPE_SOURCE_TIMEOUT_MS` (90 s — CarGurus's
 > per-model browser renders take real wall-clock time on the rare unblocked
 > run); tune sources and page counts via env vars (see `server/.env.example`). The
 > API keeps serving listings while a scrape is in progress.

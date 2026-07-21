@@ -26,11 +26,13 @@ afterEach(() => {
 
 test("config has fast, safe defaults", () => {
   const c = loadScrapeConfig();
-  // 180s/90s: CarGurus's per-model browser renders take real wall-clock time
-  // on the rare unblocked run — a higher ceiling is free for the sources
-  // that finish in seconds, so this isn't the "no source should ever be
-  // slow" assumption the original 120s/30s encoded.
-  assert.equal(c.runBudgetMs, 180_000, "default run budget is 3 minutes");
+  // 480s/90s: Clutch's browser-session tiers can each take 30-45s to launch
+  // Chromium, AutoTrader alone needs ~90s, and CarGurus's per-model browser
+  // renders take real wall-clock time on the rare unblocked run — a higher
+  // ceiling is free for the sources that finish in seconds, so this isn't
+  // the "no source should ever be slow" assumption the original 120s/30s
+  // encoded.
+  assert.equal(c.runBudgetMs, 480_000, "default run budget is 8 minutes");
   assert.equal(c.sourceTimeoutMs, 90_000, "default per-source cap is 90s");
   assert.ok(c.sourceTimeoutMs <= c.runBudgetMs);
   assert.equal(c.jsFallbackEnabled, true, "rendered fallback on by default (fails fast without a browser)");
@@ -58,7 +60,7 @@ test("bad env values fall back to defaults instead of NaN", () => {
   process.env.SCRAPE_RUN_BUDGET_MS = "not-a-number";
   process.env.SCRAPE_MAX_PAGES = "-5";
   const c = loadScrapeConfig();
-  assert.equal(c.runBudgetMs, 180_000);
+  assert.equal(c.runBudgetMs, 480_000);
   assert.equal(c.maxPagesPerSource, 4);
 });
 
