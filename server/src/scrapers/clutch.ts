@@ -4,44 +4,40 @@
  * make, model, trim, mileage, drivetrain, fuel, province price), so it works on
  * hosts without Chromium (Render, etc.).
  *
- * Queried as ONE combined request listing all 5 makes + all 10 supported models
- * at once (`makes[]`×5, `models[]`×10), then paginated. The API returns every
- * page as a MIX of all requested models (e.g. page 0 already spans RAV4, CR-V,
- * CX-5, Elantra, Corolla, Civic…), so every model is represented on every run.
- * This replaced a per-model approach whose problem was the WAF: api.clutch.ca
- * sits behind AWS WAF that allows only ~4-6 requests per run before returning
- * an empty HTTP 202 challenge — and slowing the pacing doesn't help (verified:
- * 400ms vs 3000ms between requests made no difference; it's a request-COUNT
- * budget, not a rate limit). Per-model, that budget bought ~6 complete models
- * and left the other 4 with nothing.
+ * The constraint that shapes everything here: api.clutch.ca sits behind AWS
+ * WAF that allows only a tiny per-run request budget before returning an empty
+ * HTTP 202 challenge (verified live: ~3-4 requests on Render's flagged
+ * datacenter IP; slowing the pacing doesn't help — 400ms vs 3000ms made no
+ * difference, it's a request-COUNT budget, not a rate limit — and the budget
+ * is shared across bare fetches AND in-browser fetches from the same IP). So
+ * the whole design is about spending those ~3-4 requests where they buy the
+ * most COVERAGE, in three phases:
  *
- * The combined query's own cross-model sort is NOT proportional, though —
- * verified live, repeatably: Toyota/Honda/Hyundai models land 15-40 listings
- * within the page budget while Mazda/Subaru models get only 2-4, even though
- * every model is in every request. `topUpUnderrepresentedModels` fixes this
- * once the main pagination is done — but a single shared request scoped to
- * every thin model reproduces the same skew inside that smaller subset
- * (verified live), so instead it issues one SINGLE-MODEL request per
- * under-represented model, most-deficient first, so each gets an entire page
- * to itself.
+ *   Phase 1 (breadth): ONE combined request listing all 5 makes + 10 models
+ *   (`makes[]`×5, `models[]`×10). The API returns a MIX of all models on the
+ *   page, so a single request seeds every model at once. It does NOT paginate
+ *   deeper by default — the combined query's cross-model sort is NOT
+ *   proportional (verified live, repeatably: Toyota/Honda/Hyundai land 15-40
+ *   while Mazda/Subaru get 2-4), so deeper pages just re-surface the
+ *   already-plentiful high-volume models and waste the budget.
  *
- * When a real browser IS available (local dev with Chromium), a bonus tier
- * continues pagination from inside a WAF-cleared browser page to pull the
- * remaining pages the bare-fetch WAF budget couldn't. No-op on Render today
- * (verified live from the deployed host: "Chromium is not installed" — this
- * whole tier, and the two below, are inert there until Chromium or a working
- * RENDER_SERVICE_URL is available on that host).
+ *   Phase 2 (rare-model fill): the rest of the fresh budget goes to
+ *   SINGLE-MODEL queries for the models Phase 1 left under MIN_PER_MODEL,
+ *   MOST-DEFICIENT FIRST. Naming one model gives it the whole page to itself,
+ *   and one page returns that model's complete inventory up to the API's 32
+ *   (verified live: Forester 13/13). Rarest-first is what makes the scarce
+ *   budget land on Forester/Crosstrek/Mazda3 before it's spent. This is the
+ *   fix for the long-standing "some models barely fetched" complaint.
  *
- * The top-up phase itself has two further fallback tiers once the bare fetch
- * is blocked, both reusing that one browser session: an in-page fetch() call
- * (inherits the browser's solved WAF challenge), then — if that's ALSO
- * blocked — a genuine navigation to the model's own product page
- * (clutch.ca/cars/{slug}) with the vehicle cards read straight from the
- * rendered DOM. That last tier is not a different data source (the product
- * page populates itself via the exact same api.clutch.ca call), but a full
- * page navigation is a different request pattern than an injected fetch, and
- * was verified live to succeed — Forester 13/13, Mazda3 31/31 — in a run
- * where the first two tiers had already been blocked.
+ *   Phase 3 (browser bonus): only productive on a host with a real browser AND
+ *   an unflagged IP (local dev) — a no-op on Render, verified live ("Chromium
+ *   is not installed" before the Docker migration; the WAF challenge unsolved
+ *   after it). One reused browser session runs three escalating sub-tiers:
+ *   deeper combined pages, per-model in-page fetch(), then per-model
+ *   product-page navigation (reads clutch.ca/cars/{slug} DOM cards — same
+ *   underlying api.clutch.ca data, but a full page load is a different request
+ *   pattern than an injected fetch, verified to sometimes land where the other
+ *   two were blocked).
  */
 
 import type { Page } from "playwright";
@@ -251,49 +247,81 @@ export function shouldContinueViaBrowser(page: number, totalPages: number, jsFal
 }
 
 /**
- * Bonus tier: once the bare-fetch WAF budget is spent, continue paginating from
- * inside a real, WAF-cleared browser page (the in-page fetch inherits the
- * browser's solved challenge). Pulls pages `[startPage, totalPages)` up to a
- * hard cap / deadline. No-ops if no browser is available (Render) or if the
- * browser is itself blocked. Verified to be a genuine bonus only where a
- * browser + unflagged IP exist (local dev); harmless everywhere else.
+ * Phase 3 — browser bonus tiers. Only genuinely productive on a host with a
+ * real browser AND an unflagged IP (local dev): on Render's datacenter IP the
+ * AWS WAF won't let a headless browser solve its post-budget challenge, so
+ * every tier here no-ops (verified live — all three logged "blocked or
+ * incomplete" and added nothing). All three reuse ONE browser session, i.e.
+ * ONE Chromium launch — the earlier design launched a second browser for the
+ * top-up tiers, and two concurrent launches risked an OOM on Render's
+ * memory-limited free instance. The tiers, in escalating order:
+ *   1. continue the combined query's deeper pages (high-volume depth), the
+ *      in-page fetch inheriting the browser's solved challenge;
+ *   2. per-model in-page fetch() for models still under MIN_PER_MODEL;
+ *   3. per-model product-page navigation for whatever's STILL short — reads
+ *      the rendered DOM cards, a different request pattern than an injected
+ *      fetch (verified live to sometimes land where 1 and 2 were blocked).
  */
-async function continueViaBrowser(
-  startPage: number,
+async function browserBonusTiers(
+  combinedNextPage: number,
   totalPages: number,
   listings: Listing[],
   seen: Set<string>,
   deadline: number,
   log: LogFn
-): Promise<number> {
-  // totalPages may just be the unknown-default (1) if bare fetch never got a
-  // single page back (e.g. page 0 itself was WAF-challenged) — that must NOT
-  // stop this from trying; it just means the real bound isn't known yet, so
-  // it's re-derived below from the browser's own first successful page.
-  let lastPage = Math.min(totalPages, ABSOLUTE_MAX_PAGES);
-  if (Date.now() >= deadline) return 0;
+): Promise<void> {
+  if (Date.now() >= deadline) return;
   const session = await openBrowserSession("https://www.clutch.ca/cars", log);
-  if (!session) return 0; // no browser on this host — graceful no-op
-
-  let added = 0;
+  if (!session) {
+    log("warn", "Clutch.ca: no browser on this host — skipping browser bonus tiers (expected on Render)");
+    return;
+  }
   try {
-    log("info", `Clutch.ca: continuing pagination via a real browser session (page ${startPage}+)…`);
-    for (let page = startPage; page < lastPage && Date.now() < deadline; page++) {
-      const text = await fetchJsonInSession(session, buildAllModelsQueryUrl(page));
-      if (!text) break; // browser is blocked too — stop
-      try {
-        const data = JSON.parse(text) as ClutchPage;
-        if (data.totalPages) lastPage = Math.min(data.totalPages, ABSOLUTE_MAX_PAGES);
-        added += ingestVehicles(data.vehicles ?? [], listings, seen);
-      } catch {
-        break;
+    // Tier 1: deeper combined pages. totalPages may still be the unknown-
+    // default (1) if bare fetch never got a page back (page 0 itself blocked);
+    // the real bound is re-derived below from the browser's own first page.
+    if (shouldContinueViaBrowser(combinedNextPage, totalPages, true)) {
+      log("info", `Clutch.ca: browser session — continuing combined pagination (page ${combinedNextPage}+)…`);
+      let lastPage = Math.min(totalPages || ABSOLUTE_MAX_PAGES, ABSOLUTE_MAX_PAGES);
+      for (let page = combinedNextPage; page < lastPage && Date.now() < deadline; page++) {
+        const text = await fetchJsonInSession(session, buildAllModelsQueryUrl(page));
+        if (!text) break; // browser is blocked too — stop
+        try {
+          const data = JSON.parse(text) as ClutchPage;
+          if (data.totalPages) lastPage = Math.min(data.totalPages, ABSOLUTE_MAX_PAGES);
+          ingestVehicles(data.vehicles ?? [], listings, seen);
+        } catch {
+          break;
+        }
+        await delay(400);
       }
-      await delay(400);
+    }
+
+    // Tier 2: per-model in-page fetch for models still under MIN_PER_MODEL.
+    let low = findLowModels(listings);
+    if (low.length > 0 && Date.now() < deadline) {
+      log("info", `Clutch.ca: browser session — in-page fetch for ${low.length} still-low model(s)…`);
+      for (const t of low) {
+        if (Date.now() >= deadline) break;
+        const text = await fetchJsonInSession(session, buildModelsQueryUrl([t], 0));
+        if (!text) break; // the session itself is blocked — stop
+        try {
+          ingestVehicles((JSON.parse(text) as ClutchPage).vehicles ?? [], listings, seen);
+        } catch {
+          /* malformed — skip */
+        }
+      }
+    }
+
+    // Tier 3: product-page navigation for whatever's STILL short.
+    low = findLowModels(listings);
+    if (low.length > 0 && Date.now() < deadline) {
+      log("info", `Clutch.ca: browser session — reading product pages for ${low.length} still-low model(s)…`);
+      await topUpViaProductPageNavigation(session, low, listings, seen, deadline, log);
     }
   } finally {
     await closeBrowserSession(session);
   }
-  return added;
 }
 
 function modelKey(t: { make: string; model: string }): string {
@@ -463,43 +491,39 @@ async function topUpViaProductPageNavigation(
 }
 
 /**
- * The combined query's cross-model sort is NOT proportional — verified live,
- * repeatably: Toyota/Honda/Hyundai models consistently land 15-40 listings
- * within the WAF-limited page window while Mazda/Subaru models get 2-4, even
- * though every model is included in every request. Worse, that same skew
- * reappears even inside a *combined* top-up request scoped to just the
- * leftover models (verified live: one shared request for Tucson + Mazda3 +
- * Forester + Crosstrek still let Tucson eat most of the page, leaving the
- * other three untouched) — a shared page never reliably helps the smallest
- * models. So this issues one SINGLE-MODEL request per under-represented
- * model instead, most-deficient first: naming only one model in the query
- * gives it the entire page to itself, so any real inventory for it shows up
- * regardless of how it'd otherwise sort against higher-volume makes. Each
- * model costs its own request against the tiny WAF budget, so the loop stops
- * at the first bare-fetch block rather than burning the rest of the budget on
- * requests that would fail the same way, then falls back to one browser
- * session (if available) to mop up whatever's still short. Returns how many
- * models were identified as under-represented.
+ * Phase 2 — spend the remaining bare-fetch WAF budget on the models Phase 1
+ * (the single combined page) left under MIN_PER_MODEL, MOST-DEFICIENT FIRST,
+ * one single-model request each. This is the heart of covering the rare
+ * models. The combined query's cross-model sort is NOT proportional (verified
+ * live, repeatably: Toyota/Honda/Hyundai land 15-40 while Mazda/Subaru get
+ * 2-4), and that same skew reappears even inside a *combined* request scoped
+ * to just the leftover models (a shared page lets one model eat most of it).
+ * So each thin model gets its OWN request: naming a single model gives it the
+ * whole page to itself, and one page already returns that model's complete
+ * inventory up to the API's 32 (verified live: Forester 13/13). Rarest-first
+ * ordering is what makes this work on a flagged datacenter IP, where the
+ * WAF's per-IP budget (shared across every request this run) is only ~3-4 —
+ * the scarcest models must claim it before it's spent. Stops at the first
+ * blocked/failed request; later ones would fail identically.
  */
-async function topUpUnderrepresentedModels(
+async function fillLowModelsBareFetch(
   listings: Listing[],
   seen: Set<string>,
   deadline: number,
   requestTimeoutMs: number,
-  jsFallbackEnabled: boolean,
   log: LogFn
-): Promise<number> {
-  const initiallyLow = findLowModels(listings);
-  if (initiallyLow.length === 0 || Date.now() >= deadline) return 0;
+): Promise<void> {
+  const low = findLowModels(listings);
+  if (low.length === 0 || Date.now() >= deadline) return;
 
   log(
     "info",
-    `Clutch.ca: topping up ${initiallyLow.length} under-represented model(s) one request each (${initiallyLow
+    `Clutch.ca: filling ${low.length} under-represented model(s) rarest-first, one request each (${low
       .map((t) => t.model)
       .join(", ")})…`
   );
 
-  for (const t of initiallyLow) {
+  for (const t of low) {
     if (Date.now() >= deadline) break;
     let data: ClutchPage | null;
     try {
@@ -507,45 +531,10 @@ async function topUpUnderrepresentedModels(
     } catch {
       data = null;
     }
-    if (!data) break; // bare fetch just got blocked — further bare requests would too
+    if (!data) break; // shared WAF budget spent / blocked — later requests would fail too
     ingestVehicles(data.vehicles ?? [], listings, seen);
+    await delay(400);
   }
-
-  const stillLow = findLowModels(listings);
-  if (stillLow.length > 0 && jsFallbackEnabled && Date.now() < deadline) {
-    log("info", `Clutch.ca: bare-fetch top-up blocked or incomplete — trying a browser session for ${stillLow.length} still-low model(s)…`);
-    const session = await openBrowserSession("https://www.clutch.ca/cars", log);
-    if (!session) log("warn", "Clutch.ca: browser session unavailable for top-up — keeping bare-fetch results as-is");
-    if (session) {
-      try {
-        for (const t of stillLow) {
-          if (Date.now() >= deadline) break;
-          const text = await fetchJsonInSession(session, buildModelsQueryUrl([t], 0));
-          if (!text) break; // the session itself is blocked — stop
-          try {
-            ingestVehicles((JSON.parse(text) as ClutchPage).vehicles ?? [], listings, seen);
-          } catch {
-            /* malformed — skip */
-          }
-        }
-
-        // Still short after both API-shaped tiers? Try the product pages
-        // themselves, reusing this same session (no extra browser launch).
-        const stillLowAfterFetch = findLowModels(listings);
-        if (stillLowAfterFetch.length > 0 && Date.now() < deadline) {
-          log(
-            "info",
-            `Clutch.ca: in-session fetch top-up blocked or incomplete — trying product-page navigation for ${stillLowAfterFetch.length} still-low model(s)…`
-          );
-          await topUpViaProductPageNavigation(session, stillLowAfterFetch, listings, seen, deadline, log);
-        }
-      } finally {
-        await closeBrowserSession(session);
-      }
-    }
-  }
-
-  return initiallyLow.length;
 }
 
 export const clutch: Scraper = {
@@ -553,18 +542,21 @@ export const clutch: Scraper = {
   source: "Clutch.ca",
   async run(log: LogFn): Promise<ScraperRunResult> {
     const cfg = loadScrapeConfig();
-    const maxPages = Math.max(1, cfg.clutchMaxPages);
+    const maxCombinedPages = Math.max(1, cfg.clutchMaxPages);
     const deadline = Date.now() + cfg.sourceTimeoutMs - 5000;
     const listings: Listing[] = [];
     const seen = new Set<string>();
 
-    log("info", `Clutch.ca: querying all ${MODEL_TARGETS.length} models in one combined request…`);
+    log("info", `Clutch.ca: querying all ${MODEL_TARGETS.length} models in one combined request for breadth…`);
 
-    // Bare-fetch pagination until the WAF challenges (a null page after page 0),
-    // the page cap, the last real page, or the deadline.
+    // Phase 1 — breadth: the combined all-models query (default just page 0).
+    // On a flagged datacenter IP the WAF's whole per-run budget is only ~3-4
+    // requests, so this deliberately does NOT spend it on deeper combined
+    // pages — their skewed sort just re-surfaces the already-plentiful
+    // high-volume models. That budget is worth far more in Phase 2.
     let page = 0;
     let totalPages = 1;
-    for (; page < maxPages && Date.now() < deadline; page++) {
+    for (; page < maxCombinedPages && Date.now() < deadline; page++) {
       let data: ClutchPage | null;
       try {
         data = await fetchPage(page, cfg.requestTimeoutMs);
@@ -582,14 +574,20 @@ export const clutch: Scraper = {
       await delay(400);
     }
 
-    if (shouldContinueViaBrowser(page, totalPages, cfg.jsFallbackEnabled)) {
-      await continueViaBrowser(page, totalPages, listings, seen, deadline, log);
-    }
+    // Phase 2 — targeted fill: the rest of the still-fresh bare-fetch budget
+    // goes to single-model queries for the models Phase 1 left thin, rarest
+    // first. This runs BEFORE any browser work so it claims the shared WAF
+    // budget while it's unspent (the browser tiers share that same budget and,
+    // on a flagged IP, would only waste it on requests that can't clear the
+    // challenge anyway).
+    await fillLowModelsBareFetch(listings, seen, deadline, cfg.requestTimeoutMs, log);
 
-    // The combined query's cross-model sort favours certain makes — guarantee
-    // every model has a real, usable sample rather than whatever the sort
-    // happened to surface within the page budget.
-    await topUpUnderrepresentedModels(listings, seen, deadline, cfg.requestTimeoutMs, cfg.jsFallbackEnabled, log);
+    // Phase 3 — browser bonus (local dev / unflagged IPs only; a no-op on
+    // Render, verified live). Deep combined pages + per-model in-page fetch +
+    // product-page reads, all on one reused session.
+    if (cfg.jsFallbackEnabled && findLowModels(listings).length > 0 && Date.now() < deadline) {
+      await browserBonusTiers(page, totalPages, listings, seen, deadline, log);
+    }
 
     const models = new Set(listings.map((l) => `${l.make} ${l.model}`));
     const ok = listings.length > 0;
