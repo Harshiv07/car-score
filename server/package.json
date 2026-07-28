@@ -2,7 +2,7 @@
   "name": "@carscore/server",
   "version": "2.0.0",
   "private": true,
-  "description": "CarScore V2 backend — Express REST API, Crawlee-based listing crawler, MongoDB storage, hybrid 100-point scoring engine.",
+  "description": "CarScore V2 backend \u2014 Express REST API, Crawlee-based listing crawler, MongoDB storage, hybrid 100-point scoring engine.",
   "main": "dist/index.js",
   "scripts": {
     "dev": "tsx watch src/index.ts",
@@ -12,7 +12,8 @@
     "scrape:check": "node --import tsx src/scripts/checkScraper.ts",
     "scrape:snapshot": "node --import tsx src/scripts/snapshotListings.ts",
     "db:seed-snapshot": "node --import tsx src/scripts/seedFromSnapshot.ts",
-    "typecheck": "tsc -p tsconfig.json --noEmit"
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "dealer:probe": "node --import tsx src/scripts/probeDealer.ts"
   },
   "dependencies": {
     "cheerio": "^1.0.0",
