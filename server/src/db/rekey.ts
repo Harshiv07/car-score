@@ -1,31 +1,57 @@
 import { Listing } from "../types";
-import { dedupeKeyFor } from "../util/listingKeys";
+import { dedupeKeyFor, normalizeListingUrl } from "../util/listingKeys";
+
+/** What makes two rows the same physical vehicle, ignoring anything that
+ *  drifts between scrapes (price, timestamps, photos). */
+function vehicleShape(l: Listing): string {
+  return [l.year, l.make, l.model, l.trim ?? "", l.mileageKm ?? ""].join("|").toLowerCase();
+}
+
+/**
+ * URLs that are pages rather than listings.
+ *
+ * A URL shared by several rows is ambiguous, and the two readings need opposite
+ * treatment:
+ *
+ *   - **The same car stored twice** — a duplicate left behind by the old
+ *     price-in-key scheme. Those rows describe one vehicle, and the URL is
+ *     exactly the right thing to merge them on.
+ *   - **Different cars sharing a page** — a dealer's inventory index, a model's
+ *     search results, Clutch's `/cars` fallback for id-less vehicles, or a seed
+ *     row pointing at `cargurus.ca`. Keying on that fuses an entire lot into
+ *     one record.
+ *
+ * They are distinguishable: duplicates of one car agree on year, make, model,
+ * trim and odometer; cars sharing a page do not. So a URL is disqualified only
+ * when the rows holding it describe *different vehicles*.
+ *
+ * This is a systemic guard rather than a fix for one scraper. Clutch handing
+ * every id-less vehicle the same `/cars` URL is patched at the source, but any
+ * future source could reintroduce the pattern, and identity should refuse to
+ * collapse distinct cars no matter what it is handed.
+ */
+function pageUrls(listings: Listing[]): Set<string> {
+  const shapes = new Map<string, Set<string>>();
+  for (const l of listings) {
+    const u = normalizeListingUrl(l.listingUrl);
+    if (!u) continue;
+    const set = shapes.get(u) ?? new Set<string>();
+    set.add(vehicleShape(l));
+    shapes.set(u, set);
+  }
+  return new Set([...shapes].filter(([, s]) => s.size > 1).map(([u]) => u));
+}
 
 export interface RekeyResult {
   /** Rows whose dedupeKey changed under the current scheme. */
   rekeyed: number;
-  /** Rows dropped because they turned out to be duplicates of a kept row. */
-  merged: number;
-  /** The de-duplicated, re-keyed set. */
+  /** Rows left on their old key because another row already claimed the new
+   *  one. Reported so a spike is visible rather than silent. */
+  collisions: number;
+  /** Every input row, in full — this migration never drops anything. */
   listings: Listing[];
-  /** Ids of the rows that were dropped, so storage can delete them. */
-  removedIds: string[];
 }
 
-/**
- * Bring stored rows onto the current identity scheme.
- *
- * Changing how `dedupeKey` is derived would otherwise be silently destructive:
- * every stored row still carries its old key, so the next scrape would match
- * nothing and insert a second copy of the entire inventory. This recomputes the
- * key for each row once, at startup, and collapses any rows that were only ever
- * distinct because the old key was over-specific (the same car stored twice
- * after a price change).
- *
- * When two rows collapse, the older one wins — it carries the true `firstSeenAt`,
- * which the UI shows as "added N days ago" and uses for the NEW badge. Its
- * mutable fields are refreshed from the newer row so nothing current is lost.
- */
 /**
  * Stamp incoming listings with a key derived by the *current* rule, and collapse
  * any duplicates inside the batch itself.
@@ -42,9 +68,12 @@ export interface RekeyResult {
  * `finalizeListing`.
  */
 export function withCurrentKeys(listings: Listing[]): Listing[] {
+  const pages = pageUrls(listings);
   const byKey = new Map<string, Listing>();
   for (const l of listings) {
-    const keyed = { ...l, dedupeKey: dedupeKeyFor(l) };
+    // A URL handed to several cars in one batch is a page, not a listing.
+    const usable = !pages.has(normalizeListingUrl(l.listingUrl) ?? "");
+    const keyed = { ...l, dedupeKey: dedupeKeyFor(usable ? l : { ...l, listingUrl: null }) };
     const seen = byKey.get(keyed.dedupeKey);
     if (!seen) {
       byKey.set(keyed.dedupeKey, keyed);
@@ -60,40 +89,56 @@ export function withCurrentKeys(listings: Listing[]): Listing[] {
   return [...byKey.values()];
 }
 
+/**
+ * Bring stored rows onto the current identity scheme, at startup, without ever
+ * removing one.
+ *
+ * Changing how `dedupeKey` is derived is otherwise silently destructive in both
+ * directions: stored rows still carry their old key, so the next scrape matches
+ * nothing and inserts a second copy of the whole inventory — while a migration
+ * that "tidies" the rows it thinks are duplicates can delete real inventory if
+ * its notion of identity is wrong.
+ *
+ * The first version did exactly that. It deleted the losers of a key collision
+ * and then issued an ordered bulkWrite of the new keys against a uniquely
+ * indexed `dedupeKey`; reassigning a key still held by an unprocessed row threw,
+ * the throw escaped `init()`, the process exited, and the host restarted into
+ * the same migration — deleting a little more on each pass. So this one cannot
+ * delete at all. A row whose new key is already taken simply keeps its old key,
+ * and the next upsert (which derives keys the same way) reconciles it.
+ */
 export function rekeyListings(listings: Listing[]): RekeyResult {
-  const byKey = new Map<string, Listing>();
-  const removedIds: string[] = [];
+  const pages = pageUrls(listings);
+  const taken = new Map<string, Listing>();
+  const out: Listing[] = [];
   let rekeyed = 0;
-  let merged = 0;
+  let collisions = 0;
 
-  // Oldest first, so the survivor of a collision is the row that has been
-  // around longest rather than whichever happened to be stored last.
+  // Oldest first, so when two rows want the same key the one that has been
+  // around longest keeps it — it holds the true firstSeenAt.
   const ordered = [...listings].sort(
     (a, b) => Date.parse(a.firstSeenAt || "") - Date.parse(b.firstSeenAt || "")
   );
 
   for (const row of ordered) {
-    const key = dedupeKeyFor(row);
-    if (key !== row.dedupeKey) rekeyed++;
+    const usable = !pages.has(normalizeListingUrl(row.listingUrl) ?? "");
+    const key = dedupeKeyFor(usable ? row : { ...row, listingUrl: null });
 
-    const kept = byKey.get(key);
-    if (!kept) {
-      byKey.set(key, { ...row, dedupeKey: key });
+    if (!taken.has(key)) {
+      if (key !== row.dedupeKey) rekeyed++;
+      const next = { ...row, dedupeKey: key };
+      taken.set(key, next);
+      out.push(next);
       continue;
     }
 
-    // Duplicate of a row we're keeping: fold the fresher values in and drop it.
-    merged++;
-    removedIds.push(row.id);
-    if (Date.parse(row.lastSeenAt || "") > Date.parse(kept.lastSeenAt || "")) {
-      kept.lastSeenAt = row.lastSeenAt;
-      kept.price = row.price;
-    }
-    kept.mileageKm = kept.mileageKm ?? row.mileageKm;
-    kept.listingUrl = kept.listingUrl ?? row.listingUrl;
-    kept.image = kept.image ?? row.image;
-    kept.vin = kept.vin ?? row.vin;
+    // Another row already owns this key. Leave this one exactly as it is: a
+    // startup migration must never destroy data it merely failed to classify.
+    // A genuine duplicate will be reconciled by the next upsert, which derives
+    // keys the same way — and a *wrongly* collapsed row would be unrecoverable.
+    collisions++;
+    out.push(row);
   }
 
-  return { rekeyed, merged, listings: [...byKey.values()], removedIds };
+  return { rekeyed, collisions, listings: out };
 }

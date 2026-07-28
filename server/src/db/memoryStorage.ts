@@ -47,14 +47,16 @@ export class MemoryStorage implements Storage {
 
     // Bring stored rows onto the current identity scheme. Without this, rows
     // written under the old key would never match a freshly scraped listing and
-    // the next run would duplicate the whole inventory.
+    // the next run would duplicate the whole inventory. Non-destructive: every
+    // row survives, so a mistake here can never cost inventory.
     const rekey = rekeyListings(this.data.listings);
-    if (rekey.rekeyed > 0 || rekey.merged > 0) {
+    if (rekey.rekeyed > 0) {
       this.data.listings = rekey.listings;
       dirty = true;
       // eslint-disable-next-line no-console
       console.log(
-        `Listing keys migrated: ${rekey.rekeyed} re-keyed, ${rekey.merged} duplicate row(s) merged.`
+        `Listing keys migrated: ${rekey.rekeyed} re-keyed, ${rekey.collisions} left on old key. ` +
+          `${rekey.listings.length} row(s) retained.`
       );
     }
 
