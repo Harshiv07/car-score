@@ -4,6 +4,7 @@ import {
   applyFilters,
   findAlternatives,
   getScoredListings,
+  inventoryStats,
   ownershipEstimate,
   sortListings,
 } from "../services/listingService";
@@ -22,6 +23,23 @@ function strq(v: unknown): string | undefined {
 function bool(v: unknown): boolean | undefined {
   if (v === "true" || v === "1") return true;
   return undefined;
+}
+
+/**
+ * `?keys=a,b,c` — fetch specific listings by dedupeKey.
+ *
+ * The saved-cars page needs the listings behind a set of saved keys regardless
+ * of where they rank. It used to pull the first 100 by score and filter client
+ * side, so a car saved at rank 500 simply vanished from the page — and the
+ * prune-missing-favourites step then deleted it for good. Capped so the
+ * parameter can't be used to request unbounded work.
+ */
+const MAX_KEYS = 200;
+
+function parseKeys(req: Request): string[] | undefined {
+  const raw = strq(req.query.keys);
+  if (!raw) return undefined;
+  return raw.split(",").map((s) => s.trim()).filter(Boolean).slice(0, MAX_KEYS);
 }
 
 function parseFilters(req: Request): ListingFilters {
@@ -52,7 +70,9 @@ const SORT_KEYS: SortKey[] = ["score", "deal", "mileage", "price", "reliability"
 listingsRouter.get("/", async (req, res) => {
   try {
     const all = await getScoredListings();
-    const filtered = applyFilters(all, parseFilters(req));
+    const keys = parseKeys(req);
+    const scoped = keys ? all.filter((l) => keys.includes(l.dedupeKey)) : all;
+    const filtered = applyFilters(scoped, parseFilters(req));
     const sortRaw = strq(req.query.sort) ?? "score";
     const sort: SortKey = (SORT_KEYS as string[]).includes(sortRaw) ? (sortRaw as SortKey) : "score";
     const sorted = sortListings(filtered, sort);
@@ -69,6 +89,19 @@ listingsRouter.get("/", async (req, res) => {
       sort,
       listings: sorted.slice(start, start + pageSize),
     });
+  } catch (e) {
+    res.status(500).json({ error: (e as Error).message });
+  }
+});
+
+/**
+ * GET /api/listings/stats — inventory-wide aggregates for the header.
+ * Registered before `/:id` so "stats" isn't parsed as a listing id.
+ */
+listingsRouter.get("/stats", async (_req, res) => {
+  try {
+    const all = await getScoredListings();
+    res.json(inventoryStats(all));
   } catch (e) {
     res.status(500).json({ error: (e as Error).message });
   }

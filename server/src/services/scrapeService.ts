@@ -15,6 +15,7 @@ import { getStorage } from "../db/storage";
 import { activeScrapers } from "../scrapers";
 import { loadScrapeConfig } from "../scrapers/config";
 import { LogFn, Scraper, ScraperRunResult } from "../scrapers/types";
+import { invalidateScoreCache } from "./listingService";
 
 export const COOLDOWN_MS = 10 * 60 * 1000;
 const MAX_LOGS = 200;
@@ -171,6 +172,9 @@ async function runScrape(runId: string, sources: Scraper[]): Promise<void> {
         const { inserted, updated } = await storage.upsertListings(result.listings);
         entry.totalInserted += inserted;
         entry.totalUpdated += updated;
+        // New inventory invalidates every score: Market Value is relative to
+        // the comparable set, so adding cars re-prices the ones already here.
+        invalidateScoreCache();
         pushLog("info", `${result.source}: ${inserted} new, ${updated} refreshed.`);
       }
     } catch (e) {

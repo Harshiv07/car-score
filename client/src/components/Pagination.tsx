@@ -17,8 +17,9 @@ export function Pagination({
 
   const btn =
     "nums min-w-9 rounded-lg border px-3 py-1.5 text-sm font-semibold transition disabled:cursor-not-allowed disabled:opacity-40";
-  const idle = "border-line text-muted hover:bg-surface-2 hover:text-text";
-  const active = "border-brand bg-brand text-black";
+  const idle = "border-line text-muted hover:bg-surface2 hover:text-text";
+  // `text-black` would be invisible on the light theme's gold fill.
+  const active = "border-brand bg-brand [color:var(--on-brand)]";
 
   return (
     <nav className="mt-6 flex items-center justify-center gap-1.5" aria-label="Pagination">

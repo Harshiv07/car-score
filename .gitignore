@@ -30,3 +30,4 @@ nohup.out
 client/test-results/
 client/playwright-report/
 server/.e2e-data/
+.playwright-mcp/

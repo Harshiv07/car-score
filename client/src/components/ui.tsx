@@ -27,26 +27,77 @@ export function isRecent(iso: string, hours = 48): boolean {
 
 /* ---- score colour bands -------------------------------------------------- */
 
-/** Hex for the gauge arc/needle (gradient-friendly). */
+/**
+ * Score colour bands. Four steps, and they read the same way everywhere in the
+ * app: green is earned, gold is the middle, red is a warning. Gold doubles as
+ * the brand colour, which is deliberate — a mid-70s score is the honest
+ * default for most of this inventory.
+ */
 export function scoreHex(total: number): string {
-  if (total >= 80) return "#34d399"; // emerald
-  if (total >= 65) return "#a3e635"; // lime
-  if (total >= 50) return "#f9a825"; // amber
-  return "#fb7185"; // rose
+  if (total >= 80) return "var(--good)";
+  if (total >= 65) return "var(--brand-strong)";
+  if (total >= 50) return "var(--warn)";
+  return "var(--bad)";
 }
 
 /** Tailwind text class (token-based) for score numbers elsewhere. */
 export function scoreColor(total: number): string {
   if (total >= 80) return "text-good";
-  if (total >= 65) return "text-good";
-  if (total >= 50) return "text-brand";
+  if (total >= 65) return "text-brand";
+  if (total >= 50) return "text-warn";
   return "text-bad";
+}
+
+/* ---- score spine --------------------------------------------------------- */
+
+/**
+ * The leaderboard's signature element.
+ *
+ * A vertical rail down the left edge of every card, filled to the car's score
+ * in its band colour, with the numeral at the top and the rank beneath. Read a
+ * single card and it's a score; scroll the list and the cards themselves draw a
+ * bar chart of quality down the page, so "this one is clearly better than the
+ * three under it" is legible without reading a word.
+ */
+export function ScoreSpine({ total, rank }: { total: number; rank?: number }) {
+  const hex = scoreHex(total);
+  const n = Math.round(total);
+  return (
+    <div className="flex w-9 shrink-0 flex-col items-center gap-1.5 self-stretch sm:w-11">
+      {rank != null && (
+        <span className="nums text-[11px] font-bold text-faint" aria-hidden>
+          #{rank}
+        </span>
+      )}
+
+      <div className="flex flex-col items-center leading-none">
+        <span className="nums font-display text-[26px] font-extrabold sm:text-[30px]" style={{ color: hex }}>
+          {n}
+        </span>
+        <span className="mt-0.5 text-[8px] font-bold uppercase tracking-[0.14em] text-faint">/100</span>
+      </div>
+
+      {/* The rail. The unfilled track stays visible so the proportion reads —
+          at 87/100 a track-coloured remainder is the only thing distinguishing
+          it from a solid bar. aria-hidden: the numeral already announces it. */}
+      <div
+        className="relative w-1.5 flex-1 overflow-hidden rounded-full ring-1 ring-inset ring-line"
+        style={{ backgroundColor: "color-mix(in oklab, var(--line) 60%, transparent)" }}
+        aria-hidden
+      >
+        <div
+          className="absolute inset-x-0 bottom-0 rounded-full transition-[height] duration-500"
+          style={{ height: `${Math.max(4, Math.min(100, n))}%`, backgroundColor: hex }}
+        />
+      </div>
+    </div>
+  );
 }
 
 /* ---- score badge --------------------------------------------------------- */
 
-/** Clean, legible score chip: big number in the band colour on a tinted,
- *  ring-bordered tile. Replaces the old semicircle meter. */
+/** Compact score tile, for places without room for the spine (detail hero,
+ *  compare tray, alternatives). Big number in the band colour on a tinted tile. */
 export function ScoreBadge({ total, variant = "card" }: { total: number; variant?: "card" | "hero" }) {
   const hex = scoreHex(total);
   const hero = variant === "hero";
@@ -102,7 +153,7 @@ const DEAL_STYLES: Record<DealRating, string> = {
   "Great Deal": "bg-good/12 text-good ring-good/25",
   "Good Deal": "bg-info/12 text-info ring-info/25",
   "Fair Price": "bg-muted/12 text-muted ring-line-strong/40",
-  "Above Market": "bg-brand/12 text-brand ring-brand/25",
+  "Above Market": "bg-warn/12 text-warn ring-warn/25",
   Overpriced: "bg-bad/12 text-bad ring-bad/30",
 };
 
@@ -151,7 +202,7 @@ export function Segmented<T extends string>({
   ariaLabel?: string;
 }) {
   return (
-    <div role="group" aria-label={ariaLabel} className="grid grid-flow-col auto-cols-fr gap-1 rounded-lg bg-surface-2 p-1">
+    <div role="group" aria-label={ariaLabel} className="grid grid-flow-col auto-cols-fr gap-1 rounded-lg bg-surface2 p-1">
       {options.map((o) => {
         const active = o.value === value;
         return (
@@ -161,8 +212,9 @@ export function Segmented<T extends string>({
             aria-pressed={active}
             onClick={() => onChange(o.value)}
             className={`rounded-md px-2 py-1.5 text-xs font-semibold transition ${
-              active ? "bg-brand text-black shadow-sm" : "text-muted hover:text-text"
+              active ? "bg-brand shadow-sm" : "text-muted hover:text-text"
             }`}
+            style={active ? { color: "var(--on-brand)" } : undefined}
           >
             {o.label}
           </button>
@@ -220,7 +272,7 @@ export function Select({
         aria-expanded={open}
         aria-label={ariaLabel}
         onClick={() => setOpen((v) => !v)}
-        className="flex w-full items-center justify-between gap-2 rounded-lg border border-line bg-surface-2 px-3 py-2 text-sm font-medium text-text transition hover:border-line-strong"
+        className="flex w-full items-center justify-between gap-2 rounded-lg border border-line bg-surface2 px-3 py-2 text-sm font-medium text-text transition hover:border-line-strong"
       >
         <span className="truncate">{current?.label ?? ""}</span>
         <span className={`text-faint transition-transform ${open ? "rotate-180" : ""}`}>▾</span>
@@ -241,7 +293,7 @@ export function Select({
                     setOpen(false);
                   }}
                   className={`flex w-full items-center justify-between gap-2 rounded-md px-2.5 py-1.5 text-left text-sm transition ${
-                    active ? "bg-brand/15 font-semibold text-brand" : "text-text hover:bg-surface-2"
+                    active ? "bg-brand/15 font-semibold text-brand" : "text-text hover:bg-surface2"
                   }`}
                 >
                   <span className="truncate">{o.label}</span>
@@ -253,6 +305,20 @@ export function Select({
         </ul>
       )}
     </div>
+  );
+}
+
+/**
+ * A single hard fact on a card — value first, then its unit/label. Keeping the
+ * value at text weight and the label faint lets someone scan a column of cards
+ * for "km" or "AWD" without reading sentences.
+ */
+export function Fact({ value, label }: { value: string; label?: string }) {
+  return (
+    <span className="inline-flex items-baseline gap-1">
+      <span className="nums font-semibold text-text">{value}</span>
+      {label && <span className="text-faint">{label}</span>}
+    </span>
   );
 }
 
