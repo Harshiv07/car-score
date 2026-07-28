@@ -14,6 +14,18 @@ test("leaderboard renders its thesis, provenance line and filters", async ({ pag
   await expect(page.getByLabel("Brand")).toBeVisible();
 });
 
+test("an empty inventory says so, rather than blaming filters", async ({ page }) => {
+  // The e2e API starts on an isolated empty database, so this is the real
+  // zero-inventory state. It used to render "No cars match these filters" with
+  // advice to widen a range — while no filter was set — which sent the reader
+  // to fix something that was never wrong.
+  await page.goto("/");
+  await expect(page.getByText("No listings yet.")).toBeVisible();
+  await expect(page.getByText(/run a refresh from the header/i)).toBeVisible();
+  await expect(page.getByText("No cars match these filters.")).toHaveCount(0);
+  await expect(page.getByRole("button", { name: /clear all filters/i })).toHaveCount(0);
+});
+
 test("refresh lives in the header as a freshness control, not a page CTA", async ({ page }) => {
   await page.goto("/");
   const control = page.locator("header").getByRole("button", { name: /data freshness/i });
