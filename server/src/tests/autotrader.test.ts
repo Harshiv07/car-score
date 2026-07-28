@@ -7,7 +7,7 @@
 
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { pageUrl, parseAutotraderNextData, parseAutotraderTiles } from "../scrapers/autotrader";
+import { pageUrl, activeProvinces, AUTOTRADER_PROVINCES, parseAutotraderNextData, parseAutotraderTiles } from "../scrapers/autotrader";
 import { normalizeRecord } from "../scrapers/normalize";
 
 const PAGE = `<!doctype html><html><body>
@@ -116,9 +116,40 @@ test("returns empty when there is no __NEXT_DATA__ listings blob (fallback terri
   assert.equal(numberOfPages, 1);
 });
 
-test("Ontario page URL drops prx=-1 and carries &page=N", () => {
+test("page URL drops prx=-1, defaults to Ontario, and carries &page=N", () => {
   const u = pageUrl("toyota/rav4", 3);
-  assert.ok(!u.includes("prx"), "no national-proximity param → Ontario-only");
+  assert.ok(!u.includes("prx"), "no national-proximity param → scoped by path");
   assert.match(u, /\/cars\/toyota\/rav4\/on\//);
   assert.match(u, /[?&]page=3(?:&|$)/);
+});
+
+test("page URL scopes to any province, so coverage is not Ontario-only", () => {
+  // The crawler was pinned to /on/ and ignored the rest of the country, which
+  // holds more inventory than Ontario does for most models.
+  for (const prov of ["bc", "ab", "qc", "ns"]) {
+    const u = pageUrl("honda/civic", 1, prov);
+    assert.match(u, new RegExp(`/cars/honda/civic/${prov}/`));
+    assert.ok(!u.includes("prx"));
+  }
+});
+
+test("province list is overridable but never empty or invalid", () => {
+  const saved = process.env.AUTOTRADER_PROVINCES;
+  try {
+    delete process.env.AUTOTRADER_PROVINCES;
+    assert.deepEqual(activeProvinces(), [...AUTOTRADER_PROVINCES], "defaults to every province");
+
+    process.env.AUTOTRADER_PROVINCES = "bc, ab";
+    assert.deepEqual(activeProvinces(), ["bc", "ab"], "honours a narrowed list");
+
+    // A typo must not silently reduce a run to zero sources.
+    process.env.AUTOTRADER_PROVINCES = "atlantis,xx";
+    assert.deepEqual(activeProvinces(), [...AUTOTRADER_PROVINCES], "falls back when nothing is valid");
+
+    process.env.AUTOTRADER_PROVINCES = "";
+    assert.deepEqual(activeProvinces(), [...AUTOTRADER_PROVINCES], "empty means all");
+  } finally {
+    if (saved === undefined) delete process.env.AUTOTRADER_PROVINCES;
+    else process.env.AUTOTRADER_PROVINCES = saved;
+  }
 });

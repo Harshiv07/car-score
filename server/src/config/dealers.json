@@ -1,5 +1,5 @@
 {
-  "_comment": "Thunder Bay dealers, all scraped browser-free. `convertus` (Wayne Toyota, Superior Hyundai): same-origin Convertus VMS JSON proxy — `cp` is the Convertus company id (watch the ajax-vehicles.php request the used page makes). `stm` (Gore Motors): WordPress Motors theme — reads the per-vehicle pages listed in `domain`/listings-sitemap.xml. `edealer` (Half-Way Motors Mazda): the used-inventory `urls[0]` page embeds the whole lot as a `vehicleArray` JS object literal in the static HTML. `html` (default): generic three-strategy HTML scraper, best-effort (only yields with SCRAPE_JS_FALLBACK=1).",
+  "_comment": "Thunder Bay dealers, all scraped browser-free. `convertus` (Wayne Toyota, Superior Hyundai): same-origin Convertus VMS JSON proxy \u2014 `cp` is the Convertus company id (watch the ajax-vehicles.php request the used page makes). `stm` (Gore Motors): WordPress Motors theme \u2014 reads the per-vehicle pages listed in `domain`/listings-sitemap.xml. `edealer` (Half-Way Motors Mazda): the used-inventory `urls[0]` page embeds the whole lot as a `vehicleArray` JS object literal in the static HTML. `html` (default): generic three-strategy HTML scraper, best-effort (only yields with SCRAPE_JS_FALLBACK=1). Add a dealer with `npm run dealer:probe -w server -- <domain>`: it identifies the platform from the served HTML and prints the entry, including the Convertus `cp` id (read from vmsID/inventoryId/dealer_id in the bootstrap config \u2014 verified against Wayne Toyota cp=3490 and Superior Hyundai cp=2932).",
   "dealers": [
     {
       "key": "waynetoyota",
@@ -32,8 +32,9 @@
       "province": "ON",
       "platform": "edealer",
       "urls": [
-        "https://www.halfwaymotorsmazda.com/used/"
-      ]
+        "https://www.halfwaymotorsmazda.com/inventory/used/"
+      ],
+      "note": "Cloudflare challenge on the inventory path as of 2026-07-28 \u2014 /used/ now redirects to /inventory/used/, which returns 403 'Just a moment...'. The scraper logs and skips it. Re-check with `npm run dealer:probe -w server -- halfwaymotorsmazda.com`; nothing here evades the challenge."
     }
   ]
 }

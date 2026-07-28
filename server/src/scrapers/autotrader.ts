@@ -1,5 +1,5 @@
 /**
- * AutoTrader.ca — Ontario used listings, scraped per supported model, fully
+ * AutoTrader.ca — Canada-wide used listings, scraped per supported model and
  * browser-free (works on Render).
  *
  * AutoTrader.ca is a Next.js app (AutoScout24 "search-funnel"). Its
@@ -13,7 +13,7 @@
  *   - Pagination works via `&page=N` (each page is a *different* 20 listings;
  *     `rcs=` does NOT paginate — it just re-returns page 1, which is why the
  *     old approach was stuck at ~20/model).
- *   - Dropping `prx=-1` filters to Ontario server-side (with it the results are
+ *   - Dropping `prx=-1` scopes results to the province in the path (with it the
  *     national — AB/BC/QC/…; without it every result is ON).
  *
  * `parseAutotraderTiles` (the older visible-tile text parser) is kept as a
@@ -53,9 +53,33 @@ const TARGETS: ModelTarget[] = VEHICLE_MODELS.flatMap((m) => {
   return slug ? [{ make: m.make, model: m.model, slug }] : [];
 });
 
-/** Ontario page URL for a model (no `prx=-1` → ON-only; `&page=N` paginates). */
-export function pageUrl(slug: string, page: number): string {
-  return `https://www.autotrader.ca/cars/${slug}/on/?rcp=100&srt=9&hprc=True&wcp=True&page=${page}`;
+/**
+ * Provinces AutoTrader serves on this URL shape, in rough inventory order.
+ *
+ * The crawler was pinned to `/on/` and so ignored the rest of the country.
+ * Verified live, page 1 of each: every province returns 200 with real listings
+ * and its own `numberOfPages`, and the parsed rows carry the right province
+ * code — so this is more cars from a source that already works browser-free,
+ * not a new anti-bot surface.
+ *
+ *   Toyota RAV4   ON 106 pages   rest of Canada 139
+ *   Honda Civic   ON 174 pages   rest of Canada 175
+ *
+ * Override with AUTOTRADER_PROVINCES (comma-separated) to narrow a run.
+ */
+export const AUTOTRADER_PROVINCES: readonly string[] = ["on", "bc", "qc", "ab", "ns", "nb", "mb", "sk", "nl", "pe"];
+
+export function activeProvinces(): string[] {
+  const raw = (process.env.AUTOTRADER_PROVINCES ?? "").trim();
+  if (!raw) return [...AUTOTRADER_PROVINCES];
+  const wanted = raw.split(",").map((p) => p.trim().toLowerCase()).filter(Boolean);
+  const valid = wanted.filter((p) => (AUTOTRADER_PROVINCES as readonly string[]).includes(p));
+  return valid.length ? valid : [...AUTOTRADER_PROVINCES];
+}
+
+/** Page URL for a model within one province (`&page=N` paginates). */
+export function pageUrl(slug: string, page: number, province = "on"): string {
+  return `https://www.autotrader.ca/cars/${slug}/${province}/?rcp=100&srt=9&hprc=True&wcp=True&page=${page}`;
 }
 
 /** A parsed AutoTrader listing plus its real location (province/city aren't part
@@ -244,23 +268,37 @@ export const autotrader: Scraper = {
     const seen = new Set<string>();
     const baseUrl = "https://www.autotrader.ca";
 
-    const urlToTarget = new Map<string, ModelTarget>();
-    const numberOfPagesByModel = new Map<string, number>();
+    // Keyed by model *and* province: a model has a different depth in each.
+    const urlToTarget = new Map<string, { target: ModelTarget; province: string }>();
+    const numberOfPagesByCombo = new Map<string, number>();
+    const comboKey = (t: ModelTarget, province: string) => `${t.make} ${t.model}|${province}`;
+    const provinces = activeProvinces();
 
     /** Parse one fetched page (JSON primary, tile-parser fallback) into `listings`. */
-    const collect = (html: string, target: ModelTarget): number => {
+    const collect = (html: string, target: ModelTarget, requested: string): number => {
       const { rows, numberOfPages } = parseAutotraderNextData(html, target.make, target.model);
-      numberOfPagesByModel.set(`${target.make} ${target.model}`, numberOfPages);
+      numberOfPagesByCombo.set(comboKey(target, requested), numberOfPages);
 
+      const fallbackProvince = requested.toUpperCase();
       let effective: AutotraderRow[] = rows;
       if (rows.length === 0) {
-        // __NEXT_DATA__ missing/changed — fall back to the visible tiles.
-        effective = parseAutotraderTiles(html, target.make, target.model).map((raw) => ({ raw, province: "ON", city: null }));
+        // __NEXT_DATA__ missing/changed — fall back to the visible tiles. The
+        // province we asked for is the right default, not a hard-coded "ON".
+        effective = parseAutotraderTiles(html, target.make, target.model).map((raw) => ({
+          raw,
+          province: fallbackProvince,
+          city: null,
+        }));
       }
 
       let added = 0;
       for (const { raw, province, city } of effective) {
-        const listing = normalizeRecord(raw, { sourceWebsite: "AutoTrader.ca", baseUrl, province: province ?? "ON", city });
+        const listing = normalizeRecord(raw, {
+          sourceWebsite: "AutoTrader.ca",
+          baseUrl,
+          province: province ?? fallbackProvince,
+          city,
+        });
         if (listing && !seen.has(listing.dedupeKey)) {
           seen.add(listing.dedupeKey);
           listings.push(listing);
@@ -276,30 +314,42 @@ export const autotrader: Scraper = {
         requestTimeoutSecs: Math.ceil(cfg.requestTimeoutMs / 1000),
       });
       for (const page of outcome.pages) {
-        const target = urlToTarget.get(page.url);
-        if (target) collect(page.html, target);
+        const hit = urlToTarget.get(page.url);
+        if (hit) collect(page.html, hit.target, hit.province);
       }
     };
 
-    // Phase 1 — page 1 of every model (learns each model's numberOfPages).
-    log("info", `AutoTrader.ca: fetching page 1 of ${TARGETS.length} model(s) (Ontario)…`);
-    const phase1 = TARGETS.map((t) => {
-      const url = pageUrl(t.slug, 1);
-      urlToTarget.set(url, t);
-      return url;
-    });
+    // Phase 1 — breadth: page 1 of every model in every province. This is what
+    // learns each combination's real depth, and on its own it already covers
+    // the whole country rather than one province of it.
+    log(
+      "info",
+      `AutoTrader.ca: fetching page 1 of ${TARGETS.length} model(s) across ${provinces.length} province(s)…`
+    );
+    const phase1: string[] = [];
+    for (const t of TARGETS) {
+      for (const province of provinces) {
+        const url = pageUrl(t.slug, 1, province);
+        urlToTarget.set(url, { target: t, province });
+        phase1.push(url);
+      }
+    }
     await fetchAndCollect(phase1);
 
     // Phase 2 — pages 2..cap across all models, capped by each model's real
     // page count, interleaved so no single model hogs the budget.
+    // Interleaved by page number first, so depth is spread evenly over every
+    // model and province instead of one combination consuming the budget.
     const phase2: string[] = [];
     for (let page = 2; page <= pagesPerModel; page++) {
       for (const t of TARGETS) {
-        const total = numberOfPagesByModel.get(`${t.make} ${t.model}`) ?? 1;
-        if (page > total) continue;
-        const url = pageUrl(t.slug, page);
-        urlToTarget.set(url, t);
-        phase2.push(url);
+        for (const province of provinces) {
+          const total = numberOfPagesByCombo.get(comboKey(t, province)) ?? 1;
+          if (page > total) continue;
+          const url = pageUrl(t.slug, page, province);
+          urlToTarget.set(url, { target: t, province });
+          phase2.push(url);
+        }
       }
     }
     if (phase2.length && Date.now() < deadline) {
@@ -313,7 +363,7 @@ export const autotrader: Scraper = {
     }
 
     const ok = listings.length > 0;
-    const note = listings.length > 0 ? `${listings.length} Ontario listing(s) found` : "no listings extracted";
+    const note = listings.length > 0 ? `${listings.length} listing(s) found across ${provinces.length} province(s)` : "no listings extracted";
     log(ok ? "info" : "warn", `AutoTrader.ca: ${note}`);
     return { key: "autotrader", source: "AutoTrader.ca", listings, ok, note };
   },
