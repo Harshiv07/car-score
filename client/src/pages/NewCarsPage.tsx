@@ -62,7 +62,7 @@ export function NewCarsPage() {
           {!activeMake && (
             <h2 className="mb-3 flex items-center gap-2 text-lg font-bold text-text">
               {make}
-              <span className="nums rounded-full bg-surface-2 px-2 py-0.5 text-xs font-semibold text-muted">
+              <span className="nums rounded-full bg-surface2 px-2 py-0.5 text-xs font-semibold text-muted">
                 {cars.length}
               </span>
             </h2>
@@ -110,7 +110,7 @@ function BrandTabs({
 }) {
   const pill = (isActive: boolean) =>
     `shrink-0 rounded-full px-3.5 py-1.5 text-sm font-semibold transition ${
-      isActive ? "bg-brand text-black shadow-sm" : "bg-surface-2 text-muted hover:text-text"
+      isActive ? "bg-brand shadow-sm [color:var(--on-brand)]" : "bg-surface2 text-muted hover:text-text"
     }`;
   return (
     <div role="tablist" aria-label="Filter by brand" className="mt-5 flex gap-2 overflow-x-auto pb-1">
@@ -135,7 +135,7 @@ function BrandTabs({
 
 function Chip({ children }: { children: React.ReactNode }) {
   return (
-    <span className="inline-flex items-center rounded-md bg-surface-2 px-2 py-0.5 text-[11px] font-semibold text-muted ring-1 ring-line">
+    <span className="inline-flex items-center rounded-md bg-surface2 px-2 py-0.5 text-[11px] font-semibold text-muted ring-1 ring-line">
       {children}
     </span>
   );
@@ -187,8 +187,17 @@ function NewCarCard({ car }: { car: NewCar }) {
       rel="noopener noreferrer"
       className="group flex flex-col overflow-hidden rounded-2xl border border-line bg-surface transition hover:border-brand/40 hover:shadow-lg hover:shadow-black/20"
     >
-      <div className="relative aspect-[16/10] overflow-hidden bg-surface-2">
+      <div className="relative aspect-[16/10] overflow-hidden bg-surface2">
         <CarImage car={car} />
+
+        {/* Scrim. These are stock/Wikimedia photos we don't control — a white
+            car against a bright sky left the chips and score unreadable. */}
+        <div
+          className="pointer-events-none absolute inset-x-0 top-0 h-24"
+          style={{ background: "linear-gradient(to bottom, color-mix(in oklab, #000 55%, transparent), transparent)" }}
+          aria-hidden
+        />
+
         <div className="absolute left-3 top-3 flex gap-1.5">
           {car.bodyType && <Chip>{car.bodyType}</Chip>}
           {car.fuelType && car.fuelType !== "Gas" && <Chip>{car.fuelType}</Chip>}

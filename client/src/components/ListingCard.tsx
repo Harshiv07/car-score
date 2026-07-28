@@ -1,110 +1,189 @@
 import { Link } from "react-router-dom";
 import { ScoredListing } from "../api/types";
 import { useFavorites } from "../hooks/useFavorites";
-import { Badge, cad, DealPill, isRecent, km, NewBadge, ScoreBadge, Stars, timeAgo } from "./ui";
+import { useCompare } from "../hooks/useCompare";
+import { CarPhoto } from "./CarPhoto";
+import { whyLine, kmPerYear } from "../lib/whyLine";
+import { quickMonthly } from "../lib/finance";
+import { Badge, cad, DealPill, Fact, isRecent, km, NewBadge, ScoreSpine, scoreHex, timeAgo } from "./ui";
 
-function cat(l: ScoredListing, key: string) {
-  return l.score.breakdown.find((c) => c.key === key);
-}
-
+/**
+ * One car on the leaderboard.
+ *
+ * Two layouts, because a phone and a desktop want different things. Above 640px
+ * it's a row — score spine, photo, then content — and the spine turns the list
+ * into a bar chart of quality as you scroll. Below that the row would leave the
+ * text column about 180px wide, which truncated every title and wrapped badges
+ * onto three lines, so the card stacks: full-width photo with the score on it,
+ * then the text at full width.
+ *
+ * Reading order either way: score (is it good?) → photo (what is it?) → title
+ * and price (can I afford it?) → the why line (should I care?) → hard facts.
+ */
 export function ListingCard({ listing, rank }: { listing: ScoredListing; rank?: number }) {
-  const rel = cat(listing, "reliability");
   const savings = listing.score.market.savings;
   const { isFavorite, toggle } = useFavorites();
+  const { has: inCompare, toggle: toggleCompare, canAdd } = useCompare();
   const fav = isFavorite(listing.dedupeKey);
+  const comparing = inCompare(listing.id);
+  const perYear = kmPerYear(listing);
+
+  // The deal rating is already a pill; drop the duplicate badge.
+  const badges = listing.badges.filter((b) => b !== listing.score.dealRating);
 
   return (
-    <Link
-      to={`/listing/${listing.id}`}
-      className="group relative block rounded-2xl border border-line bg-surface p-4 transition hover:border-brand/40 hover:shadow-lg hover:shadow-black/20"
-    >
-      <button
-        onClick={(e) => {
-          e.preventDefault();
-          e.stopPropagation();
-          toggle(listing.dedupeKey);
-        }}
-        aria-pressed={fav}
-        aria-label={fav ? "Remove from favourites" : "Add to favourites"}
-        title={fav ? "Remove from favourites" : "Add to favourites"}
-        className={`absolute right-3 top-3 grid h-8 w-8 place-items-center rounded-full text-lg transition ${
-          fav ? "text-bad hover:bg-bad/10" : "text-faint hover:bg-surface-2 hover:text-bad"
-        }`}
+    <article className="group relative overflow-hidden rounded-2xl border border-line bg-surface transition hover:border-brand/40 hover:shadow-lg hover:shadow-black/20">
+      <Link
+        to={`/listing/${listing.id}`}
+        className="flex flex-col sm:flex-row sm:gap-4 sm:p-4"
+        aria-label={`${listing.title}, ${cad(listing.price)}, score ${Math.round(listing.score.total)} out of 100`}
       >
-        {fav ? "♥" : "♡"}
-      </button>
-
-      <div className="flex items-start gap-4">
-        {rank != null && (
-          <div className="nums hidden w-6 pt-2 text-center text-sm font-bold text-faint sm:block">{rank}</div>
-        )}
-        <div className="pt-0.5">
-          <ScoreBadge total={listing.score.total} />
+        {/* Desktop spine */}
+        <div className="hidden sm:flex">
+          <ScoreSpine total={listing.score.total} rank={rank} />
         </div>
 
-        <div className="min-w-0 flex-1 pr-8">
-          <div className="flex flex-wrap items-center gap-2">
-            <h3 className="truncate text-[15px] font-bold text-text transition group-hover:text-brand">
+        <div className="relative shrink-0 sm:w-44">
+          <CarPhoto
+            src={listing.image}
+            alt=""
+            ratio={null}
+            width={480}
+            sizes="(max-width: 640px) 100vw, 176px"
+            className="aspect-[16/9] w-full sm:aspect-[4/3] sm:rounded-xl"
+          />
+
+          {/* Mobile score, sat on the photo so it stays first in the reading
+              order without stealing a column from the text. */}
+          <div className="absolute bottom-2 left-2 flex items-end gap-1.5 sm:hidden">
+            <span
+              className="nums font-display rounded-lg px-2 py-1 text-xl font-extrabold leading-none backdrop-blur-sm"
+              style={{ color: scoreHex(listing.score.total), backgroundColor: "color-mix(in oklab, var(--bg) 78%, transparent)" }}
+            >
+              {Math.round(listing.score.total)}
+              <span className="text-[10px] font-bold text-faint">/100</span>
+            </span>
+            {rank != null && (
+              <span
+                className="nums rounded-md px-1.5 py-0.5 text-[10px] font-bold text-muted backdrop-blur-sm"
+                style={{ backgroundColor: "color-mix(in oklab, var(--bg) 78%, transparent)" }}
+                aria-hidden
+              >
+                #{rank}
+              </span>
+            )}
+          </div>
+        </div>
+
+        <div className="min-w-0 flex-1 p-3 pr-14 sm:p-0 sm:pr-16">
+          <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+            {/* Full width on mobile so the pill wraps below instead of
+                squeezing the title into an ellipsis. On desktop it's capped
+                rather than flexible, so the deal pill stays beside the title
+                it describes instead of being pushed to the far edge. */}
+            <h3 className="w-full min-w-0 truncate text-[15px] font-bold text-text transition group-hover:text-brand sm:w-auto sm:max-w-[58%]">
               {listing.title}
             </h3>
-            {listing.listingUrl && (
-              <button
-                type="button"
-                onClick={(e) => {
-                  e.preventDefault();
-                  e.stopPropagation();
-                  window.open(listing.listingUrl!, "_blank", "noopener,noreferrer");
-                }}
-                title={`Open on ${listing.sourceWebsite}`}
-                className="text-sm font-semibold text-brand hover:text-brand-strong"
-              >
-                ↗
-              </button>
-            )}
             <DealPill rating={listing.score.dealRating} />
             {listing.cpo && <Badge label="CPO" />}
             {isRecent(listing.firstSeenAt) && <NewBadge />}
           </div>
 
-          <div className="mt-1.5 flex flex-wrap items-baseline gap-x-4 gap-y-1 text-sm">
-            <span className="nums text-lg font-extrabold text-text">{cad(listing.price)}</span>
+          {/* Price line */}
+          <div className="mt-1.5 flex flex-wrap items-baseline gap-x-3 gap-y-1">
+            <span className="nums font-display text-xl font-extrabold text-text">{cad(listing.price)}</span>
             {savings > 0 ? (
-              <span className="nums font-semibold text-good">{cad(savings)} below market</span>
+              <span className="nums text-sm font-semibold text-good">{cad(savings)} under market</span>
             ) : savings < -500 ? (
-              <span className="nums font-semibold text-bad">{cad(-savings)} above market</span>
+              <span className="nums text-sm font-semibold text-bad">{cad(-savings)} over market</span>
             ) : null}
-            <span className="nums text-muted">
-              {listing.mileageKm != null ? km(listing.mileageKm) : "mileage n/a"}
-            </span>
-            <span className="text-muted">{listing.drivetrain}</span>
+            <span className="nums text-xs text-faint">≈{cad(quickMonthly(listing.price, listing.province))}/mo</span>
           </div>
 
-          <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-muted">
-            {rel && (
-              <span className="flex items-center gap-1">
-                Reliability <Stars value={rel.stars} />
-              </span>
-            )}
-            <span>
-              {listing.dealer ?? "Private / aggregator"}
-              {listing.city ? ` · ${listing.city}${listing.province ? `, ${listing.province}` : ""}` : ""}
-            </span>
-            <span className="text-faint">{listing.sourceWebsite}</span>
-            <span className="ml-auto text-right text-faint" title={new Date(listing.firstSeenAt).toLocaleString()}>
-              Added {timeAgo(listing.firstSeenAt)}
-              {listing.lastSeenAt !== listing.firstSeenAt && ` · refreshed ${timeAgo(listing.lastSeenAt)}`}
+          {/* The case for this car, in one sentence. */}
+          <p className="mt-2 line-clamp-2 text-[13px] leading-snug text-muted">{whyLine(listing)}</p>
+
+          {/* Hard facts */}
+          <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted">
+            <Fact value={listing.mileageKm != null ? km(listing.mileageKm) : "—"} />
+            {perYear && <span className="text-faint">{perYear.toLocaleString("en-CA")} km/yr</span>}
+            {listing.drivetrain !== "Unknown" && <Fact value={listing.drivetrain} />}
+            <span className="truncate text-faint">
+              {[listing.dealer, listing.city && `${listing.city}${listing.province ? `, ${listing.province}` : ""}`]
+                .filter(Boolean)
+                .join(" · ") || listing.sourceWebsite}
             </span>
           </div>
 
-          {listing.badges.length > 0 && (
+          {badges.length > 0 && (
             <div className="mt-2.5 flex flex-wrap gap-1.5">
-              {listing.badges.map((b) => (
+              {badges.map((b) => (
                 <Badge key={b} label={b} />
               ))}
             </div>
           )}
+
+          {/* Source + freshness, quiet and out of the reading path. */}
+          <p className="mt-2 text-[11px] text-faint sm:absolute sm:bottom-3 sm:right-4 sm:mt-0">
+            {listing.sourceWebsite} · {timeAgo(listing.firstSeenAt)}
+          </p>
         </div>
+      </Link>
+
+      {/* Actions sit outside the Link so they're real buttons in the tab order. */}
+      <div className="absolute right-2 top-2 flex items-center gap-1 sm:right-3 sm:top-3">
+        <IconButton
+          onClick={() => toggleCompare(listing.id)}
+          disabled={!comparing && !canAdd}
+          pressed={comparing}
+          title={comparing ? "Remove from comparison" : canAdd ? "Add to comparison" : "Comparison is full (3 cars)"}
+          label={comparing ? "Remove from comparison" : "Add to comparison"}
+          glyph="⇄"
+          activeClass="bg-brand/15 text-brand"
+        />
+        <IconButton
+          onClick={() => toggle(listing.dedupeKey)}
+          pressed={fav}
+          title={fav ? "Remove from saved" : "Save this car"}
+          label={fav ? "Remove from saved" : "Save this car"}
+          glyph={fav ? "♥" : "♡"}
+          activeClass="text-bad"
+        />
       </div>
-    </Link>
+    </article>
+  );
+}
+
+function IconButton({
+  onClick,
+  disabled,
+  pressed,
+  title,
+  label,
+  glyph,
+  activeClass,
+}: {
+  onClick: () => void;
+  disabled?: boolean;
+  pressed: boolean;
+  title: string;
+  label: string;
+  glyph: string;
+  activeClass: string;
+}) {
+  return (
+    <button
+      onClick={onClick}
+      disabled={disabled}
+      aria-pressed={pressed}
+      title={title}
+      className={`grid h-8 w-8 place-items-center rounded-full text-[15px] backdrop-blur-sm transition disabled:cursor-not-allowed disabled:opacity-30 ${
+        pressed ? activeClass : "text-muted hover:text-text"
+      }`}
+      style={{ backgroundColor: "color-mix(in oklab, var(--surface) 70%, transparent)" }}
+    >
+      <span aria-hidden>{glyph}</span>
+      <span className="sr-only">{label}</span>
+    </button>
   );
 }

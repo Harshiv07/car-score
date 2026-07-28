@@ -6,13 +6,50 @@
 
 import { test, expect } from "@playwright/test";
 
-test("leaderboard renders hero, KPI tiles and filters", async ({ page }) => {
+test("leaderboard renders its thesis, provenance line and filters", async ({ page }) => {
   await page.goto("/");
   await expect(page.locator("header").getByText("CARSCORE")).toBeVisible();
-  await expect(page.getByText("Listings scanned", { exact: false })).toBeVisible();
-  await expect(page.getByText("Average score", { exact: false })).toBeVisible();
-  await expect(page.getByRole("button", { name: /refresh/i })).toBeVisible();
+  await expect(page.getByRole("heading", { level: 1 })).toContainText(/look at first/i);
+  await expect(page.getByText(/listings/).first()).toBeVisible();
   await expect(page.getByLabel("Brand")).toBeVisible();
+});
+
+test("refresh lives in the header as a freshness control, not a page CTA", async ({ page }) => {
+  await page.goto("/");
+  const control = page.locator("header").getByRole("button", { name: /data freshness/i });
+  await expect(control).toBeVisible();
+
+  // It opens a popover rather than starting a crawl on a single click.
+  await control.click();
+  const panel = page.getByRole("dialog", { name: /data freshness/i });
+  await expect(panel).toBeVisible();
+  await expect(panel.getByRole("button", { name: /refresh now|available in|refreshing/i })).toBeVisible();
+
+  await page.keyboard.press("Escape");
+  await expect(panel).toBeHidden();
+});
+
+test("no horizontal overflow at a phone width", async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto("/");
+  const overflow = await page.evaluate(
+    () => document.documentElement.scrollWidth - document.documentElement.clientWidth
+  );
+  expect(overflow).toBeLessThanOrEqual(0);
+});
+
+test("filters move behind a drawer on mobile", async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto("/");
+
+  // The sidebar is hidden at this width; the drawer button is the way in.
+  await page.getByRole("button", { name: /^filters/i }).click();
+  const drawer = page.getByRole("dialog", { name: "Filters" });
+  await expect(drawer).toBeVisible();
+  await expect(drawer.getByLabel("Brand")).toBeVisible();
+
+  await page.keyboard.press("Escape");
+  await expect(drawer).toBeHidden();
 });
 
 test("brand filter writes make= into the URL", async ({ page }) => {
@@ -39,7 +76,7 @@ test("year-to only offers years >= year-from", async ({ page }) => {
 
 test("new cars tab navigates and renders its page", async ({ page }) => {
   await page.goto("/");
-  await page.getByRole("link", { name: "New Cars" }).click();
+  await page.getByRole("link", { name: "New cars" }).first().click();
   await expect(page).toHaveURL(/\/new-cars/);
   await expect(page.getByRole("heading", { level: 1 })).toContainText(/New\s*Cars/i);
 });
@@ -72,8 +109,8 @@ test("theme switch toggles dark mode", async ({ page }) => {
   await expect(html).toHaveClass(/dark/);
 });
 
-test("favourites page shows the empty state", async ({ page }) => {
+test("saved-cars page shows the empty state", async ({ page }) => {
   await page.goto("/favorites");
-  await expect(page.getByText("No favourites yet")).toBeVisible();
-  await expect(page.getByRole("link", { name: /browse listings/i })).toBeVisible();
+  await expect(page.getByText("Nothing saved yet")).toBeVisible();
+  await expect(page.getByRole("link", { name: /browse the leaderboard/i })).toBeVisible();
 });

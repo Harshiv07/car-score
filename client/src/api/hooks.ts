@@ -1,6 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { apiGet, apiPost } from "./client";
 import {
+  InventoryStats,
   ListingDetailResponse,
   ListingsResponse,
   MetaResponse,
@@ -17,32 +18,19 @@ export function useListings(params: URLSearchParams) {
   });
 }
 
-/** Aggregate stats for the leaderboard KPI row (whole inventory, best-savings first). */
+/**
+ * Inventory-wide aggregates for the leaderboard header.
+ *
+ * Computed server-side over the whole inventory. This used to be derived on the
+ * client from the first 100 results of `sort=deal`, which made "average score"
+ * the average of the best 100 cars and reported "1 source active" for a
+ * four-source inventory, because the top 100 deals all came from one site.
+ */
 export function useListingStats() {
   return useQuery({
     queryKey: ["listingStats"],
-    queryFn: () => apiGet<ListingsResponse>("/api/listings?pageSize=100&sort=deal"),
-    staleTime: 30_000,
-    select: (data) => {
-      const ls = data.listings;
-      const avgScore = ls.length ? Math.round(ls.reduce((s, l) => s + l.score.total, 0) / ls.length) : 0;
-      const best = ls.reduce<(typeof ls)[number] | null>(
-        (b, l) => (l.score.market.savings > (b?.score.market.savings ?? -Infinity) ? l : b),
-        null
-      );
-      const sources = new Set(ls.map((l) => l.sourceWebsite));
-      return {
-        totalListings: data.totalUnfiltered,
-        avgScore,
-        bestSavings: best && best.score.market.savings > 0 ? best.score.market.savings : 0,
-        bestSavingsTitle: best?.title ?? null,
-        sourcesActive: sources.size,
-        // Keys of the loaded set; `complete` means it's the whole inventory
-        // (so favourites-pruning against it is safe).
-        keys: ls.map((l) => l.dedupeKey),
-        complete: data.totalUnfiltered <= ls.length,
-      };
-    },
+    queryFn: () => apiGet<InventoryStats>("/api/listings/stats"),
+    staleTime: 60_000,
   });
 }
 

@@ -1,33 +1,34 @@
-import { useEffect, useMemo } from "react";
+import { useMemo, useState } from "react";
+import { motion } from "framer-motion";
 import { useSearchParams } from "react-router-dom";
 import { useListings, useListingStats, useMeta, useScrapeStatus } from "../api/hooks";
 import { FiltersSidebar } from "../components/FiltersSidebar";
+import { FilterDrawer } from "../components/FilterDrawer";
 import { ListingCard } from "../components/ListingCard";
+import { TopPick } from "../components/TopPick";
 import { Pagination } from "../components/Pagination";
-import { RefreshButton } from "../components/RefreshButton";
-import { Wordmark } from "../App";
-import { useFavorites } from "../hooks/useFavorites";
+import { CompareTray } from "../components/CompareTray";
 import { cad, Select, timeAgo } from "../components/ui";
 
 const DEFAULT_PAGE_SIZE = 10;
 
+/** Params that aren't filters, for counting how many filters are actually on. */
+const NON_FILTER_PARAMS = ["sort", "page", "pageSize"];
+
 export function LeaderboardPage() {
   const [params, setParams] = useSearchParams();
+  const [drawerOpen, setDrawerOpen] = useState(false);
+
   const queryParams = useMemo(() => {
     const p = new URLSearchParams(params);
     if (!p.has("pageSize")) p.set("pageSize", String(DEFAULT_PAGE_SIZE));
     return p;
   }, [params]);
+
   const { data, isLoading, isError, error } = useListings(queryParams);
   const { data: meta } = useMeta();
   const { data: stats } = useListingStats();
   const { data: scrape } = useScrapeStatus();
-  const { prune } = useFavorites();
-
-  // Keep the header favourites count honest once we've seen the whole inventory.
-  useEffect(() => {
-    if (stats?.complete) prune(stats.keys);
-  }, [stats, prune]);
 
   const setParam = (key: string, value: string) => {
     setParams(
@@ -51,70 +52,102 @@ export function LeaderboardPage() {
   };
 
   const sort = params.get("sort") ?? "score";
-  const cooldownMin = Math.ceil((scrape?.cooldownSecondsRemaining ?? 0) / 60);
+  const activeFilters = [...params.keys()].filter((k) => !NON_FILTER_PARAMS.includes(k)).length;
+  const clearAll = () => setParams(new URLSearchParams(sort !== "score" ? { sort } : {}), { replace: true });
+
+  const page = data?.page ?? 1;
+  const isFiltered = activeFilters > 0;
+  // The hero answers the current question, so it only leads the first page of
+  // the default ranking — under an explicit sort the list itself is the answer.
+  const hero = page === 1 && sort === "score" ? data?.listings[0] : undefined;
+  const rest = hero ? data?.listings.slice(1) : data?.listings;
 
   return (
     <div className="mx-auto max-w-7xl px-4 py-8">
-      {/* Hero */}
-      <div className="fade-up">
-        <Wordmark className="text-4xl sm:text-5xl" />
-        <p className="mt-3 max-w-xl text-sm leading-relaxed text-muted">
-          Best-value first cars, ranked by reliability, market value, winter capability and ownership cost —
-          not just the lowest price.
+      {/* Thesis — the question this page answers, not a second wordmark. */}
+      <header className="fade-up max-w-2xl">
+        <h1 className="font-display text-3xl font-extrabold leading-[1.1] tracking-tight text-text sm:text-[42px]">
+          Which used car should you
+          <br className="hidden sm:block" /> actually look at first?
+        </h1>
+        <p className="mt-3 text-sm leading-relaxed text-muted">
+          Every listing scored out of 100 on reliability, real market value, winter capability and what it costs to
+          run — so the ranking reflects the car, not the asking price.
         </p>
-      </div>
 
-      {/* KPI row */}
-      <div className="mt-6 grid grid-cols-2 gap-3 lg:grid-cols-4">
-        <StatTile
-          label="Listings scanned"
-          value={stats ? String(stats.totalListings) : "—"}
-          sub={stats ? `${stats.sourcesActive} source${stats.sourcesActive === 1 ? "" : "s"} active` : ""}
-        />
-        <StatTile label="Average score" value={stats ? String(stats.avgScore) : "—"} sub="out of 100" tone="brand" />
-        <StatTile
-          label="Best savings found"
-          value={stats && stats.bestSavings > 0 ? cad(stats.bestSavings) : "—"}
-          sub={stats?.bestSavingsTitle ?? ""}
-          tone="good"
-        />
-        <StatTile
-          label="Last refresh"
-          value={scrape?.lastScrapeTime ? timeAgo(scrape.lastScrapeTime) : "never"}
-          sub={cooldownMin > 0 ? `cooldown clears in ${cooldownMin}m` : "ready to refresh"}
-        />
-      </div>
+        {/* Provenance, as one honest line rather than four decorative tiles. */}
+        <div className="mt-4 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-faint">
+          {stats ? (
+            <>
+              <Metric value={stats.totalListings.toLocaleString("en-CA")} label="listings" />
+              <Dot />
+              <Metric value={String(stats.sourcesActive)} label={stats.sourcesActive === 1 ? "source" : "sources"} />
+              <Dot />
+              <Metric value={String(stats.excellentDeals)} label="rated excellent" />
+              {stats.bestSavings > 0 && (
+                <>
+                  <Dot />
+                  <span>
+                    best find <span className="nums font-semibold text-good">{cad(stats.bestSavings)}</span> under
+                    market
+                  </span>
+                </>
+              )}
+              <Dot />
+              <span>refreshed {scrape?.lastScrapeTime ? timeAgo(scrape.lastScrapeTime) : "never"}</span>
+            </>
+          ) : (
+            <span className="inline-block h-4 w-72 max-w-full animate-pulse rounded bg-surface" />
+          )}
+        </div>
+      </header>
 
-      <div className="mt-8 grid grid-cols-1 gap-6 lg:grid-cols-[260px_1fr]">
-        <div className="rounded-2xl border border-line bg-surface p-4 lg:sticky lg:top-20 lg:self-start">
-          <FiltersSidebar
-            meta={meta}
-            params={params}
-            onChange={setParam}
-            onClear={() => setParams(new URLSearchParams(sort !== "score" ? { sort } : {}), { replace: true })}
-          />
+      {/* Hero: the best match for the current query. */}
+      {hero && (
+        <div className="mt-7">
+          <TopPick listing={hero} />
+        </div>
+      )}
+
+      <div className="mt-8 grid grid-cols-1 gap-6 lg:grid-cols-[264px_1fr]">
+        {/* Desktop filters. On mobile these live in the drawer instead, so the
+            first thing under the header is a car and not a control panel. */}
+        <div className="hidden rounded-2xl border border-line bg-surface p-4 lg:sticky lg:top-20 lg:block lg:self-start">
+          <FiltersSidebar meta={meta} params={params} onChange={setParam} onClear={clearAll} />
         </div>
 
-        <div>
+        <div id="results">
           <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
-            <p className="text-sm text-muted">
+            <p className="text-sm text-muted" aria-live="polite">
               {data ? (
                 <>
-                  <span className="nums font-bold text-text">{data.total}</span>
-                  {" of "}
-                  <span className="nums">{data.totalUnfiltered}</span> listings
+                  <span className="nums font-bold text-text">{data.total.toLocaleString("en-CA")}</span>
+                  {isFiltered ? (
+                    <>
+                      {" of "}
+                      <span className="nums">{data.totalUnfiltered.toLocaleString("en-CA")}</span> cars match
+                    </>
+                  ) : (
+                    " cars ranked"
+                  )}
                 </>
               ) : (
                 "Loading…"
               )}
             </p>
+
             <div className="flex items-center gap-2">
-              <RefreshButton />
+              <button
+                onClick={() => setDrawerOpen(true)}
+                className="rounded-lg border border-line bg-surface px-3 py-2 text-sm font-semibold text-text transition hover:border-line-strong lg:hidden"
+              >
+                Filters{activeFilters > 0 ? ` (${activeFilters})` : ""}
+              </button>
               <div className="flex items-center gap-2 text-sm text-muted">
                 <span className="hidden sm:inline">Sort</span>
                 <Select
                   ariaLabel="Sort"
-                  className="w-44"
+                  className="w-40 sm:w-44"
                   value={sort}
                   options={(meta?.sortOptions ?? [{ key: "score", label: "Best Score" }]).map((o) => ({
                     value: o.key,
@@ -127,28 +160,56 @@ export function LeaderboardPage() {
           </div>
 
           {isError && (
-            <div className="rounded-2xl border border-bad/40 bg-bad/10 p-4 text-sm text-bad">
-              Failed to load listings: {(error as Error).message}
+            <div className="rounded-2xl border border-bad/40 bg-bad/10 p-5">
+              <p className="text-sm font-semibold text-bad">Couldn't load listings.</p>
+              <p className="mt-1 text-sm text-muted">{(error as Error).message}</p>
+              <p className="mt-2 text-sm text-muted">
+                The API may still be starting up. Reload the page, or run a refresh once it's back.
+              </p>
             </div>
           )}
 
           {isLoading && (
-            <div className="space-y-3">
+            <div className="space-y-3" aria-label="Loading listings">
               {Array.from({ length: 6 }).map((_, i) => (
-                <div key={i} className="h-28 animate-pulse rounded-2xl bg-surface" />
+                <div key={i} className="h-36 animate-pulse rounded-2xl bg-surface" />
               ))}
             </div>
           )}
 
           {data && data.listings.length === 0 && (
-            <div className="rounded-2xl border border-line bg-surface p-10 text-center text-muted">
-              No listings match these filters.
+            <div className="rounded-2xl border border-line bg-surface p-10 text-center">
+              <p className="font-display text-lg font-bold text-text">No cars match these filters.</p>
+              <p className="mx-auto mt-1.5 max-w-sm text-sm text-muted">
+                Widen the price or mileage range, or drop the brand filter to see what else is close.
+              </p>
+              {isFiltered && (
+                <button
+                  onClick={clearAll}
+                  className="mt-4 rounded-lg bg-brand px-4 py-2 text-sm font-bold transition hover:bg-brand-strong"
+                  style={{ color: "var(--on-brand)" }}
+                >
+                  Clear all filters
+                </button>
+              )}
             </div>
           )}
 
+          {/* Cards settle in sequence rather than snapping in as a block. The
+              stagger is capped so a full page never feels like it's queueing. */}
           <div className="space-y-3">
-            {data?.listings.map((l, i) => (
-              <ListingCard key={l.id} listing={l} rank={(data.page - 1) * data.pageSize + i + 1} />
+            {rest?.map((l, i) => (
+              <motion.div
+                key={l.id}
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.28, delay: Math.min(i * 0.035, 0.28), ease: [0.4, 0, 0.2, 1] }}
+              >
+                <ListingCard
+                  listing={l}
+                  rank={(page - 1) * (data?.pageSize ?? DEFAULT_PAGE_SIZE) + i + 1 + (hero ? 1 : 0)}
+                />
+              </motion.div>
             ))}
           </div>
 
@@ -172,27 +233,24 @@ export function LeaderboardPage() {
           )}
         </div>
       </div>
+
+      <FilterDrawer open={drawerOpen} onClose={() => setDrawerOpen(false)} activeCount={activeFilters}>
+        <FiltersSidebar meta={meta} params={params} onChange={setParam} onClear={clearAll} />
+      </FilterDrawer>
+
+      <CompareTray />
     </div>
   );
 }
 
-function StatTile({
-  label,
-  value,
-  sub,
-  tone,
-}: {
-  label: string;
-  value: string;
-  sub?: string;
-  tone?: "brand" | "good";
-}) {
-  const color = tone === "brand" ? "text-brand" : tone === "good" ? "text-good" : "text-text";
+function Metric({ value, label }: { value: string; label: string }) {
   return (
-    <div className="rounded-2xl border border-line bg-surface p-4">
-      <div className="text-[11px] font-semibold uppercase tracking-wide text-faint">{label}</div>
-      <div className={`nums font-display mt-1 text-2xl font-bold ${color}`}>{value}</div>
-      {sub && <div className="mt-0.5 truncate text-[11px] text-faint" title={sub}>{sub}</div>}
-    </div>
+    <span>
+      <span className="nums font-semibold text-text">{value}</span> {label}
+    </span>
   );
+}
+
+function Dot() {
+  return <span aria-hidden>·</span>;
 }

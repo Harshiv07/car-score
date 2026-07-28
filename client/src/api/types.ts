@@ -84,6 +84,19 @@ export interface ListingsResponse {
   listings: ScoredListing[];
 }
 
+/** GET /api/listings/stats — aggregates over the whole inventory. */
+export interface InventoryStats {
+  totalListings: number;
+  avgScore: number;
+  sourcesActive: number;
+  dealerCount: number;
+  excellentDeals: number;
+  bestSavings: number;
+  bestSavingsTitle: string | null;
+  bestSavingsId: string | null;
+  withPhoto: number;
+}
+
 export interface KnownIssue {
   title: string;
   severity: "minor" | "moderate" | "major";
