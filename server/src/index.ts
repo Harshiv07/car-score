@@ -12,14 +12,32 @@ import { getStorage } from "./db/storage";
 const PORT = Number(process.env.PORT ?? 4000);
 
 /**
- * Allowed browser origins. `CORS_ORIGIN` takes a comma-separated list; with it
- * unset we stay open, which is right for local dev and for a public read-only
- * API, but production deployments should pin it to the client origin.
+ * Allowed browser origins.
+ *
+ * `CORS_ORIGIN` takes a comma-separated list and replaces the defaults
+ * entirely. The defaults are a real allowlist rather than "reflect whatever
+ * Origin you sent" — an unset env var shouldn't silently mean "open to
+ * everyone", which is what a bare `origin: true` does.
+ *
+ * The regex covers this project's Vercel preview deployments, whose hostnames
+ * are generated per branch; it's anchored to the project and account so it
+ * can't match an arbitrary *.vercel.app site.
  */
-const ALLOWED_ORIGINS = (process.env.CORS_ORIGIN ?? "")
+const DEFAULT_ORIGINS: (string | RegExp)[] = [
+  "https://cargrade.vercel.app",
+  /^https:\/\/car-score-[a-z0-9-]+-pharshiv07-gmailcoms-projects\.vercel\.app$/,
+  "http://localhost:3000",
+  "http://localhost:4173",
+];
+
+const CONFIGURED_ORIGINS = (process.env.CORS_ORIGIN ?? "")
   .split(",")
   .map((s) => s.trim())
   .filter(Boolean);
+
+const ALLOWED_ORIGINS: (string | RegExp)[] = CONFIGURED_ORIGINS.length
+  ? CONFIGURED_ORIGINS
+  : DEFAULT_ORIGINS;
 
 async function main() {
   const storage = await getStorage();
@@ -31,11 +49,22 @@ async function main() {
   app.set("trust proxy", 1);
   app.disable("x-powered-by");
 
-  // Security headers. The API serves JSON to a separate origin and embeds
-  // nothing, so the restrictive resource policy costs us nothing.
+  // Security headers. This service returns JSON and nothing else — no HTML, no
+  // scripts, no embedded resources — so it gets the strictest CSP there is
+  // rather than none at all: deny every resource type outright. (Turning CSP
+  // off entirely is the weaker option and CodeQL is right to flag it; a
+  // `default-src 'none'` policy is both stricter and free here.)
   app.use(
     helmet({
-      contentSecurityPolicy: false, // no HTML is served from here
+      contentSecurityPolicy: {
+        useDefaults: false,
+        directives: {
+          "default-src": ["'none'"],
+          "frame-ancestors": ["'none'"],
+          "base-uri": ["'none'"],
+          "form-action": ["'none'"],
+        },
+      },
       crossOriginResourcePolicy: { policy: "cross-origin" },
     })
   );
@@ -44,7 +73,7 @@ async function main() {
 
   app.use(
     cors({
-      origin: ALLOWED_ORIGINS.length ? ALLOWED_ORIGINS : true,
+      origin: ALLOWED_ORIGINS,
       methods: ["GET", "POST"],
       maxAge: 86_400,
     })
