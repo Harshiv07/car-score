@@ -18,7 +18,7 @@
     "test:e2e": "npm run test:e2e -w client"
   },
   "devDependencies": {
-    "concurrently": "^9.1.0"
+    "concurrently": "^9.2.4"
   },
   "engines": {
     "node": ">=18"
