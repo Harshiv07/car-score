@@ -1,12 +1,13 @@
 import { useEffect, useState } from "react";
 import { NavLink, Route, Routes, useLocation } from "react-router-dom";
-import { AnimatePresence, motion } from "framer-motion";
+import { AnimatePresence, motion, useScroll, useSpring, useMotionValueEvent } from "framer-motion";
 import { LeaderboardPage } from "./pages/LeaderboardPage";
 import { DetailPage } from "./pages/DetailPage";
 import { FavoritesPage } from "./pages/FavoritesPage";
 import { NewCarsPage } from "./pages/NewCarsPage";
 import { ComparePage } from "./pages/ComparePage";
 import { RefreshControl } from "./components/RefreshControl";
+import { ScrollManager } from "./components/ScrollManager";
 import { useFavorites } from "./hooks/useFavorites";
 
 const THEME_KEY = "carscore:v2:theme";
@@ -77,6 +78,14 @@ export default function App() {
   const { count } = useFavorites();
   const location = useLocation();
 
+  // Scroll-linked chrome. `scrollYProgress` is a motion value, so the progress
+  // bar is driven off the compositor rather than a React state update per
+  // scroll event — the difference between a smooth bar and a stuttering one.
+  const { scrollY, scrollYProgress } = useScroll();
+  const progress = useSpring(scrollYProgress, { stiffness: 180, damping: 30, restDelta: 0.001 });
+  const [scrolled, setScrolled] = useState(false);
+  useMotionValueEvent(scrollY, "change", (y) => setScrolled(y > 8));
+
   const tab = ({ isActive }: { isActive: boolean }) =>
     `relative shrink-0 rounded-lg px-3 py-1.5 text-sm font-semibold transition ${
       isActive ? "text-brand" : "text-muted hover:text-text"
@@ -84,11 +93,17 @@ export default function App() {
 
   return (
     <div className="min-h-screen bg-bg text-text">
+      <ScrollManager />
+
       <a href="#main" className="skip-link">
         Skip to content
       </a>
 
-      <header className="sticky top-0 z-30 border-b border-line bg-bg/85 backdrop-blur-md">
+      <header
+        className={`sticky top-0 z-30 border-b bg-bg/85 backdrop-blur-md transition-[border-color,box-shadow] duration-300 ${
+          scrolled ? "border-line-strong/60 shadow-lg shadow-black/20" : "border-line shadow-none"
+        }`}
+      >
         <div className="relative mx-auto max-w-7xl px-4">
           <div className="flex items-center gap-3 py-3">
             <NavLink to="/" className="flex shrink-0 items-baseline gap-2">
@@ -123,6 +138,13 @@ export default function App() {
               <ThemeSwitch dark={dark} onToggle={() => setDark((d) => !d)} />
             </div>
           </div>
+
+          {/* How far through the page you are. Ambient, not a control. */}
+          <motion.div
+            className="pointer-events-none absolute inset-x-0 bottom-0 h-px origin-left bg-brand/70"
+            style={{ scaleX: progress }}
+            aria-hidden
+          />
 
           {/* Mobile nav row. */}
           <nav aria-label="Primary" className="-mx-4 flex items-center gap-1 overflow-x-auto px-4 pb-2 sm:hidden">

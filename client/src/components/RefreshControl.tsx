@@ -99,7 +99,7 @@ export function RefreshControl() {
           // contains the visible text so voice control can target it.
           aria-label={`Data freshness — ${statusText}`}
           title="Data freshness"
-          className="flex items-center gap-2 rounded-lg border border-line bg-surface px-2.5 py-1.5 text-xs font-semibold text-muted transition hover:border-line-strong hover:text-text"
+          className="flex min-h-9 min-w-9 items-center justify-center gap-2 rounded-lg border border-line bg-surface px-2.5 py-1.5 text-xs font-semibold text-muted transition hover:border-line-strong hover:text-text"
         >
           <motion.span
             aria-hidden

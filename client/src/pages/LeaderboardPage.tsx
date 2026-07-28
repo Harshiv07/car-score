@@ -197,7 +197,7 @@ export function LeaderboardPage() {
 
           {/* Cards settle in sequence rather than snapping in as a block. The
               stagger is capped so a full page never feels like it's queueing. */}
-          <div className="space-y-3">
+          <div className="card-list space-y-3">
             {rest?.map((l, i) => (
               <motion.div
                 key={l.id}
