@@ -3,6 +3,7 @@ import { useListingDetail } from "../api/hooks";
 import { ListingCard } from "../components/ListingCard";
 import { CarPhoto } from "../components/CarPhoto";
 import { PaymentEstimate } from "../components/PaymentEstimate";
+import { AnimatedNumber, FillBar } from "../components/motion";
 import { useFavorites } from "../hooks/useFavorites";
 import { whyLine, scoreBand, kmPerYear } from "../lib/whyLine";
 import { Badge, cad, DealPill, isRecent, km, NewBadge, scoreHex, Stars, timeAgo } from "../components/ui";
@@ -89,15 +90,16 @@ export function DetailPage() {
             {l.sourceWebsite}
           </p>
 
-          {/* Score, stated as a verdict rather than a chip. */}
+          {/* Score, stated as a verdict rather than a chip. It counts up on
+              arrival — the number is a measurement, and watching it settle says
+              so more honestly than printing it fully formed. */}
           <div className="mt-5 flex items-end gap-4 border-y border-line py-4">
             <div className="leading-none">
-              <span
+              <AnimatedNumber
+                value={l.score.total}
                 className="nums font-display text-6xl font-extrabold"
                 style={{ color: scoreHex(l.score.total) }}
-              >
-                {Math.round(l.score.total)}
-              </span>
+              />
               <span className="ml-1 text-sm font-bold text-faint">/100</span>
             </div>
             <div className="pb-1">
@@ -167,8 +169,12 @@ export function DetailPage() {
         {/* Score breakdown — the reason anyone is on this page. */}
         <div className={card}>
           <h2 className={h2}>Why this score</h2>
+          {/* The bars fill in sequence rather than all at once: the total
+              visibly assembles from its categories, which is the one thing this
+              panel exists to explain. The stagger is capped so the last bar
+              isn't left waiting. */}
           <div className="space-y-3">
-            {l.score.breakdown.map((c) => {
+            {l.score.breakdown.map((c, i) => {
               const frac = c.max ? c.points / c.max : 0;
               const fill = frac >= 0.75 ? "bg-good" : frac >= 0.5 ? "bg-brand" : "bg-bad";
               return (
@@ -182,8 +188,8 @@ export function DetailPage() {
                       </span>
                     </span>
                   </div>
-                  <div className="mt-1 h-1.5 overflow-hidden rounded-full bg-surface2">
-                    <div className={`h-full rounded-full ${fill}`} style={{ width: `${frac * 100}%` }} />
+                  <div className="mt-1">
+                    <FillBar percent={frac * 100} className={fill} delay={Math.min(i * 0.06, 0.5)} height={6} />
                   </div>
                   <p className="mt-1 text-xs text-muted">{c.detail}</p>
                 </div>
@@ -202,9 +208,9 @@ export function DetailPage() {
           {ownership && (
             <div className={card}>
               <h2 className={h2}>Running costs, per year</h2>
-              <OwnershipBar label="Fuel" value={ownership.fuelAnnual} max={ownership.totalAnnual} />
-              <OwnershipBar label="Insurance" value={ownership.insuranceAnnual} max={ownership.totalAnnual} />
-              <OwnershipBar label="Maintenance" value={ownership.maintenanceAnnual} max={ownership.totalAnnual} />
+              <OwnershipBar label="Fuel" value={ownership.fuelAnnual} max={ownership.totalAnnual} index={0} />
+              <OwnershipBar label="Insurance" value={ownership.insuranceAnnual} max={ownership.totalAnnual} index={1} />
+              <OwnershipBar label="Maintenance" value={ownership.maintenanceAnnual} max={ownership.totalAnnual} index={2} />
               <div className="mt-3 flex items-baseline justify-between border-t border-line pt-3">
                 <span className="text-sm font-bold text-text">Total / year</span>
                 <span className="nums text-lg font-extrabold text-brand">{cad(ownership.totalAnnual)}</span>
@@ -306,7 +312,7 @@ export function DetailPage() {
   );
 }
 
-function OwnershipBar({ label, value, max }: { label: string; value: number; max: number }) {
+function OwnershipBar({ label, value, max, index = 0 }: { label: string; value: number; max: number; index?: number }) {
   const pct = max ? Math.min(100, (value / max) * 100) : 0;
   return (
     <div className="mb-2.5">
@@ -314,9 +320,7 @@ function OwnershipBar({ label, value, max }: { label: string; value: number; max
         <span className="text-muted">{label}</span>
         <span className="nums font-semibold text-text">{cad(value)}</span>
       </div>
-      <div className="h-2 overflow-hidden rounded-full bg-surface2">
-        <div className="h-full rounded-full bg-info" style={{ width: `${pct}%` }} />
-      </div>
+      <FillBar percent={pct} className="bg-info" delay={index * 0.08} height={8} />
     </div>
   );
 }
