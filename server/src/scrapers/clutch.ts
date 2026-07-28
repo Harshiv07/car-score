@@ -118,7 +118,13 @@ export function clutchToRaw(v: ClutchVehicle): RawVehicleRecord {
   const fuel = v.fuelType?.name ?? "";
   const year = v.year ?? "";
   // Deep-link to the exact vehicle detail page (e.g. clutch.ca/vehicles/111414).
-  const url = v.id != null ? `https://www.clutch.ca/vehicles/${v.id}` : "https://www.clutch.ca/cars";
+  //
+  // Null, not a generic /cars link, when the payload has no id. The listing URL
+  // is now part of a listing's identity (util/listingKeys.ts), so handing every
+  // id-less vehicle the same URL would make them all the same record and
+  // collapse a whole model's inventory into one row. Without an id we genuinely
+  // don't have this car's page, and saying so lets the composite key take over.
+  const url = v.id != null ? `https://www.clutch.ca/vehicles/${v.id}` : null;
   return {
     title: [year, make, model, trim].filter(Boolean).join(" "),
     make,
