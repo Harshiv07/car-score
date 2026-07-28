@@ -2,6 +2,7 @@ import mongoose, { Schema, model, Model } from "mongoose";
 import { Listing, ScrapeHistoryEntry } from "../types";
 import { Storage, UpsertResult } from "./storage";
 import { SEED_DEDUPE_KEYS } from "./seed";
+import { rekeyListings, withCurrentKeys } from "./rekey";
 import { VEHICLE_MODELS } from "../data/vehicleModels";
 
 /**
@@ -109,6 +110,44 @@ export class MongoStorage implements Storage {
     // One-time cleanup: remove any previously-seeded demo listings so the app
     // shows scraped inventory only. (No longer seeds on an empty DB.)
     await this.ListingM.deleteMany({ dedupeKey: { $in: [...SEED_DEDUPE_KEYS] } });
+
+    await this.migrateDedupeKeys();
+  }
+
+  /**
+   * Bring stored rows onto the current identity scheme (see db/rekey.ts).
+   * Idempotent: once every row's stored key equals its computed key this does
+   * nothing but one read, so it's safe to run on every boot.
+   */
+  private async migrateDedupeKeys(): Promise<void> {
+    const stored = await this.ListingM.find().lean<Listing[]>();
+    if (stored.length === 0) return;
+
+    const { rekeyed, merged, listings, removedIds } = rekeyListings(stored);
+    if (rekeyed === 0 && merged === 0) return;
+
+    // Drop the losers first — dedupeKey is uniquely indexed, so a survivor
+    // taking a duplicate's key would collide if the duplicate still existed.
+    if (removedIds.length > 0) {
+      await this.ListingM.deleteMany({ id: { $in: removedIds } });
+    }
+
+    const changed = listings.filter(
+      (l) => stored.find((s) => s.id === l.id)?.dedupeKey !== l.dedupeKey
+    );
+    if (changed.length > 0) {
+      await this.ListingM.bulkWrite(
+        changed.map((l) => ({
+          updateOne: {
+            filter: { id: l.id },
+            update: { $set: { dedupeKey: l.dedupeKey } },
+          },
+        }))
+      );
+    }
+
+    // eslint-disable-next-line no-console
+    console.log(`Listing keys migrated: ${rekeyed} re-keyed, ${merged} duplicate row(s) merged.`);
   }
 
   async getAllListings(): Promise<Listing[]> {
@@ -119,7 +158,9 @@ export class MongoStorage implements Storage {
     return this.ListingM.findOne({ id }).lean<Listing>();
   }
 
-  async upsertListings(listings: Listing[]): Promise<UpsertResult> {
+  async upsertListings(incoming: Listing[]): Promise<UpsertResult> {
+    // Never trust a caller-supplied dedupeKey — derive it here. See withCurrentKeys.
+    const listings = withCurrentKeys(incoming);
     let inserted = 0;
     let updated = 0;
     const now = new Date().toISOString();

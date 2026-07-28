@@ -181,7 +181,12 @@ test(
             totalCount: n,
             totalPages: 1,
             vehicles: Array.from({ length: n }, (_, j) => ({
-              id: j,
+              // Clutch ids are globally unique, not per-model. The mock used to
+              // restart at 0 for every model, so all ten models produced the
+              // same /vehicles/{id} URLs — which now correctly dedupe to one
+              // car each, making this look like a scraper failure. Namespacing
+              // by model reproduces what the real API returns.
+              id: `${model}-${j}`,
               year: 2022,
               make: { name: MODEL_TARGETS.find((x) => x.model === model)!.make },
               model: { name: model },

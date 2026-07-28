@@ -9,10 +9,11 @@ import { useSyncExternalStore } from "react";
 const KEY = "carscore:v2:favorites";
 const listeners = new Set<() => void>();
 
-// Favourites are keyed by a listing's stable dedupeKey ("vin:…" / "cmp:…").
-// Older builds stored regenerated ids ("lst_…"), which orphan on every scrape —
-// drop anything that isn't a dedupeKey so the count is never phantom.
-const isDedupeKey = (s: string) => /^(vin|cmp):/.test(s);
+// Favourites are keyed by a listing's stable dedupeKey — "vin:…", "url:…" or
+// "cmp:…". Older builds stored regenerated ids ("lst_…"), which orphan on every
+// scrape, so anything without a known prefix is dropped and the count is never
+// phantom. Keep this in sync with DEDUPE_PREFIXES in server/src/util/listingKeys.ts.
+const isDedupeKey = (s: string) => /^(vin|url|cmp):/.test(s);
 
 function read(): string[] {
   try {

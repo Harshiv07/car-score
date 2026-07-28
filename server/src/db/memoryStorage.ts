@@ -3,6 +3,7 @@ import path from "path";
 import { Listing, ScrapeHistoryEntry } from "../types";
 import { Storage, UpsertResult } from "./storage";
 import { SEED_DEDUPE_KEYS } from "./seed";
+import { rekeyListings, withCurrentKeys } from "./rekey";
 
 interface Snapshot {
   listings: Listing[];
@@ -42,7 +43,22 @@ export class MemoryStorage implements Storage {
     // shows scraped inventory only.
     const before = this.data.listings.length;
     this.data.listings = this.data.listings.filter((l) => !SEED_DEDUPE_KEYS.has(l.dedupeKey));
-    if (this.data.listings.length !== before) await this.flush();
+    let dirty = this.data.listings.length !== before;
+
+    // Bring stored rows onto the current identity scheme. Without this, rows
+    // written under the old key would never match a freshly scraped listing and
+    // the next run would duplicate the whole inventory.
+    const rekey = rekeyListings(this.data.listings);
+    if (rekey.rekeyed > 0 || rekey.merged > 0) {
+      this.data.listings = rekey.listings;
+      dirty = true;
+      // eslint-disable-next-line no-console
+      console.log(
+        `Listing keys migrated: ${rekey.rekeyed} re-keyed, ${rekey.merged} duplicate row(s) merged.`
+      );
+    }
+
+    if (dirty) await this.flush();
   }
 
   private async flush(): Promise<void> {
@@ -57,7 +73,9 @@ export class MemoryStorage implements Storage {
     return this.data.listings.find((l) => l.id === id) ?? null;
   }
 
-  async upsertListings(listings: Listing[]): Promise<UpsertResult> {
+  async upsertListings(incoming: Listing[]): Promise<UpsertResult> {
+    // Never trust a caller-supplied dedupeKey — derive it here. See withCurrentKeys.
+    const listings = withCurrentKeys(incoming);
     const byKey = new Map(this.data.listings.map((l) => [l.dedupeKey, l]));
     let inserted = 0;
     let updated = 0;
