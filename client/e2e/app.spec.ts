@@ -41,13 +41,29 @@ test("refresh lives in the header as a freshness control, not a page CTA", async
   await expect(panel).toBeHidden();
 });
 
-test("no horizontal overflow at a phone width", async ({ page }) => {
+test("no horizontal overflow at any common width", async ({ page }) => {
+  // 768px used to overflow: the top-pick hero went two-column at `md`, which
+  // squeezed its title column to ~84px and pushed the panel off-screen.
+  for (const width of [320, 360, 390, 414, 640, 768, 1024, 1280]) {
+    await page.setViewportSize({ width, height: 900 });
+    await page.goto("/");
+    const overflow = await page.evaluate(
+      () => document.documentElement.scrollWidth - document.documentElement.clientWidth
+    );
+    expect(overflow, `horizontal overflow at ${width}px`).toBeLessThanOrEqual(0);
+  }
+});
+
+test("no text is rendered below 10px", async ({ page }) => {
+  // The score's "/100" label was 8px, with a further 40-odd elements at 10px.
   await page.setViewportSize({ width: 390, height: 844 });
   await page.goto("/");
-  const overflow = await page.evaluate(
-    () => document.documentElement.scrollWidth - document.documentElement.clientWidth
+  const tiny = await page.evaluate(() =>
+    [...document.querySelectorAll("body *")].filter(
+      (el) => el.children.length === 0 && el.textContent?.trim() && parseFloat(getComputedStyle(el).fontSize) < 10
+    ).length
   );
-  expect(overflow).toBeLessThanOrEqual(0);
+  expect(tiny).toBe(0);
 });
 
 test("filters move behind a drawer on mobile", async ({ page }) => {

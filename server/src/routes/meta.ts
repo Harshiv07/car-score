@@ -14,6 +14,8 @@ metaRouter.get("/", async (_req, res) => {
     const listings = await storage.getAllListings();
     const uniq = (xs: (string | null)[]) => [...new Set(xs.filter((x): x is string => !!x))].sort();
 
+    // Filter options change only when inventory does.
+    res.set("Cache-Control", "public, max-age=60, stale-while-revalidate=600");
     res.json({
       brands: uniq(VEHICLE_MODELS.map((m) => m.make)),
       models: VEHICLE_MODELS.map((m) => ({ make: m.make, model: m.model, body: m.body })),

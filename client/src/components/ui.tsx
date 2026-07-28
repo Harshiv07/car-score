@@ -75,7 +75,7 @@ export function ScoreSpine({ total, rank }: { total: number; rank?: number }) {
         <span className="nums font-display text-[26px] font-extrabold sm:text-[30px]" style={{ color: hex }}>
           {n}
         </span>
-        <span className="mt-0.5 text-[8px] font-bold uppercase tracking-[0.14em] text-faint">/100</span>
+        <span className="mt-0.5 text-[10px] font-bold uppercase tracking-[0.12em] text-faint">/100</span>
       </div>
 
       {/* The rail, which fills from the bottom as the card scrolls into view —
