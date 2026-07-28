@@ -241,19 +241,6 @@ input[type="range"].range::-moz-range-thumb {
   animation: cs-shimmer 1.4s linear infinite;
 }
 
-/* Sheet slide-in for the mobile filter drawer. */
-@keyframes cs-sheet-in {
-  from {
-    transform: translateY(100%);
-  }
-  to {
-    transform: none;
-  }
-}
-.sheet-in {
-  animation: cs-sheet-in 0.28s cubic-bezier(0.32, 0.72, 0, 1) both;
-}
-
 /* Respect the OS setting: keep state changes, drop the movement. */
 @media (prefers-reduced-motion: reduce) {
   *,

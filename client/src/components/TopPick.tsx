@@ -1,6 +1,7 @@
 import { Link } from "react-router-dom";
 import { ScoredListing } from "../api/types";
 import { CarPhoto } from "./CarPhoto";
+import { AnimatedNumber } from "./motion";
 import { whyLine, scoreBand, kmPerYear } from "../lib/whyLine";
 import { quickMonthly } from "../lib/finance";
 import { cad, DealPill, km, scoreHex } from "./ui";
@@ -52,9 +53,11 @@ export function TopPick({ listing }: { listing: ScoredListing }) {
         <div className="flex flex-col justify-center gap-3 p-5 sm:p-7">
           <div className="flex items-start gap-4">
             <div className="leading-none">
-              <div className="nums font-display text-5xl font-extrabold sm:text-6xl" style={{ color: hex }}>
-                {n}
-              </div>
+              <AnimatedNumber
+                value={n}
+                className="nums font-display block text-5xl font-extrabold sm:text-6xl"
+                style={{ color: hex }}
+              />
               <div className="mt-1 text-[10px] font-bold uppercase tracking-[0.16em]" style={{ color: hex }}>
                 {scoreBand(listing.score.total)}
               </div>

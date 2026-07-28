@@ -1,4 +1,5 @@
 import { useEffect, useRef } from "react";
+import { AnimatePresence, motion } from "framer-motion";
 import { createPortal } from "react-dom";
 
 /**
@@ -69,21 +70,32 @@ export function FilterDrawer({
     };
   }, [open, onClose]);
 
-  if (!open) return null;
-
+  // AnimatePresence rather than the CSS keyframe it used to run: a sheet that
+  // animates in but vanishes on close feels broken, and only a presence
+  // wrapper can hold the node in the tree long enough to animate it out.
   return createPortal(
+    <AnimatePresence>
+      {open && (
     <div className="fixed inset-0 z-50 lg:hidden">
-      <div
+      <motion.div
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        exit={{ opacity: 0 }}
+        transition={{ duration: 0.2 }}
         className="absolute inset-0 bg-black/60 backdrop-blur-sm"
         onClick={onClose}
         aria-hidden
       />
-      <div
+      <motion.div
         ref={panelRef}
         role="dialog"
         aria-modal="true"
         aria-label="Filters"
-        className="sheet-in absolute inset-x-0 bottom-0 flex max-h-[85vh] flex-col rounded-t-3xl border-t border-line bg-surface"
+        initial={{ y: "100%" }}
+        animate={{ y: 0 }}
+        exit={{ y: "100%" }}
+        transition={{ type: "spring", stiffness: 340, damping: 34 }}
+        className="absolute inset-x-0 bottom-0 flex max-h-[85vh] flex-col rounded-t-3xl border-t border-line bg-surface"
       >
         <div className="flex items-center justify-between border-b border-line px-4 py-3">
           <h2 className="font-display text-base font-bold text-text">
@@ -108,8 +120,10 @@ export function FilterDrawer({
             Show results
           </button>
         </div>
-      </div>
-    </div>,
+      </motion.div>
+    </div>
+      )}
+    </AnimatePresence>,
     document.body
   );
 }
