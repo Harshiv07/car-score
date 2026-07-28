@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { DealRating } from "../api/types";
+import { FillRail } from "./motion";
 
 export const cad = (n: number) => `$${Math.round(n).toLocaleString("en-CA")}`;
 export const km = (n: number) => `${Math.round(n).toLocaleString("en-CA")} km`;
@@ -77,19 +78,12 @@ export function ScoreSpine({ total, rank }: { total: number; rank?: number }) {
         <span className="mt-0.5 text-[8px] font-bold uppercase tracking-[0.14em] text-faint">/100</span>
       </div>
 
-      {/* The rail. The unfilled track stays visible so the proportion reads —
-          at 87/100 a track-coloured remainder is the only thing distinguishing
-          it from a solid bar. aria-hidden: the numeral already announces it. */}
-      <div
-        className="relative w-1.5 flex-1 overflow-hidden rounded-full ring-1 ring-inset ring-line"
-        style={{ backgroundColor: "color-mix(in oklab, var(--line) 60%, transparent)" }}
-        aria-hidden
-      >
-        <div
-          className="absolute inset-x-0 bottom-0 rounded-full transition-[height] duration-500"
-          style={{ height: `${Math.max(4, Math.min(100, n))}%`, backgroundColor: hex }}
-        />
-      </div>
+      {/* The rail, which fills from the bottom as the card scrolls into view —
+          so the leaderboard draws its own bar chart as you move down it. The
+          unfilled track stays visible so the proportion reads: at 87/100 a
+          track-coloured remainder is the only thing distinguishing it from a
+          solid bar. aria-hidden: the numeral already announces the score. */}
+      <FillRail percent={n} color={hex} />
     </div>
   );
 }

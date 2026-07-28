@@ -1,4 +1,5 @@
 import { Link } from "react-router-dom";
+import { AnimatePresence, motion } from "framer-motion";
 import { ScoredListing } from "../api/types";
 import { useFavorites } from "../hooks/useFavorites";
 import { useCompare } from "../hooks/useCompare";
@@ -32,7 +33,14 @@ export function ListingCard({ listing, rank }: { listing: ScoredListing; rank?: 
   const badges = listing.badges.filter((b) => b !== listing.score.dealRating);
 
   return (
-    <article className="group relative overflow-hidden rounded-2xl border border-line bg-surface transition hover:border-brand/40 hover:shadow-lg hover:shadow-black/20">
+    // A small lift on hover so the row you are pointing at separates from the
+    // column. `whileHover` rather than a CSS transform so reduced-motion users
+    // get the border/shadow change without the movement.
+    <motion.article
+      whileHover={{ y: -2 }}
+      transition={{ type: "spring", stiffness: 400, damping: 30 }}
+      className="group relative overflow-hidden rounded-2xl border border-line bg-surface transition-[border-color,box-shadow] hover:border-brand/40 hover:shadow-lg hover:shadow-black/20"
+    >
       <Link
         to={`/listing/${listing.id}`}
         className="flex flex-col sm:flex-row sm:gap-4 sm:p-4"
@@ -150,7 +158,7 @@ export function ListingCard({ listing, rank }: { listing: ScoredListing; rank?: 
           activeClass="text-bad"
         />
       </div>
-    </article>
+    </motion.article>
   );
 }
 
@@ -172,18 +180,33 @@ function IconButton({
   activeClass: string;
 }) {
   return (
-    <button
+    <motion.button
       onClick={onClick}
       disabled={disabled}
       aria-pressed={pressed}
       title={title}
-      className={`grid h-8 w-8 place-items-center rounded-full text-[15px] backdrop-blur-sm transition disabled:cursor-not-allowed disabled:opacity-30 ${
+      whileTap={{ scale: 0.85 }}
+      transition={{ type: "spring", stiffness: 600, damping: 20 }}
+      className={`grid h-8 w-8 place-items-center rounded-full text-[15px] backdrop-blur-sm transition-colors disabled:cursor-not-allowed disabled:opacity-30 ${
         pressed ? activeClass : "text-muted hover:text-text"
       }`}
       style={{ backgroundColor: "color-mix(in oklab, var(--surface) 70%, transparent)" }}
     >
-      <span aria-hidden>{glyph}</span>
+      {/* Swapping the glyph on a key change gives the toggle a beat of its own,
+          so a save reads as an action rather than a silent style change. */}
+      <AnimatePresence mode="popLayout" initial={false}>
+        <motion.span
+          key={glyph}
+          initial={{ scale: 0.5, opacity: 0 }}
+          animate={{ scale: 1, opacity: 1 }}
+          exit={{ scale: 0.5, opacity: 0 }}
+          transition={{ duration: 0.15 }}
+          aria-hidden
+        >
+          {glyph}
+        </motion.span>
+      </AnimatePresence>
       <span className="sr-only">{label}</span>
-    </button>
+    </motion.button>
   );
 }
