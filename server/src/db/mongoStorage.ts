@@ -123,31 +123,45 @@ export class MongoStorage implements Storage {
     const stored = await this.ListingM.find().lean<Listing[]>();
     if (stored.length === 0) return;
 
-    const { rekeyed, merged, listings, removedIds } = rekeyListings(stored);
-    if (rekeyed === 0 && merged === 0) return;
-
-    // Drop the losers first — dedupeKey is uniquely indexed, so a survivor
-    // taking a duplicate's key would collide if the duplicate still existed.
-    if (removedIds.length > 0) {
-      await this.ListingM.deleteMany({ id: { $in: removedIds } });
+    const { rekeyed, collisions, listings } = rekeyListings(stored);
+    if (rekeyed === 0) {
+      if (collisions > 0) {
+        // eslint-disable-next-line no-console
+        console.warn(`Listing keys: ${collisions} row(s) left on their old key (key already taken).`);
+      }
+      return;
     }
 
-    const changed = listings.filter(
-      (l) => stored.find((s) => s.id === l.id)?.dedupeKey !== l.dedupeKey
-    );
-    if (changed.length > 0) {
-      await this.ListingM.bulkWrite(
-        changed.map((l) => ({
-          updateOne: {
-            filter: { id: l.id },
-            update: { $set: { dedupeKey: l.dedupeKey } },
-          },
-        }))
-      );
+    const byId = new Map(stored.map((s) => [s.id, s]));
+    const changed = listings.filter((l) => byId.get(l.id)?.dedupeKey !== l.dedupeKey);
+
+    // One row at a time, each guarded, and never a delete.
+    //
+    // The previous version deleted "duplicates" and then issued an ordered
+    // bulkWrite of the new keys. dedupeKey is uniquely indexed, so reassigning
+    // key K to row A while row B still held K threw mid-flight — which threw
+    // out of init(), exited the process, and had Render restart into the same
+    // migration, deleting a little more each pass. A startup migration must not
+    // be able to drain the collection it is migrating, so this one cannot
+    // delete at all and tolerates a failed write per row.
+    let applied = 0;
+    let skipped = 0;
+    for (const l of changed) {
+      try {
+        await this.ListingM.updateOne({ id: l.id }, { $set: { dedupeKey: l.dedupeKey } });
+        applied++;
+      } catch {
+        // Key taken by a row we have not reached yet: leave this one alone.
+        // The next upsert derives keys the same way and will reconcile it.
+        skipped++;
+      }
     }
 
     // eslint-disable-next-line no-console
-    console.log(`Listing keys migrated: ${rekeyed} re-keyed, ${merged} duplicate row(s) merged.`);
+    console.log(
+      `Listing keys migrated: ${applied} re-keyed, ${skipped} deferred, ${collisions} left on old key. ` +
+        `${stored.length} row(s) retained.`
+    );
   }
 
   async getAllListings(): Promise<Listing[]> {

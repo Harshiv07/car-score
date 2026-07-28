@@ -7,7 +7,7 @@
  */
 
 import { Drivetrain, FuelType, Listing } from "../types";
-import { finalizeListing } from "../util/listingKeys";
+import { finalizeListing, legacyDedupeKeyFor } from "../util/listingKeys";
 
 interface SeedRow {
   make: string;
@@ -179,5 +179,20 @@ export const SEED_LISTINGS: Listing[] = rows.map((r) =>
   })
 );
 
-/** Deterministic dedupe keys of the old seed rows, for one-time cleanup. */
-export const SEED_DEDUPE_KEYS: ReadonlySet<string> = new Set(SEED_LISTINGS.map((l) => l.dedupeKey));
+/**
+ * Keys of the old demo rows, for the one-time startup cleanup.
+ *
+ * Computed with the *legacy* key function, frozen here on purpose. These keys
+ * feed a `deleteMany`, and deriving them from the current scheme meant that
+ * changing how identity works silently changed what the cleanup deletes.
+ *
+ * Concretely: several seed rows use a category URL as their `listingUrl`
+ * (`autotrader.ca/cars/toyota/rav4`, `waynetoyota.com/vehicles/used`). Under
+ * the URL-first scheme those became `url:` keys that a real listing could
+ * plausibly share — pointing a delete-by-key at live inventory. Pinning them to
+ * the scheme the rows were actually written under removes that whole class of
+ * accident: the cleanup can only ever match rows the old code wrote.
+ */
+export const SEED_DEDUPE_KEYS: ReadonlySet<string> = new Set(
+  SEED_LISTINGS.map((l) => legacyDedupeKeyFor(l))
+);

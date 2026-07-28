@@ -122,6 +122,31 @@ export function dedupeKeyFor(l: DedupeInput): string {
  *  scheme so they can be re-keyed instead of duplicated. */
 export const DEDUPE_PREFIXES = ["vin:", "url:", "cmp:"] as const;
 
+/**
+ * The previous scheme: VIN, else a hash of year|make|model|trim|price|dealer.
+ *
+ * Kept only so the one-time seed cleanup can identify rows the *old* code wrote.
+ * Do not use it for new writes — it is the scheme this file exists to replace.
+ * It lives here, frozen, rather than being re-derived from the current function,
+ * because a delete-by-key whose keys move when the scheme moves is a way to
+ * delete live data by accident.
+ */
+export function legacyDedupeKeyFor(l: {
+  vin: string | null;
+  year: number;
+  make: string;
+  model: string;
+  trim: string | null;
+  price: number;
+  dealer: string | null;
+}): string {
+  if (l.vin && l.vin.trim().length >= 11) {
+    return `vin:${l.vin.trim().toUpperCase()}`;
+  }
+  const raw = [l.year, l.make, l.model, l.trim ?? "", l.price, l.dealer ?? ""].join("|").toLowerCase();
+  return `cmp:${createHash("sha1").update(raw).digest("hex").slice(0, 16)}`;
+}
+
 export function newListingId(): string {
   return `lst_${randomUUID().replace(/-/g, "").slice(0, 20)}`;
 }
