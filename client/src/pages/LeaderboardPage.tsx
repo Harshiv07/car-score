@@ -1,18 +1,18 @@
 import { useMemo, useState } from "react";
-import { motion } from "framer-motion";
 import { useSearchParams } from "react-router-dom";
-import { useInfiniteListings, useListingStats, useMeta, useScrapeStatus } from "../api/hooks";
+import { useListings, useListingStats, useMeta, useScrapeStatus } from "../api/hooks";
 import { FiltersSidebar } from "../components/FiltersSidebar";
 import { FilterDrawer } from "../components/FilterDrawer";
 import { ListingCard } from "../components/ListingCard";
 import { TopPick } from "../components/TopPick";
 import { CompareTray } from "../components/CompareTray";
-import { InfiniteSentinel } from "../components/InfiniteSentinel";
+import { Pagination } from "../components/Pagination";
+import { ScrollReveal } from "../components/ScrollReveal";
 import { cad, Select, timeAgo } from "../components/ui";
 
 const DEFAULT_PAGE_SIZE = 12;
 
-/** How many cars arrive per batch. Kept in the URL so a chosen size survives a
+/** How many cars a page holds. Kept in the URL so a chosen size survives a
  *  reload and travels with a shared link, like every other view setting here. */
 const PAGE_SIZES = [12, 24, 48] as const;
 
@@ -30,31 +30,14 @@ export function LeaderboardPage() {
 
   const pageSize = readPageSize(params);
 
-  // `page` is owned by the infinite query; `pageSize` is the reader's choice and
-  // is passed to it explicitly, so neither belongs in the filter key.
   const queryParams = useMemo(() => {
     const p = new URLSearchParams(params);
-    p.delete("page");
-    p.delete("pageSize");
+    p.set("pageSize", String(pageSize));
     return p;
-  }, [params]);
+  }, [params, pageSize]);
 
-  const {
-    data: pages,
-    isLoading,
-    isError,
-    error,
-    fetchNextPage,
-    hasNextPage,
-    isFetchingNextPage,
-  } = useInfiniteListings(queryParams, pageSize);
-
-  // Flattened view of every page loaded so far.
-  const first = pages?.pages[0];
-  const listings = useMemo(() => pages?.pages.flatMap((p) => p.listings) ?? [], [pages]);
-  const data = first
-    ? { total: first.total, totalUnfiltered: first.totalUnfiltered, listings, page: 1, pageSize }
-    : undefined;
+  const { data, isLoading, isError, error } = useListings(queryParams);
+  const listings = data?.listings ?? [];
   const { data: meta } = useMeta();
   const { data: stats } = useListingStats();
   const { data: scrape } = useScrapeStatus();
@@ -85,9 +68,10 @@ export function LeaderboardPage() {
   const clearAll = () => setParams(new URLSearchParams(sort !== "score" ? { sort } : {}), { replace: true });
 
   const isFiltered = activeFilters > 0;
-  // The hero answers the current question. Under an explicit sort the list
-  // itself is the answer, so it steps aside.
-  const hero = sort === "score" ? listings[0] : undefined;
+  const page = data?.page ?? 1;
+  // The hero answers the current question, so it leads the first page of the
+  // default ranking. Under an explicit sort, or deeper in, the list is the answer.
+  const hero = page === 1 && sort === "score" ? listings[0] : undefined;
   const rest = hero ? listings.slice(1) : listings;
 
   return (
@@ -158,10 +142,7 @@ export function LeaderboardPage() {
                   ) : (
                     " cars ranked"
                   )}
-                  <span className="text-faint">
-                    {" · showing "}
-                    <span className="nums">{listings.length.toLocaleString("en-CA")}</span>
-                  </span>
+
                 </>
               ) : (
                 "Loading…"
@@ -178,7 +159,7 @@ export function LeaderboardPage() {
               <div className="hidden items-center gap-2 text-sm text-muted sm:flex">
                 <span className="hidden lg:inline">Show</span>
                 <Select
-                  ariaLabel="Listings per batch"
+                  ariaLabel="Listings per page"
                   className="w-[5.5rem]"
                   value={String(pageSize)}
                   options={PAGE_SIZES.map((n) => ({ value: String(n), label: String(n) }))}
@@ -255,28 +236,38 @@ export function LeaderboardPage() {
             </div>
           )}
 
-          {/* Cards settle in sequence rather than snapping in as a block. The
-              stagger is capped so a full page never feels like it's queueing. */}
+          {/* Cards rise into view as you scroll past them. Whatever is already
+              on screen shows at once — only the rows below animate — so the
+              first paint is the page, not an empty column filling itself in.
+              The small stagger applies to that first screen; past it each card
+              is triggered by its own position. */}
           <div className="card-list space-y-3">
             {rest?.map((l, i) => (
-              <motion.div
-                key={l.id}
-                initial={{ opacity: 0, y: 10 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.28, delay: Math.min((i % pageSize) * 0.035, 0.28), ease: [0.4, 0, 0.2, 1] }}
-              >
-                <ListingCard listing={l} rank={i + 1 + (hero ? 1 : 0)} />
-              </motion.div>
+              <ScrollReveal key={l.id} delay={Math.min(i * 0.03, 0.18)}>
+                <ListingCard listing={l} rank={(page - 1) * pageSize + i + 1 + (hero ? 1 : 0)} />
+              </ScrollReveal>
             ))}
           </div>
 
           {data && (
-            <InfiniteSentinel
-              hasMore={!!hasNextPage}
-              isLoading={isFetchingNextPage}
-              onLoadMore={() => void fetchNextPage()}
-              remaining={Math.max(0, data.total - listings.length)}
-              batchSize={pageSize}
+            <Pagination
+              page={page}
+              pageSize={pageSize}
+              total={data.total}
+              onPage={(p) => {
+                setParams(
+                  (prev) => {
+                    const next = new URLSearchParams(prev);
+                    if (p <= 1) next.delete("page");
+                    else next.set("page", String(p));
+                    return next;
+                  },
+                  { replace: true }
+                );
+                // A new page is a new list: start it at the top of the results
+                // rather than wherever the previous page happened to leave you.
+                document.getElementById("results")?.scrollIntoView({ block: "start" });
+              }}
             />
           )}
         </div>
