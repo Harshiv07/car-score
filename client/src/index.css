@@ -95,6 +95,9 @@
 
 html {
   scrollbar-gutter: stable;
+  /* Anchor jumps (the skip link, in-page links) glide instead of teleporting.
+     Programmatic scroll restoration suspends this — see ScrollManager. */
+  scroll-behavior: smooth;
 }
 
 body {
@@ -105,6 +108,14 @@ body {
   text-rendering: optimizelegibility;
   /* Nothing in this layout is meant to scroll sideways. */
   overflow-x: hidden;
+}
+
+/* Long result lists: let the browser skip layout and paint for cards that are
+   nowhere near the viewport. `contain-intrinsic-size` supplies a placeholder
+   height so the scrollbar stays honest and scrolling doesn't jump. */
+.card-list > * {
+  content-visibility: auto;
+  contain-intrinsic-size: auto 150px;
 }
 
 /* Tabular figures for prices/scores/mileage so columns don't jitter. */

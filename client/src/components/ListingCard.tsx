@@ -3,6 +3,7 @@ import { AnimatePresence, motion } from "framer-motion";
 import { ScoredListing } from "../api/types";
 import { useFavorites } from "../hooks/useFavorites";
 import { useCompare } from "../hooks/useCompare";
+import { usePrefetchListing } from "../api/hooks";
 import { CarPhoto } from "./CarPhoto";
 import { whyLine, kmPerYear } from "../lib/whyLine";
 import { quickMonthly } from "../lib/finance";
@@ -28,6 +29,7 @@ export function ListingCard({ listing, rank }: { listing: ScoredListing; rank?: 
   const fav = isFavorite(listing.dedupeKey);
   const comparing = inCompare(listing.id);
   const perYear = kmPerYear(listing);
+  const prefetch = usePrefetchListing();
 
   // The deal rating is already a pill; drop the duplicate badge.
   const badges = listing.badges.filter((b) => b !== listing.score.dealRating);
@@ -37,6 +39,10 @@ export function ListingCard({ listing, rank }: { listing: ScoredListing; rank?: 
     // column. `whileHover` rather than a CSS transform so reduced-motion users
     // get the border/shadow change without the movement.
     <motion.article
+      // Hovering a card is a reliable signal it is about to be opened, and the
+      // detail request is the whole wait. Warm it now; the click then paints.
+      onPointerEnter={() => prefetch(listing.id)}
+      onFocusCapture={() => prefetch(listing.id)}
       whileHover={{ y: -2 }}
       transition={{ type: "spring", stiffness: 400, damping: 30 }}
       className="group relative overflow-hidden rounded-2xl border border-line bg-surface transition-[border-color,box-shadow] hover:border-brand/40 hover:shadow-lg hover:shadow-black/20"
@@ -69,11 +75,11 @@ export function ListingCard({ listing, rank }: { listing: ScoredListing; rank?: 
               style={{ color: scoreHex(listing.score.total), backgroundColor: "color-mix(in oklab, var(--bg) 78%, transparent)" }}
             >
               {Math.round(listing.score.total)}
-              <span className="text-[10px] font-bold text-faint">/100</span>
+              <span className="text-[11px] font-bold text-faint">/100</span>
             </span>
             {rank != null && (
               <span
-                className="nums rounded-md px-1.5 py-0.5 text-[10px] font-bold text-muted backdrop-blur-sm"
+                className="nums rounded-md px-1.5 py-0.5 text-[11px] font-bold text-muted backdrop-blur-sm"
                 style={{ backgroundColor: "color-mix(in oklab, var(--bg) 78%, transparent)" }}
                 aria-hidden
               >

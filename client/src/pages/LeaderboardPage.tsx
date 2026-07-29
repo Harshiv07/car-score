@@ -179,25 +179,42 @@ export function LeaderboardPage() {
 
           {data && data.listings.length === 0 && (
             <div className="rounded-2xl border border-line bg-surface p-10 text-center">
-              <p className="font-display text-lg font-bold text-text">No cars match these filters.</p>
-              <p className="mx-auto mt-1.5 max-w-sm text-sm text-muted">
-                Widen the price or mileage range, or drop the brand filter to see what else is close.
-              </p>
-              {isFiltered && (
-                <button
-                  onClick={clearAll}
-                  className="mt-4 rounded-lg bg-brand px-4 py-2 text-sm font-bold transition hover:bg-brand-strong"
-                  style={{ color: "var(--on-brand)" }}
-                >
-                  Clear all filters
-                </button>
+              {/* Two different empty states. "No cars match these filters" is
+                  wrong — and actively misleading — when the inventory itself is
+                  empty and no filter is set: it sends someone to widen a range
+                  that was never narrowed. Distinguish the cases by whether the
+                  unfiltered inventory has anything in it. */}
+              {data.totalUnfiltered === 0 ? (
+                <>
+                  <p className="font-display text-lg font-bold text-text">No listings yet.</p>
+                  <p className="mx-auto mt-1.5 max-w-sm text-sm text-muted">
+                    Nothing has been crawled into the database yet. Run a refresh from the header to scan every
+                    source — it takes a few minutes.
+                  </p>
+                </>
+              ) : (
+                <>
+                  <p className="font-display text-lg font-bold text-text">No cars match these filters.</p>
+                  <p className="mx-auto mt-1.5 max-w-sm text-sm text-muted">
+                    Widen the price or mileage range, or drop the brand filter to see what else is close.
+                  </p>
+                  {isFiltered && (
+                    <button
+                      onClick={clearAll}
+                      className="mt-4 rounded-lg bg-brand px-4 py-2 text-sm font-bold transition hover:bg-brand-strong"
+                      style={{ color: "var(--on-brand)" }}
+                    >
+                      Clear all filters
+                    </button>
+                  )}
+                </>
               )}
             </div>
           )}
 
           {/* Cards settle in sequence rather than snapping in as a block. The
               stagger is capped so a full page never feels like it's queueing. */}
-          <div className="space-y-3">
+          <div className="card-list space-y-3">
             {rest?.map((l, i) => (
               <motion.div
                 key={l.id}

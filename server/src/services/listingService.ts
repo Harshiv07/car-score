@@ -23,7 +23,23 @@ function getCat(l: ScoredListing, key: string): number {
  * only the scoring is not. So we fingerprint the raw set (O(n)) and reuse the
  * scored result until the inventory actually changes.
  */
-let scoreCache: { fingerprint: string; scored: ScoredListing[] } | null = null;
+let scoreCache: { fingerprint: string; scored: ScoredListing[]; builtAt: number } | null = null;
+
+/**
+ * How long a built cache is trusted without re-reading the inventory.
+ *
+ * The fingerprint above made scoring cheap but left the *read* on every
+ * request: `getAllListings()` pulls the whole collection out of MongoDB just to
+ * confirm nothing changed. Measured against production at 1,376 listings that
+ * was the dominant cost — `/api/listings` took ~1.5s warm, of which roughly
+ * 800ms was fetching ~3 MB from Atlas to compute a hash and throw it away.
+ *
+ * Inventory only changes when a crawl writes, and a crawl is rate-limited to
+ * one per ten minutes and calls `invalidateScoreCache()` when it finishes. So
+ * within this window a request needs no database round trip at all, and the
+ * fingerprint still guards correctness the moment the window lapses.
+ */
+const CACHE_TTL_MS = 30_000;
 
 /** Cheap, order-independent signature of the inventory's scoring inputs. */
 function fingerprint(listings: Listing[]): string {
@@ -40,11 +56,18 @@ function fingerprint(listings: Listing[]): string {
 }
 
 export async function getScoredListings(): Promise<ScoredListing[]> {
+  // Inside the TTL, serve without touching the database at all.
+  if (scoreCache && Date.now() - scoreCache.builtAt < CACHE_TTL_MS) return scoreCache.scored;
+
   const storage = await getStorage();
   const all = await storage.getAllListings();
 
   const fp = fingerprint(all);
-  if (scoreCache && scoreCache.fingerprint === fp) return scoreCache.scored;
+  if (scoreCache && scoreCache.fingerprint === fp) {
+    // Inventory is unchanged: keep the scores, restart the window.
+    scoreCache.builtAt = Date.now();
+    return scoreCache.scored;
+  }
 
   const scored: ScoredListing[] = [];
   for (const l of all) {
@@ -53,7 +76,7 @@ export async function getScoredListings(): Promise<ScoredListing[]> {
   }
   assignBadges(scored);
 
-  scoreCache = { fingerprint: fp, scored };
+  scoreCache = { fingerprint: fp, scored, builtAt: Date.now() };
   return scored;
 }
 

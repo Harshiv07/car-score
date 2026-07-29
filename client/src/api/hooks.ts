@@ -34,6 +34,29 @@ export function useListingStats() {
   });
 }
 
+/**
+ * Warm a listing's detail before it is asked for.
+ *
+ * The detail view waits on `/api/listings/:id`, and against the deployed API
+ * that is most of the delay between clicking a card and reading anything.
+ * Pointer-over or keyboard focus is a reliable few hundred milliseconds of
+ * warning, which is usually the whole round trip — so by the time the click
+ * lands the data is already in the React Query cache and the page paints
+ * immediately.
+ *
+ * `staleTime` matches the query itself, so a prefetch that turns out to be
+ * unnecessary is a single cached request, not a repeated one.
+ */
+export function usePrefetchListing() {
+  const qc = useQueryClient();
+  return (id: string) =>
+    void qc.prefetchQuery({
+      queryKey: ["listing", id],
+      queryFn: () => apiGet<ListingDetailResponse>(`/api/listings/${id}`),
+      staleTime: 30_000,
+    });
+}
+
 export function useListingDetail(id: string | undefined) {
   return useQuery({
     queryKey: ["listing", id],

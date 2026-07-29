@@ -2,6 +2,7 @@ import { Link } from "react-router-dom";
 import { ScoredListing } from "../api/types";
 import { CarPhoto } from "./CarPhoto";
 import { AnimatedNumber } from "./motion";
+import { usePrefetchListing } from "../api/hooks";
 import { whyLine, scoreBand, kmPerYear } from "../lib/whyLine";
 import { quickMonthly } from "../lib/finance";
 import { cad, DealPill, km, scoreHex } from "./ui";
@@ -18,6 +19,7 @@ export function TopPick({ listing }: { listing: ScoredListing }) {
   const n = Math.round(listing.score.total);
   const hex = scoreHex(listing.score.total);
   const perYear = kmPerYear(listing);
+  const prefetch = usePrefetchListing();
 
   // The three dimensions this car scored highest on — its actual case.
   const top = [...listing.score.breakdown]
@@ -33,7 +35,12 @@ export function TopPick({ listing }: { listing: ScoredListing }) {
 
       <Link
         to={`/listing/${listing.id}`}
-        className="group grid gap-0 overflow-hidden rounded-3xl border border-line bg-surface transition hover:border-brand/50 md:grid-cols-[1.1fr_1fr]"
+        // Warm the detail request on hover — it is the whole wait on click.
+        onPointerEnter={() => prefetch(listing.id)}
+        onFocus={() => prefetch(listing.id)}
+        // Two columns only from lg. At md (768px) the split left the title column
+        // ~84px wide and pushed the panel past the viewport edge.
+        className="group grid gap-0 overflow-hidden rounded-3xl border border-line bg-surface transition hover:border-brand/50 lg:grid-cols-[1.1fr_1fr]"
       >
         <div className="relative">
           <CarPhoto

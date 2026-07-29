@@ -12,6 +12,15 @@ import { getModelInfo } from "../data/vehicleModels";
 
 export const listingsRouter = Router();
 
+/**
+ * Inventory is refreshed by a crawl at most once every ten minutes, so a read
+ * can be a little stale without being wrong. `stale-while-revalidate` lets the
+ * browser paint instantly from cache on a back-navigation or a re-filter while
+ * it refreshes underneath — which is most of what made moving around the app
+ * feel slow, since every view previously waited on a fresh round trip.
+ */
+const READ_CACHE = "public, max-age=30, stale-while-revalidate=300";
+
 function num(v: unknown): number | undefined {
   if (v == null || v === "") return undefined;
   const n = Number(v);
@@ -81,6 +90,7 @@ listingsRouter.get("/", async (req, res) => {
     const pageSize = Math.min(100, Math.max(1, num(req.query.pageSize) ?? 50));
     const start = (page - 1) * pageSize;
 
+    res.set("Cache-Control", READ_CACHE);
     res.json({
       total: sorted.length,
       totalUnfiltered: all.length,
@@ -101,6 +111,7 @@ listingsRouter.get("/", async (req, res) => {
 listingsRouter.get("/stats", async (_req, res) => {
   try {
     const all = await getScoredListings();
+    res.set("Cache-Control", READ_CACHE);
     res.json(inventoryStats(all));
   } catch (e) {
     res.status(500).json({ error: (e as Error).message });
@@ -117,6 +128,7 @@ listingsRouter.get("/:id", async (req, res) => {
       return;
     }
     const info = getModelInfo(listing.make, listing.model);
+    res.set("Cache-Control", READ_CACHE);
     res.json({
       listing,
       ownership: ownershipEstimate(listing),
