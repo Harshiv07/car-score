@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import { useListings, useListingStats, useMeta, useScrapeStatus } from "../api/hooks";
 import { FiltersSidebar } from "../components/FiltersSidebar";
@@ -36,13 +36,17 @@ export function LeaderboardPage() {
     return p;
   }, [params, pageSize]);
 
-  const { data, isLoading, isError, error } = useListings(queryParams);
+  const { data, isLoading, isError, error, isFetching } = useListings(queryParams);
   const listings = data?.listings ?? [];
   const { data: meta } = useMeta();
   const { data: stats } = useListingStats();
   const { data: scrape } = useScrapeStatus();
 
-  const setParam = (key: string, value: string) => {
+  // Stable identity, or the memo on FiltersSidebar is worthless: a new function
+  // every render is a new prop every render, and the sidebar would re-render
+  // anyway. `setParams` from useSearchParams is already stable, and the updater
+  // form means this closes over nothing that changes.
+  const setParam = useCallback((key: string, value: string) => {
     setParams(
       (prev) => {
         const next = new URLSearchParams(prev);
@@ -61,11 +65,14 @@ export function LeaderboardPage() {
       },
       { replace: true }
     );
-  };
+  }, [setParams]);
 
   const sort = params.get("sort") ?? "score";
   const activeFilters = [...params.keys()].filter((k) => !NON_FILTER_PARAMS.includes(k)).length;
-  const clearAll = () => setParams(new URLSearchParams(sort !== "score" ? { sort } : {}), { replace: true });
+  const clearAll = useCallback(
+    () => setParams(new URLSearchParams(sort !== "score" ? { sort } : {}), { replace: true }),
+    [setParams, sort]
+  );
 
   const isFiltered = activeFilters > 0;
   const page = data?.page ?? 1;
@@ -131,6 +138,14 @@ export function LeaderboardPage() {
         <div id="results">
           <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
             <p className="text-sm text-muted" aria-live="polite">
+              {/* The list stays put while a new filter loads, so this is the
+                  only signal that anything is happening. */}
+              {isFetching && !isLoading && (
+                <span
+                  className="mr-2 inline-block h-3 w-3 animate-spin rounded-full border-2 border-line border-t-brand align-[-1px]"
+                  aria-hidden
+                />
+              )}
               {data ? (
                 <>
                   <span className="nums font-bold text-text">{data.total.toLocaleString("en-CA")}</span>

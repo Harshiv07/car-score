@@ -1,3 +1,4 @@
+import { memo } from "react";
 import { Link } from "react-router-dom";
 import { AnimatePresence, motion } from "framer-motion";
 import { ScoredListing } from "../api/types";
@@ -22,7 +23,7 @@ import { Badge, cad, DealPill, Fact, isRecent, km, NewBadge, ScoreSpine, scoreHe
  * Reading order either way: score (is it good?) → photo (what is it?) → title
  * and price (can I afford it?) → the why line (should I care?) → hard facts.
  */
-export function ListingCard({ listing, rank }: { listing: ScoredListing; rank?: number }) {
+function ListingCardImpl({ listing, rank }: { listing: ScoredListing; rank?: number }) {
   const savings = listing.score.market.savings;
   const { isFavorite, toggle } = useFavorites();
   const { has: inCompare, toggle: toggleCompare, canAdd } = useCompare();
@@ -271,3 +272,11 @@ function IconButton({
     </motion.button>
   );
 }
+
+/**
+ * Memoised. A page holds a dozen of these, and each renders a photo, a score
+ * spine, a computed why-line and a payment estimate — none of which change
+ * because a filter moved or a sibling card was saved. Re-rendering the whole
+ * list on every parent update was the bulk of the work done on a filter change.
+ */
+export const ListingCard = memo(ListingCardImpl);

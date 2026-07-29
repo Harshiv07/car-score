@@ -1,4 +1,6 @@
+import { memo, useCallback } from "react";
 import { MetaResponse } from "../api/types";
+import { useDebouncedCommit } from "../hooks/useDebouncedCommit";
 import { Segmented, Select, Toggle, cad, km, Option } from "./ui";
 
 const PRICE_MIN = 5000;
@@ -10,7 +12,7 @@ const YEAR_FLOOR = 2016;
  * All filters write straight into URL search params (shareable, survives
  * reload). `onChange(key, value)` sets or clears one param.
  */
-export function FiltersSidebar({
+function FiltersSidebarImpl({
   meta,
   params,
   onChange,
@@ -27,8 +29,18 @@ export function FiltersSidebar({
 
   const label = "block text-[11px] font-semibold uppercase tracking-wide text-faint mb-1.5";
 
-  const priceMax = Number(get("priceMax")) || PRICE_MAX;
-  const mileageMax = Number(get("mileageMax")) || MILEAGE_MAX;
+  // The sliders move instantly; only the committed value is debounced, so a
+  // drag across the range is one request instead of one per pixel.
+  const commitPrice = useCallback(
+    (v: number) => onChange("priceMax", v >= PRICE_MAX ? "" : String(v)),
+    [onChange]
+  );
+  const commitMileage = useCallback(
+    (v: number) => onChange("mileageMax", v >= MILEAGE_MAX ? "" : String(v)),
+    [onChange]
+  );
+  const [priceMax, setPriceMax] = useDebouncedCommit(Number(get("priceMax")) || PRICE_MAX, commitPrice);
+  const [mileageMax, setMileageMax] = useDebouncedCommit(Number(get("mileageMax")) || MILEAGE_MAX, commitMileage);
 
   const currentYear = new Date().getFullYear();
   const years: Option[] = [{ value: "", label: "Any" }];
@@ -71,7 +83,7 @@ export function FiltersSidebar({
           step={1000}
           value={priceMax}
           style={{ ["--pct" as string]: `${((priceMax - PRICE_MIN) / (PRICE_MAX - PRICE_MIN)) * 100}%` }}
-          onChange={(e) => onChange("priceMax", Number(e.target.value) >= PRICE_MAX ? "" : e.target.value)}
+          onChange={(e) => setPriceMax(Number(e.target.value))}
           aria-label="Maximum price"
         />
       </div>
@@ -90,7 +102,7 @@ export function FiltersSidebar({
           step={5000}
           value={mileageMax}
           style={{ ["--pct" as string]: `${((mileageMax - 20000) / (MILEAGE_MAX - 20000)) * 100}%` }}
-          onChange={(e) => onChange("mileageMax", Number(e.target.value) >= MILEAGE_MAX ? "" : e.target.value)}
+          onChange={(e) => setMileageMax(Number(e.target.value))}
           aria-label="Maximum mileage"
         />
       </div>
@@ -145,3 +157,11 @@ export function FiltersSidebar({
     </aside>
   );
 }
+
+/**
+ * Memoised: the sidebar depends on the filter params and the meta options, and
+ * on nothing about the listings themselves. Without this it re-rendered on every
+ * result change — every page turn, every refetch — rebuilding all six option
+ * lists to draw exactly what was already on screen.
+ */
+export const FiltersSidebar = memo(FiltersSidebarImpl);

@@ -1,3 +1,4 @@
+import { memo } from "react";
 import { Link } from "react-router-dom";
 import { ScoredListing } from "../api/types";
 import { CarPhoto } from "./CarPhoto";
@@ -15,7 +16,7 @@ import { cad, DealPill, km, scoreHex } from "./ui";
  * on — rather than a wordmark. When filters are on it re-points at the best
  * match for those filters, which keeps it honest as the query narrows.
  */
-export function TopPick({ listing }: { listing: ScoredListing }) {
+function TopPickImpl({ listing }: { listing: ScoredListing }) {
   const n = Math.round(listing.score.total);
   const hex = scoreHex(listing.score.total);
   const perYear = kmPerYear(listing);
@@ -108,3 +109,9 @@ export function TopPick({ listing }: { listing: ScoredListing }) {
     </section>
   );
 }
+
+/**
+ * Memoised for the same reason as ListingCard: the hero only changes when the
+ * listing behind it does, not when an unrelated bit of page state moves.
+ */
+export const TopPick = memo(TopPickImpl);
