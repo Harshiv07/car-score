@@ -55,10 +55,42 @@ function fingerprint(listings: Listing[]): string {
   return `${listings.length}:${hash}:${newest}`;
 }
 
-export async function getScoredListings(): Promise<ScoredListing[]> {
-  // Inside the TTL, serve without touching the database at all.
-  if (scoreCache && Date.now() - scoreCache.builtAt < CACHE_TTL_MS) return scoreCache.scored;
+/**
+ * The build currently in flight, if any.
+ *
+ * A page load fires `/api/listings`, `/api/listings/stats` and `/api/meta` at
+ * once, and every one of them needs the scored inventory. With nothing shared
+ * between them, a cold cache meant three simultaneous full-collection reads and
+ * three independent scoring passes racing on one Node thread — a textbook cache
+ * stampede. Measured on the deployed free-tier instance, each of those three
+ * calls took ~6s and LCP landed at 7.0s, against ~1.5s for the same call made
+ * on its own.
+ *
+ * Callers now await one shared build instead of starting their own.
+ */
+let inFlight: Promise<ScoredListing[]> | null = null;
 
+/**
+ * Group listings by make+model.
+ *
+ * Market Value is the only thing scoring reads the rest of the inventory for,
+ * and its comparable filter already requires the same make *and* model — so
+ * handing each listing its own bucket is exactly equivalent to handing it
+ * everything, minus the 1.9M pointless comparisons an O(n²) scan does at 1,376
+ * listings. Free locally, decisive on a 0.1-CPU dyno.
+ */
+function bucketByModel(listings: Listing[]): Map<string, Listing[]> {
+  const buckets = new Map<string, Listing[]>();
+  for (const l of listings) {
+    const key = `${l.make}|${l.model}`.toLowerCase();
+    const bucket = buckets.get(key);
+    if (bucket) bucket.push(l);
+    else buckets.set(key, [l]);
+  }
+  return buckets;
+}
+
+async function buildScoredListings(): Promise<ScoredListing[]> {
   const storage = await getStorage();
   const all = await storage.getAllListings();
 
@@ -69,15 +101,32 @@ export async function getScoredListings(): Promise<ScoredListing[]> {
     return scoreCache.scored;
   }
 
+  const buckets = bucketByModel(all);
   const scored: ScoredListing[] = [];
   for (const l of all) {
-    const score = scoreListing(l, all);
+    const comparables = buckets.get(`${l.make}|${l.model}`.toLowerCase()) ?? [l];
+    const score = scoreListing(l, comparables);
     if (score) scored.push({ ...l, score, badges: [] });
   }
   assignBadges(scored);
 
   scoreCache = { fingerprint: fp, scored, builtAt: Date.now() };
   return scored;
+}
+
+export async function getScoredListings(): Promise<ScoredListing[]> {
+  // Inside the TTL, serve without touching the database at all.
+  if (scoreCache && Date.now() - scoreCache.builtAt < CACHE_TTL_MS) return scoreCache.scored;
+
+  // Someone is already building it — wait for theirs rather than starting a
+  // second one. This is what turns three concurrent cold requests into one
+  // unit of work instead of three.
+  if (inFlight) return inFlight;
+
+  inFlight = buildScoredListings().finally(() => {
+    inFlight = null;
+  });
+  return inFlight;
 }
 
 /** Drop the cache — called after a scrape writes new inventory. */
