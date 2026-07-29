@@ -137,10 +137,12 @@ test("province list is overridable but never empty or invalid", () => {
   const saved = process.env.AUTOTRADER_PROVINCES;
   try {
     delete process.env.AUTOTRADER_PROVINCES;
-    assert.deepEqual(activeProvinces(), [...AUTOTRADER_PROVINCES], "defaults to every province");
+    // Ontario plus its two drivable neighbours — a car in BC is available but
+    // not buyable for someone in Thunder Bay.
+    assert.deepEqual(activeProvinces(), ["on", "qc", "mb"], "defaults to the drivable catchment");
 
     process.env.AUTOTRADER_PROVINCES = "bc, ab";
-    assert.deepEqual(activeProvinces(), ["bc", "ab"], "honours a narrowed list");
+    assert.deepEqual(activeProvinces(), ["bc", "ab"], "can be widened to any province AutoTrader serves");
 
     // A typo must not silently reduce a run to zero sources.
     process.env.AUTOTRADER_PROVINCES = "atlantis,xx";
