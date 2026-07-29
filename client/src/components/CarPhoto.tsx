@@ -70,7 +70,9 @@ export function CarPhoto({
           alt={alt}
           loading={priority ? "eager" : "lazy"}
           decoding={priority ? "sync" : "async"}
-          fetchPriority={priority ? "high" : "auto"}
+          // Lowercase: React 18 does not map `fetchPriority` to the DOM
+          // attribute and warns about an unrecognised prop.
+          {...{ fetchpriority: priority ? "high" : "auto" }}
           onLoad={() => setState("ready")}
           onError={() => setState("failed")}
           className={`h-full w-full object-cover transition-opacity duration-300 ${
