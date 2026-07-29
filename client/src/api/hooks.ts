@@ -1,4 +1,4 @@
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { apiGet, apiPost } from "./client";
 import {
   InventoryStats,
@@ -31,6 +31,38 @@ export function useListingStats() {
     queryKey: ["listingStats"],
     queryFn: () => apiGet<InventoryStats>("/api/listings/stats"),
     staleTime: 60_000,
+  });
+}
+
+/**
+ * The leaderboard, loaded a page at a time as the reader scrolls.
+ *
+ * Paging through a ranked list with numbered buttons makes you leave the page
+ * to see rank 11, and coming back re-fetches and re-scrolls. An infinite list
+ * matches how the thing is actually read — top down, until something is worth
+ * opening — and React Query keeps every loaded page in its cache, so returning
+ * from a car restores the whole list at the height you left it rather than the
+ * first ten again.
+ *
+ * `pageSize` stays modest: each page is a real request, and a large one delays
+ * first paint for rows nobody has scrolled to yet.
+ */
+export function useInfiniteListings(params: URLSearchParams, pageSize = 12) {
+  const qs = params.toString();
+  return useInfiniteQuery({
+    queryKey: ["listings", "infinite", qs, pageSize],
+    initialPageParam: 1,
+    queryFn: ({ pageParam }) => {
+      const p = new URLSearchParams(params);
+      p.set("page", String(pageParam));
+      p.set("pageSize", String(pageSize));
+      return apiGet<ListingsResponse>(`/api/listings?${p.toString()}`);
+    },
+    getNextPageParam: (last) => {
+      const loaded = last.page * last.pageSize;
+      return loaded < last.total ? last.page + 1 : undefined;
+    },
+    staleTime: 30_000,
   });
 }
 
