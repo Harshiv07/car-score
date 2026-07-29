@@ -1,4 +1,4 @@
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { apiGet, apiPost } from "./client";
 import {
   InventoryStats,
@@ -15,6 +15,12 @@ export function useListings(params: URLSearchParams) {
     queryKey: ["listings", qs],
     queryFn: () => apiGet<ListingsResponse>(`/api/listings${qs ? `?${qs}` : ""}`),
     staleTime: 30_000,
+    // Changing a filter or turning a page is a new query key, so by default the
+    // list would blank to skeletons and rebuild while the request is in flight.
+    // Holding the previous results means the page changes rather than reloads —
+    // invisible against a 2ms local API, very visible against the deployed one.
+    // `isFetching` still exposes the in-flight state for a quiet indicator.
+    placeholderData: keepPreviousData,
   });
 }
 
