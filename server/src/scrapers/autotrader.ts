@@ -1,5 +1,5 @@
 /**
- * AutoTrader.ca — Canada-wide used listings, scraped per supported model and
+ * AutoTrader.ca — used listings across the drivable provinces, per supported model and
  * browser-free (works on Render).
  *
  * AutoTrader.ca is a Next.js app (AutoScout24 "search-funnel"). Its
@@ -54,26 +54,37 @@ const TARGETS: ModelTarget[] = VEHICLE_MODELS.flatMap((m) => {
 });
 
 /**
- * Provinces AutoTrader serves on this URL shape, in rough inventory order.
+ * Provinces to crawl, and why these three.
  *
- * The crawler was pinned to `/on/` and so ignored the rest of the country.
- * Verified live, page 1 of each: every province returns 200 with real listings
- * and its own `numberOfPages`, and the parsed rows carry the right province
- * code — so this is more cars from a source that already works browser-free,
- * not a new anti-bot surface.
+ * The crawler used to be pinned to `/on/` and ignored the rest of the country.
+ * The province is a path segment on a URL shape that already works
+ * browser-free, so widening it is more cars from a source that is not fighting
+ * us — but "available" is not the same as "buyable". This app is for a
+ * first-time buyer in Thunder Bay, and a car in Vancouver or Halifax is not a
+ * car they can realistically go and collect. Ontario plus its two drivable
+ * neighbours is the honest catchment.
  *
- *   Toyota RAV4   ON 106 pages   rest of Canada 139
- *   Honda Civic   ON 174 pages   rest of Canada 175
+ * Verified live, page 1 of each model:
  *
- * Override with AUTOTRADER_PROVINCES (comma-separated) to narrow a run.
+ *   Toyota RAV4    ON 106 pages   QC 46   MB 9
+ *   Honda Civic    ON 174 pages   QC 62   MB 7
+ *
+ * Set AUTOTRADER_PROVINCES to widen or narrow it — every province AutoTrader
+ * serves works on this URL shape (bc, ab, sk, ns, nb, nl, pe as well), so
+ * going national later is a config change, not a code change.
  */
-export const AUTOTRADER_PROVINCES: readonly string[] = ["on", "bc", "qc", "ab", "ns", "nb", "mb", "sk", "nl", "pe"];
+export const AUTOTRADER_PROVINCES: readonly string[] = ["on", "qc", "mb"];
+
+/** Every province AutoTrader serves, for validating an override. */
+export const SUPPORTED_PROVINCES: readonly string[] = [
+  "on", "qc", "mb", "bc", "ab", "sk", "ns", "nb", "nl", "pe",
+];
 
 export function activeProvinces(): string[] {
   const raw = (process.env.AUTOTRADER_PROVINCES ?? "").trim();
   if (!raw) return [...AUTOTRADER_PROVINCES];
   const wanted = raw.split(",").map((p) => p.trim().toLowerCase()).filter(Boolean);
-  const valid = wanted.filter((p) => (AUTOTRADER_PROVINCES as readonly string[]).includes(p));
+  const valid = wanted.filter((p) => (SUPPORTED_PROVINCES as readonly string[]).includes(p));
   return valid.length ? valid : [...AUTOTRADER_PROVINCES];
 }
 
