@@ -5,7 +5,7 @@ import { useFavorites } from "../hooks/useFavorites";
 import { useCompare } from "../hooks/useCompare";
 import { usePrefetchListing } from "../api/hooks";
 import { CarPhoto } from "./CarPhoto";
-import { whyLine, kmPerYear } from "../lib/whyLine";
+import { whyLine, kmPerYear, mileageVerdict } from "../lib/whyLine";
 import { quickMonthly } from "../lib/finance";
 import { Badge, cad, DealPill, Fact, isRecent, km, NewBadge, ScoreSpine, scoreHex, timeAgo } from "./ui";
 
@@ -30,6 +30,11 @@ export function ListingCard({ listing, rank }: { listing: ScoredListing; rank?: 
   const comparing = inCompare(listing.id);
   const perYear = kmPerYear(listing);
   const prefetch = usePrefetchListing();
+  const mileage = mileageVerdict(listing);
+  const where =
+    [listing.dealer, listing.city && `${listing.city}${listing.province ? `, ${listing.province}` : ""}`]
+      .filter(Boolean)
+      .join(" · ") || listing.sourceWebsite;
 
   // The deal rating is already a pill; drop the duplicate badge.
   const badges = listing.badges.filter((b) => b !== listing.score.dealRating);
@@ -89,7 +94,9 @@ export function ListingCard({ listing, rank }: { listing: ScoredListing; rank?: 
           </div>
         </div>
 
-        <div className="min-w-0 flex-1 p-3 pr-14 sm:p-0 sm:pr-16">
+        {/* Right padding reserves the action cluster — now three controls
+            (open on source, compare, save), not two. */}
+        <div className="min-w-0 flex-1 p-3 pr-[6.5rem] sm:p-0 sm:pr-28">
           <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
             {/* Full width on mobile so the pill wraps below instead of
                 squeezing the title into an ellipsis. On desktop it's capped
@@ -103,30 +110,58 @@ export function ListingCard({ listing, rank }: { listing: ScoredListing; rank?: 
             {isRecent(listing.firstSeenAt) && <NewBadge />}
           </div>
 
-          {/* Price line */}
-          <div className="mt-1.5 flex flex-wrap items-baseline gap-x-3 gap-y-1">
+          {/* Price line. The monthly figure is what this audience actually
+              decides on, so it is a legible chip rather than faint grey. */}
+          <div className="mt-1.5 flex flex-wrap items-baseline gap-x-2.5 gap-y-1">
             <span className="nums font-display text-xl font-extrabold text-text">{cad(listing.price)}</span>
             {savings > 0 ? (
               <span className="nums text-sm font-semibold text-good">{cad(savings)} under market</span>
             ) : savings < -500 ? (
               <span className="nums text-sm font-semibold text-bad">{cad(-savings)} over market</span>
             ) : null}
-            <span className="nums text-xs text-faint">≈{cad(quickMonthly(listing.price, listing.province))}/mo</span>
+            <span className="nums rounded-md bg-surface2 px-1.5 py-0.5 text-[11px] font-semibold text-muted">
+              ≈{cad(quickMonthly(listing.price, listing.province))}/mo
+            </span>
           </div>
 
-          {/* The case for this car, in one sentence. */}
-          <p className="mt-2 line-clamp-2 text-[13px] leading-snug text-muted">{whyLine(listing)}</p>
+          {/* The case for this car, in one sentence — minus the price delta the
+              row above already states. */}
+          <p className="mt-2 line-clamp-2 text-[13px] leading-snug text-muted">
+            {whyLine(listing, { omitPrice: true })}
+          </p>
 
-          {/* Hard facts */}
-          <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted">
+          {/* Hard facts: the vehicle first, then where it is, with a divider
+              between them so specs and provenance stop reading as one list. */}
+          <div className="mt-2 flex flex-wrap items-center gap-x-2.5 gap-y-1 text-xs text-muted">
             <Fact value={listing.mileageKm != null ? km(listing.mileageKm) : "—"} />
-            {perYear && <span className="text-faint">{perYear.toLocaleString("en-CA")} km/yr</span>}
+            {perYear && (
+              // Coloured by the engine's own verdict, so the number agrees with
+              // the sentence above it instead of sitting in neutral grey while
+              // the why line calls the mileage high.
+              <span
+                className={`nums ${
+                  mileage === "high" ? "font-semibold text-warn" : mileage === "low" ? "text-good" : "text-faint"
+                }`}
+                title={
+                  mileage === "high"
+                    ? "Above the distance expected for this car's age"
+                    : mileage === "low"
+                      ? "Below the distance expected for this car's age"
+                      : undefined
+                }
+              >
+                {perYear.toLocaleString("en-CA")} km/yr
+              </span>
+            )}
             {listing.drivetrain !== "Unknown" && <Fact value={listing.drivetrain} />}
-            <span className="truncate text-faint">
-              {[listing.dealer, listing.city && `${listing.city}${listing.province ? `, ${listing.province}` : ""}`]
-                .filter(Boolean)
-                .join(" · ") || listing.sourceWebsite}
-            </span>
+            {where && (
+              <>
+                <span className="text-line-strong" aria-hidden>
+                  |
+                </span>
+                <span className="truncate text-faint">{where}</span>
+              </>
+            )}
           </div>
 
           {badges.length > 0 && (
@@ -146,6 +181,26 @@ export function ListingCard({ listing, rank }: { listing: ScoredListing; rank?: 
 
       {/* Actions sit outside the Link so they're real buttons in the tab order. */}
       <div className="absolute right-2 top-2 flex items-center gap-1 sm:right-3 sm:top-3">
+        {listing.listingUrl && (
+          // Straight to the seller's own page. Plenty of the time the reader
+          // has already decided from the card and wants the actual listing —
+          // making them open our detail page first is a tollbooth, not a step.
+          // A real anchor, so middle-click and "open in new tab" behave.
+          <motion.a
+            href={listing.listingUrl}
+            target="_blank"
+            rel="noopener noreferrer nofollow"
+            onClick={(e) => e.stopPropagation()}
+            title={`Open this listing on ${listing.sourceWebsite}`}
+            whileTap={{ scale: 0.85 }}
+            transition={{ type: "spring", stiffness: 600, damping: 20 }}
+            className="grid h-8 w-8 place-items-center rounded-full text-[13px] text-muted backdrop-blur-sm transition-colors hover:text-brand"
+            style={{ backgroundColor: "color-mix(in oklab, var(--surface) 70%, transparent)" }}
+          >
+            <span aria-hidden>↗</span>
+            <span className="sr-only">Open this listing on {listing.sourceWebsite} (opens in a new tab)</span>
+          </motion.a>
+        )}
         <IconButton
           onClick={() => toggleCompare(listing.id)}
           disabled={!comparing && !canAdd}

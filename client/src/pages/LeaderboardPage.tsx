@@ -1,16 +1,25 @@
 import { useMemo, useState } from "react";
 import { motion } from "framer-motion";
 import { useSearchParams } from "react-router-dom";
-import { useListings, useListingStats, useMeta, useScrapeStatus } from "../api/hooks";
+import { useInfiniteListings, useListingStats, useMeta, useScrapeStatus } from "../api/hooks";
 import { FiltersSidebar } from "../components/FiltersSidebar";
 import { FilterDrawer } from "../components/FilterDrawer";
 import { ListingCard } from "../components/ListingCard";
 import { TopPick } from "../components/TopPick";
-import { Pagination } from "../components/Pagination";
 import { CompareTray } from "../components/CompareTray";
+import { InfiniteSentinel } from "../components/InfiniteSentinel";
 import { cad, Select, timeAgo } from "../components/ui";
 
-const DEFAULT_PAGE_SIZE = 10;
+const DEFAULT_PAGE_SIZE = 12;
+
+/** How many cars arrive per batch. Kept in the URL so a chosen size survives a
+ *  reload and travels with a shared link, like every other view setting here. */
+const PAGE_SIZES = [12, 24, 48] as const;
+
+function readPageSize(params: URLSearchParams): number {
+  const n = Number(params.get("pageSize"));
+  return (PAGE_SIZES as readonly number[]).includes(n) ? n : DEFAULT_PAGE_SIZE;
+}
 
 /** Params that aren't filters, for counting how many filters are actually on. */
 const NON_FILTER_PARAMS = ["sort", "page", "pageSize"];
@@ -19,13 +28,33 @@ export function LeaderboardPage() {
   const [params, setParams] = useSearchParams();
   const [drawerOpen, setDrawerOpen] = useState(false);
 
+  const pageSize = readPageSize(params);
+
+  // `page` is owned by the infinite query; `pageSize` is the reader's choice and
+  // is passed to it explicitly, so neither belongs in the filter key.
   const queryParams = useMemo(() => {
     const p = new URLSearchParams(params);
-    if (!p.has("pageSize")) p.set("pageSize", String(DEFAULT_PAGE_SIZE));
+    p.delete("page");
+    p.delete("pageSize");
     return p;
   }, [params]);
 
-  const { data, isLoading, isError, error } = useListings(queryParams);
+  const {
+    data: pages,
+    isLoading,
+    isError,
+    error,
+    fetchNextPage,
+    hasNextPage,
+    isFetchingNextPage,
+  } = useInfiniteListings(queryParams, pageSize);
+
+  // Flattened view of every page loaded so far.
+  const first = pages?.pages[0];
+  const listings = useMemo(() => pages?.pages.flatMap((p) => p.listings) ?? [], [pages]);
+  const data = first
+    ? { total: first.total, totalUnfiltered: first.totalUnfiltered, listings, page: 1, pageSize }
+    : undefined;
   const { data: meta } = useMeta();
   const { data: stats } = useListingStats();
   const { data: scrape } = useScrapeStatus();
@@ -55,12 +84,11 @@ export function LeaderboardPage() {
   const activeFilters = [...params.keys()].filter((k) => !NON_FILTER_PARAMS.includes(k)).length;
   const clearAll = () => setParams(new URLSearchParams(sort !== "score" ? { sort } : {}), { replace: true });
 
-  const page = data?.page ?? 1;
   const isFiltered = activeFilters > 0;
-  // The hero answers the current question, so it only leads the first page of
-  // the default ranking — under an explicit sort the list itself is the answer.
-  const hero = page === 1 && sort === "score" ? data?.listings[0] : undefined;
-  const rest = hero ? data?.listings.slice(1) : data?.listings;
+  // The hero answers the current question. Under an explicit sort the list
+  // itself is the answer, so it steps aside.
+  const hero = sort === "score" ? listings[0] : undefined;
+  const rest = hero ? listings.slice(1) : listings;
 
   return (
     <div className="mx-auto max-w-7xl px-4 py-8">
@@ -130,6 +158,10 @@ export function LeaderboardPage() {
                   ) : (
                     " cars ranked"
                   )}
+                  <span className="text-faint">
+                    {" · showing "}
+                    <span className="nums">{listings.length.toLocaleString("en-CA")}</span>
+                  </span>
                 </>
               ) : (
                 "Loading…"
@@ -143,6 +175,17 @@ export function LeaderboardPage() {
               >
                 Filters{activeFilters > 0 ? ` (${activeFilters})` : ""}
               </button>
+              <div className="hidden items-center gap-2 text-sm text-muted sm:flex">
+                <span className="hidden lg:inline">Show</span>
+                <Select
+                  ariaLabel="Listings per batch"
+                  className="w-[5.5rem]"
+                  value={String(pageSize)}
+                  options={PAGE_SIZES.map((n) => ({ value: String(n), label: String(n) }))}
+                  onChange={(v) => setParam("pageSize", v === String(DEFAULT_PAGE_SIZE) ? "" : v)}
+                />
+              </div>
+
               <div className="flex items-center gap-2 text-sm text-muted">
                 <span className="hidden sm:inline">Sort</span>
                 <Select
@@ -220,32 +263,20 @@ export function LeaderboardPage() {
                 key={l.id}
                 initial={{ opacity: 0, y: 10 }}
                 animate={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.28, delay: Math.min(i * 0.035, 0.28), ease: [0.4, 0, 0.2, 1] }}
+                transition={{ duration: 0.28, delay: Math.min((i % pageSize) * 0.035, 0.28), ease: [0.4, 0, 0.2, 1] }}
               >
-                <ListingCard
-                  listing={l}
-                  rank={(page - 1) * (data?.pageSize ?? DEFAULT_PAGE_SIZE) + i + 1 + (hero ? 1 : 0)}
-                />
+                <ListingCard listing={l} rank={i + 1 + (hero ? 1 : 0)} />
               </motion.div>
             ))}
           </div>
 
           {data && (
-            <Pagination
-              page={data.page}
-              pageSize={data.pageSize}
-              total={data.total}
-              onPage={(p) =>
-                setParams(
-                  (prev) => {
-                    const next = new URLSearchParams(prev);
-                    if (p <= 1) next.delete("page");
-                    else next.set("page", String(p));
-                    return next;
-                  },
-                  { replace: true }
-                )
-              }
+            <InfiniteSentinel
+              hasMore={!!hasNextPage}
+              isLoading={isFetchingNextPage}
+              onLoadMore={() => void fetchNextPage()}
+              remaining={Math.max(0, data.total - listings.length)}
+              batchSize={pageSize}
             />
           )}
         </div>
