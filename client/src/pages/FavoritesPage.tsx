@@ -1,9 +1,9 @@
 import { useEffect, useMemo } from "react";
 import { Link } from "react-router-dom";
-import { motion } from "framer-motion";
 import { useListings } from "../api/hooks";
 import { useFavorites } from "../hooks/useFavorites";
 import { ListingCard } from "../components/ListingCard";
+import { ScrollReveal } from "../components/ScrollReveal";
 import { CompareTray } from "../components/CompareTray";
 
 /**
@@ -69,14 +69,9 @@ export function FavoritesPage() {
         )}
 
         {saved.map((l, i) => (
-          <motion.div
-            key={l.id}
-            initial={{ opacity: 0, y: 10 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.28, delay: Math.min(i * 0.04, 0.28), ease: [0.4, 0, 0.2, 1] }}
-          >
+          <ScrollReveal key={l.id} delay={Math.min(i * 0.03, 0.18)}>
             <ListingCard listing={l} />
-          </motion.div>
+          </ScrollReveal>
         ))}
       </div>
 
