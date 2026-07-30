@@ -3,6 +3,7 @@ import { useSearchParams } from "react-router-dom";
 import { useNewCars } from "../api/hooks";
 import { NewCar } from "../api/types";
 import { cad, ScoreBadge, timeAgo } from "../components/ui";
+import { WakingNotice } from "../components/WakingNotice";
 
 export function NewCarsPage() {
   const { data, isLoading } = useNewCars();
@@ -41,6 +42,10 @@ export function NewCarsPage() {
           }
         />
       )}
+
+      <div className="mt-5">
+        <WakingNotice active={isLoading && !data} />
+      </div>
 
       {data?.loading && (
         <div className="mt-5 flex items-center gap-2 rounded-xl border border-line bg-surface px-4 py-2.5 text-sm text-muted">
