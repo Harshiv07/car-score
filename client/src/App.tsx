@@ -6,6 +6,7 @@ import { DetailPage } from "./pages/DetailPage";
 import { FavoritesPage } from "./pages/FavoritesPage";
 import { NewCarsPage } from "./pages/NewCarsPage";
 import { ComparePage } from "./pages/ComparePage";
+import { GuidePage } from "./pages/GuidePage";
 import { RefreshControl } from "./components/RefreshControl";
 import { ScrollManager } from "./components/ScrollManager";
 import { useFavorites } from "./hooks/useFavorites";
@@ -70,6 +71,7 @@ export function Wordmark({ className = "" }: { className?: string }) {
 const TABS = [
   { to: "/", label: "Leaderboard", end: true },
   { to: "/new-cars", label: "New cars", end: false },
+  { to: "/guide", label: "Guide", end: false },
   { to: "/favorites", label: "Saved", end: false },
 ];
 
@@ -111,9 +113,11 @@ export default function App() {
               <span className="hidden text-xs font-medium text-faint lg:inline">first-car copilot · Canada</span>
             </NavLink>
 
-            {/* Desktop nav sits inline; on mobile it drops to its own row so
-                nothing gets clipped off the right edge. */}
-            <nav aria-label="Primary" className="ml-2 hidden items-center gap-1 sm:flex">
+            {/* Inline from md, not sm. With four tabs the wordmark, nav and the
+                right-hand controls no longer fit on one row at 640px — the
+                refresh and theme controls were pushed 8px past the edge. Below
+                that the nav drops to its own row instead. */}
+            <nav aria-label="Primary" className="ml-2 hidden items-center gap-1 md:flex">
               {TABS.map((t) => (
                 <NavLink key={t.to} to={t.to} end={t.end} className={tab}>
                   {({ isActive }) => (
@@ -147,7 +151,7 @@ export default function App() {
           />
 
           {/* Mobile nav row. */}
-          <nav aria-label="Primary" className="-mx-4 flex items-center gap-1 overflow-x-auto px-4 pb-2 sm:hidden">
+          <nav aria-label="Primary" className="-mx-4 flex items-center gap-1 overflow-x-auto px-4 pb-2 md:hidden">
             {TABS.map((t) => (
               <NavLink key={t.to} to={t.to} end={t.end} className={tab}>
                 {t.label}
@@ -171,6 +175,7 @@ export default function App() {
               <Route path="/" element={<LeaderboardPage />} />
               <Route path="/new-cars" element={<NewCarsPage />} />
               <Route path="/favorites" element={<FavoritesPage />} />
+              <Route path="/guide" element={<GuidePage />} />
               <Route path="/compare" element={<ComparePage />} />
               <Route path="/listing/:id" element={<DetailPage />} />
             </Routes>

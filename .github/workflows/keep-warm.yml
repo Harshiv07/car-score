@@ -1,0 +1,40 @@
+name: Keep API warm
+
+# Render's free tier spins an idle instance down, and waking it takes 30-60s.
+# Measured against the deployed API: a cold /api/listings took 46s, the same
+# request warm took 0.36s. That gap is the whole of "the initial loading is very
+# slow" — the app's own caching is already serving warm reads in milliseconds.
+#
+# So this pings the health endpoint often enough that the instance rarely idles
+# out. It is a workaround for the hosting tier, not a fix for the app: the only
+# real fix is a plan that doesn't sleep, and this is the free version of that.
+#
+# GitHub throttles scheduled workflows on busy runners, so the interval is a
+# floor rather than a guarantee — an occasional cold start will still happen.
+
+on:
+  schedule:
+    # Every 10 minutes. Render idles at ~15, so this leaves headroom for a
+    # skipped run without the instance dropping.
+    - cron: "*/10 * * * *"
+  workflow_dispatch:
+
+concurrency:
+  group: keep-warm
+  cancel-in-progress: true
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Ping /healthz
+        run: |
+          URL="${{ vars.API_URL || 'https://carscore-api.onrender.com' }}/healthz"
+          # A cold instance can take a while to answer; that is the point of the
+          # request, so allow for it rather than failing the run.
+          code=$(curl -sS -o /dev/null -w '%{http_code}' --max-time 90 --retry 2 --retry-delay 10 "$URL" || echo "000")
+          echo "GET $URL -> $code"
+          # Don't fail the workflow on a bad response: a red cron every ten
+          # minutes trains everyone to ignore it, and this job is best-effort.
+          if [ "$code" != "200" ]; then echo "::warning::API did not return 200 (got $code)"; fi

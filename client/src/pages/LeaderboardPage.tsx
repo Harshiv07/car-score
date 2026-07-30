@@ -8,6 +8,7 @@ import { TopPick } from "../components/TopPick";
 import { CompareTray } from "../components/CompareTray";
 import { Pagination } from "../components/Pagination";
 import { ScrollReveal } from "../components/ScrollReveal";
+import { WakingNotice } from "../components/WakingNotice";
 import { cad, Select, timeAgo } from "../components/ui";
 
 const DEFAULT_PAGE_SIZE = 12;
@@ -197,6 +198,8 @@ export function LeaderboardPage() {
               </div>
             </div>
           </div>
+
+          <WakingNotice active={isLoading} />
 
           {isError && (
             <div className="rounded-2xl border border-bad/40 bg-bad/10 p-5">
