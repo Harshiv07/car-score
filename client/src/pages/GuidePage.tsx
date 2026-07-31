@@ -2,6 +2,7 @@ import { motion } from "framer-motion";
 import { Link } from "react-router-dom";
 import { Walkaround } from "../components/guide/Walkaround";
 import { TyreWear, RustMap, ServiceTimeline } from "../components/guide/Diagrams";
+import { SellerTypes, CertifiedMeanings } from "../components/guide/SellerTypes";
 
 /**
  * The first-car guide.
@@ -79,6 +80,8 @@ function CostRow({ label, amount, note }: { label: string; amount: string; note:
 const CONTENTS = [
   { id: "budget", label: "What it really costs" },
   { id: "before", label: "Before you go" },
+  { id: "sellers", label: "Who's selling it" },
+  { id: "certified", label: "“Certified”" },
   { id: "walkaround", label: "The walkaround" },
   { id: "tyres", label: "Reading the tyres" },
   { id: "rust", label: "Rust" },
@@ -216,10 +219,60 @@ export function GuidePage() {
         </div>
       </Section>
 
+      {/* ---- who is selling it ---- */}
+      <Section
+        id="sellers"
+        eyebrow="03"
+        title="Who's selling it changes everything else"
+        lede="The same car at the same price carries completely different protection depending on who hands you the keys. This is the least visible thing in a listing and the most consequential, so settle it before you drive anywhere."
+      >
+        <SellerTypes />
+
+        <motion.div {...rise} className="mt-6 rounded-2xl border border-warn/30 bg-warn/5 p-5">
+          <p className="text-sm leading-relaxed text-text">
+            <span className="font-bold">A listing site is not a seller.</span> AutoTrader and CarGurus are
+            noticeboards — a listing there can be a franchised dealer, an independent lot, or someone in a
+            driveway, and the column that applies to you changes completely between them. This app shows the
+            source it found a car on, which is not the same as who is selling it, so the first question on the
+            phone is: <span className="font-semibold text-text">are you a registered dealer, or a private
+            seller?</span>
+          </p>
+        </motion.div>
+      </Section>
+
+      {/* ---- the certified trap ---- */}
+      <Section
+        id="certified"
+        eyebrow="04"
+        title="Three different things are called &ldquo;certified&rdquo;"
+        lede="This single word does more damage than any other in a used-car advert, because a seller can say it and mean any of the following — and none of them means what a first buyer assumes."
+      >
+        <CertifiedMeanings />
+
+        <motion.div {...rise} className="mt-6 grid gap-4 sm:grid-cols-2">
+          <div className="rounded-2xl border border-line bg-surface p-5">
+            <p className="text-sm font-bold text-text">So ask the question precisely</p>
+            <p className="mt-2 text-sm leading-relaxed text-muted">
+              Not "is it certified?" but "does it come with a valid Safety Standards Certificate, and is there
+              any warranty beyond that?" Those are two separate answers, and a vague reply to a precise question
+              is itself information.
+            </p>
+          </div>
+          <div className="rounded-2xl border border-bad/30 bg-bad/5 p-5">
+            <p className="text-sm font-bold text-bad">&ldquo;Sold as-is&rdquo; is legal, and it means exactly what it says</p>
+            <p className="mt-2 text-sm leading-relaxed text-muted">
+              A registered dealer may sell a car with no certificate and no warranty as long as it is clearly
+              disclosed. You cannot plate it until it passes an inspection, and you pay for both the inspection
+              and everything it fails on. Price an as-is car as if it needs $1,000 of work, because it might.
+            </p>
+          </div>
+        </motion.div>
+      </Section>
+
       {/* ---- walkaround ---- */}
       <Section
         id="walkaround"
-        eyebrow="03"
+        eyebrow="05"
         title="The walkaround, in order"
         lede="Do this the same way every time. A fixed order is how you stop skipping things while someone stands next to you waiting for a decision."
       >
@@ -229,7 +282,7 @@ export function GuidePage() {
       {/* ---- tyres ---- */}
       <Section
         id="tyres"
-        eyebrow="04"
+        eyebrow="06"
         title="Tyres tell you about the car, not the tyres"
         lede="They are the cheapest part to read and the most honest. Wear patterns record how the car has been maintained and whether anything underneath is bent."
       >
@@ -245,7 +298,7 @@ export function GuidePage() {
       {/* ---- rust ---- */}
       <Section
         id="rust"
-        eyebrow="05"
+        eyebrow="07"
         title="Rust is the Canadian tax"
         lede="Road salt means a structurally rusty car is common here and normal in an eight-year-old vehicle that lived outside. Surface rust on a bracket is cosmetic. Rust on structure is the end of the car."
       >
@@ -272,7 +325,7 @@ export function GuidePage() {
       {/* ---- drive ---- */}
       <Section
         id="drive"
-        eyebrow="06"
+        eyebrow="08"
         title="The test drive"
         lede="Twenty minutes, with the radio off, on roads you choose — not the loop the seller suggests. You are listening, not enjoying it."
       >
@@ -321,7 +374,7 @@ export function GuidePage() {
       {/* ---- paperwork ---- */}
       <Section
         id="paperwork"
-        eyebrow="07"
+        eyebrow="09"
         title="Paperwork, and the one number that has to match"
         lede="Boring, and the part that turns into a genuine disaster when it's wrong."
       >
@@ -368,7 +421,7 @@ export function GuidePage() {
       </Section>
 
       {/* ---- PPI ---- */}
-      <Section id="ppi" eyebrow="08" title="Pay a mechanic before you pay the seller">
+      <Section id="ppi" eyebrow="10" title="Pay a mechanic before you pay the seller">
         <motion.div {...rise} className="rounded-3xl border border-brand/30 bg-brand/5 p-6 sm:p-8">
           <p className="text-base leading-relaxed text-text">
             A pre-purchase inspection costs <span className="font-bold text-brand">$100–200</span> at an
@@ -391,7 +444,7 @@ export function GuidePage() {
       {/* ---- negotiate ---- */}
       <Section
         id="negotiate"
-        eyebrow="09"
+        eyebrow="11"
         title="Negotiating with facts instead of nerve"
         lede="You don't need to be a confident haggler. You need a list and a number, which is what the previous sections were for."
       >
@@ -426,7 +479,7 @@ export function GuidePage() {
       {/* ---- walk away ---- */}
       <Section
         id="walkaway"
-        eyebrow="10"
+        eyebrow="12"
         title="When to stop and leave"
         lede="Not everything is negotiable. These are the ones where the right answer is to thank them and go."
       >
@@ -455,7 +508,7 @@ export function GuidePage() {
       {/* ---- maintain ---- */}
       <Section
         id="maintain"
-        eyebrow="11"
+        eyebrow="13"
         title="Keeping it alive once it's yours"
         lede="Most cars that die young are killed by neglect rather than age. Almost all of this is cheap, and the one expensive item on the list is the one that destroys engines when it's skipped."
       >
