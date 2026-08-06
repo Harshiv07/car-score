@@ -5,38 +5,110 @@ name: Keep API warm
 # request warm took 0.36s. That gap is the whole of "the initial loading is very
 # slow" — the app's own caching is already serving warm reads in milliseconds.
 #
-# So this pings the health endpoint often enough that the instance rarely idles
-# out. It is a workaround for the hosting tier, not a fix for the app: the only
-# real fix is a plan that doesn't sleep, and this is the free version of that.
+# WHY THIS JOB LOOPS INSTEAD OF JUST PINGING ONCE
 #
-# GitHub throttles scheduled workflows on busy runners, so the interval is a
-# floor rather than a guarantee — an occasional cold start will still happen.
+# GitHub does not honour a high-frequency cron. Measured over the first 85 runs
+# of this workflow (162 hours): the cron asks for 10 minutes, the median gap
+# between runs that actually fired was 103 minutes, and *not one* of the 84
+# gaps came in under 15 minutes. Render idles at ~15. A single ping per trigger
+# therefore never once reached the instance before it had already gone to
+# sleep — the workflow was green throughout and doing nothing.
+#
+# So each run that does fire now holds its runner and pings on its own timer
+# for the next PING_WINDOW_MINUTES. GitHub's scheduling is unreliable; a shell
+# loop is not. Actions minutes are free and unlimited on public repositories,
+# which is what makes this affordable.
+#
+# This is still a workaround for the hosting tier, not a fix. The real fixes,
+# in order of preference:
+#   1. A Render plan that doesn't sleep (~$7/mo) — removes the problem.
+#   2. An external uptime pinger (cron-job.org, UptimeRobot) — free, and it
+#      actually honours a 5-minute schedule, which GitHub will not.
+# Coverage here is proportional to how often GitHub feels like starting a run.
 
 on:
   schedule:
-    # Every 10 minutes. Render idles at ~15, so this leaves headroom for a
-    # skipped run without the instance dropping.
+    # Kept at 10 minutes deliberately. GitHub drops most of these triggers (see
+    # above), so this is a request for "as often as you'll give me a runner",
+    # not a real interval. The in-job loop is what provides actual coverage.
     - cron: "*/10 * * * *"
   workflow_dispatch:
+    inputs:
+      window_minutes:
+        description: "How long this run should keep pinging"
+        default: "50"
+        required: false
 
 concurrency:
   group: keep-warm
-  cancel-in-progress: true
+  # Never cancel a ping that is already in flight. With cancel-in-progress the
+  # next scheduled occurrence killed the previous run while it was still
+  # waiting for a runner — GitHub reports that as a cancelled job inside a
+  # failed run, which is exactly how this workflow went red on 2026-08-06
+  # having never made a request at all.
+  cancel-in-progress: false
 
 permissions: {}
 
 jobs:
   ping:
+    # Forks inherit the cron; without this they would wake somebody else's API.
+    if: github.repository == 'Harshiv07/car-score'
     runs-on: ubuntu-latest
-    timeout-minutes: 5
+    # Comfortably above the ping window so the loop closes on its own terms
+    # rather than being killed mid-request.
+    timeout-minutes: 60
     steps:
-      - name: Ping /healthz
+      - name: Ping /healthz on a timer
+        env:
+          API_URL: ${{ vars.API_URL || 'https://carscore-api.onrender.com' }}
+          PING_WINDOW_MINUTES: ${{ inputs.window_minutes || '50' }}
+          PING_INTERVAL_SECONDS: "300"
         run: |
-          URL="${{ vars.API_URL || 'https://carscore-api.onrender.com' }}/healthz"
-          # A cold instance can take a while to answer; that is the point of the
-          # request, so allow for it rather than failing the run.
-          code=$(curl -sS -o /dev/null -w '%{http_code}' --max-time 90 --retry 2 --retry-delay 10 "$URL" || echo "000")
-          echo "GET $URL -> $code"
-          # Don't fail the workflow on a bad response: a red cron every ten
-          # minutes trains everyone to ignore it, and this job is best-effort.
-          if [ "$code" != "200" ]; then echo "::warning::API did not return 200 (got $code)"; fi
+          set -u
+          url="${API_URL%/}/healthz"
+          deadline=$(( $(date -u +%s) + PING_WINDOW_MINUTES * 60 ))
+          ok=0
+          bad=0
+
+          echo "Pinging $url every ${PING_INTERVAL_SECONDS}s for ${PING_WINDOW_MINUTES}m"
+
+          while :; do
+            # Worst case 125s (60 + 5 delay + 60), which has to stay well under
+            # the interval so a slow cold start can't make pings overlap. The
+            # previous budget was 290s against a 300s job timeout, leaving 10s
+            # for runner startup — a genuinely slow wake would have blown it.
+            #
+            # curl writes -w once per attempt, so a retried failure prints
+            # "000" twice; take the last line and treat "no output at all" as
+            # 000 rather than letting the codes concatenate into "000000".
+            code=$(curl -sS -o /dev/null -w '%{http_code}\n' \
+                     --max-time 60 --retry 1 --retry-delay 5 --retry-connrefused \
+                     "$url" | tail -n 1)
+            code="${code:-000}"
+
+            if [ "$code" = "200" ]; then
+              ok=$(( ok + 1 ))
+            else
+              bad=$(( bad + 1 ))
+              echo "::warning::$url returned $code"
+            fi
+            echo "$(date -u +%H:%M:%S)  $url -> $code"
+
+            now=$(date -u +%s)
+            [ "$now" -ge "$deadline" ] && break
+            remaining=$(( deadline - now ))
+            sleep $(( PING_INTERVAL_SECONDS < remaining ? PING_INTERVAL_SECONDS : remaining ))
+          done
+
+          # A red cron every few hours trains everyone to ignore it, so a bad
+          # response is a warning and a summary line, never a failed run. The
+          # run failing should mean "the workflow is broken", not "the API was
+          # briefly slow".
+          {
+            echo "### Keep API warm"
+            echo ""
+            echo "- Endpoint: \`$url\`"
+            echo "- Window: ${PING_WINDOW_MINUTES}m at ${PING_INTERVAL_SECONDS}s intervals"
+            echo "- Pings: **$ok** ok, **$bad** not-200"
+          } >> "$GITHUB_STEP_SUMMARY"
