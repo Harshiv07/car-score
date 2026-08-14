@@ -6,7 +6,7 @@ import { PaymentEstimate } from "../components/PaymentEstimate";
 import { AnimatedNumber, FillBar } from "../components/motion";
 import { useFavorites } from "../hooks/useFavorites";
 import { whyLine, scoreBand, kmPerYear } from "../lib/whyLine";
-import { Badge, cad, DealPill, isRecent, km, NewBadge, scoreHex, Stars, timeAgo } from "../components/ui";
+import { Badge, cad, DealPill, EvapBadge, isRecent, km, NewBadge, scoreHex, Stars, timeAgo } from "../components/ui";
 
 const SEVERITY_STYLES: Record<string, string> = {
   major: "text-bad",
@@ -77,6 +77,7 @@ export function DetailPage() {
             <DealPill rating={l.score.dealRating} />
             {l.cpo && <Badge label="CPO" />}
             {isRecent(l.firstSeenAt) && <NewBadge />}
+            {l.evap?.eligible && <EvapBadge rebateAmount={l.evap.rebateAmount} reason={l.evap.reason} />}
           </div>
 
           <h1 className="mt-2 font-display text-3xl font-extrabold leading-tight tracking-tight text-text">
@@ -218,6 +219,26 @@ export function DetailPage() {
               <p className="mt-2 text-xs text-faint">
                 Assumes {ownership.assumptions.kmPerYear.toLocaleString()} km/yr at $
                 {ownership.assumptions.fuelPriceCadPerL}/L. Insurance varies by driver.
+              </p>
+            </div>
+          )}
+
+          {l.evap && (
+            <div className={card}>
+              <h2 className={h2}>EV incentive (EVAP)</h2>
+              <div className="flex items-baseline justify-between gap-3">
+                <span className={`text-sm font-bold ${l.evap.eligible ? "text-good" : "text-muted"}`}>
+                  {l.evap.eligible ? "May qualify" : "Doesn't appear to qualify"}
+                </span>
+                {l.evap.eligible && (
+                  <span className="nums text-lg font-extrabold text-good">{cad(l.evap.rebateAmount)}</span>
+                )}
+              </div>
+              <p className="mt-2 text-xs leading-relaxed text-muted">{l.evap.reason}</p>
+              <p className="mt-2 text-[11px] text-faint">
+                Canada's Electric Vehicle Affordability Program, April 2026–March 2031. This is a simplified read
+                based on price and make, not a legal determination — confirm against the government's official
+                eligible-vehicle list before you buy.
               </p>
             </div>
           )}

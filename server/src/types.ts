@@ -92,6 +92,14 @@ export interface ScoreResult {
 export interface ScoredListing extends Listing {
   score: ScoreResult;
   badges: string[];
+  /** Federal EV Affordability Program read on this listing; null when not applicable (see data/evapEligibility.ts). */
+  evap: EvapEligibility | null;
+}
+
+export interface EvapEligibility {
+  eligible: boolean;
+  rebateAmount: number;
+  reason: string;
 }
 
 export interface ScrapeHistoryEntry {

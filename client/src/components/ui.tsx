@@ -130,6 +130,26 @@ export function NewBadge() {
   );
 }
 
+/**
+ * "May qualify for the federal EV Affordability Program" — money back, not a
+ * warning, so it borrows the same green used for savings and CPO rather than
+ * gold (reserved for the score) or a caution colour. `rebateAmount` and
+ * `reason` come straight from the server's `evapEligibility` check; the title
+ * attribute carries the "may qualify, confirm before you buy" caveat so it's
+ * one hover away without cluttering the card.
+ */
+export function EvapBadge({ rebateAmount, reason }: { rebateAmount: number; reason: string }) {
+  return (
+    <span
+      className="inline-flex items-center gap-1 rounded-full bg-good/15 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-good ring-1 ring-good/25"
+      title={reason}
+    >
+      <span className="h-1.5 w-1.5 rounded-full bg-good" />
+      EVAP eligible · ${rebateAmount.toLocaleString("en-CA")}
+    </span>
+  );
+}
+
 export function Stars({ value, className = "" }: { value: number; className?: string }) {
   const full = Math.floor(value);
   const half = value - full >= 0.5;
