@@ -13,7 +13,8 @@
     "scrape:snapshot": "node --import tsx src/scripts/snapshotListings.ts",
     "db:seed-snapshot": "node --import tsx src/scripts/seedFromSnapshot.ts",
     "typecheck": "tsc -p tsconfig.json --noEmit",
-    "dealer:probe": "node --import tsx src/scripts/probeDealer.ts"
+    "dealer:probe": "node --import tsx src/scripts/probeDealer.ts",
+    "recalls:build": "node --import tsx src/scripts/buildRecallData.ts"
   },
   "dependencies": {
     "cheerio": "^1.0.0",

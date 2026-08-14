@@ -9,6 +9,7 @@ import {
   sortListings,
 } from "../services/listingService";
 import { getModelInfo } from "../data/vehicleModels";
+import { getRecallHistory } from "../services/recallService";
 
 export const listingsRouter = Router();
 
@@ -132,6 +133,7 @@ listingsRouter.get("/:id", async (req, res) => {
     res.json({
       listing,
       ownership: ownershipEstimate(listing),
+      recallHistory: getRecallHistory(listing.make, listing.model, listing.year),
       modelInfo: info
         ? {
             body: info.body,
