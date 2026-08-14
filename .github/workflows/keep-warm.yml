@@ -37,10 +37,13 @@ name: Keep API warm
 
 on:
   schedule:
-    # Kept at 10 minutes deliberately. GitHub drops most of these triggers (see
-    # above), so this is a request for "as often as you'll give me a runner",
-    # not a real interval. The in-job loop is what provides actual coverage.
-    - cron: "*/10 * * * *"
+    # 5 minutes is GitHub's documented floor for scheduled workflows — it will
+    # not run one more often than this, no matter what's written here. GitHub
+    # drops most of these triggers anyway (see above), so this is a request
+    # for "as often as you'll give me a runner", not a real interval. The
+    # in-job loop is what provides actual coverage between whichever triggers
+    # land.
+    - cron: "*/5 * * * *"
   workflow_dispatch:
     inputs:
       window_minutes:
