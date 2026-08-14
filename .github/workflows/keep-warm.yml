@@ -19,6 +19,15 @@ name: Keep API warm
 # loop is not. Actions minutes are free and unlimited on public repositories,
 # which is what makes this affordable.
 #
+# 2026-08-14 re-check, 59 runs (~2.5 days) since the loop landed: median gap
+# between a run's end and the next run's start is 15.4m, mean 24.3m, worst
+# 112m. Render idles at ~15m, so 53% of gaps still went cold. Widening the
+# window from 50m to 57m (against a 60m timeout) directly converts idle gap
+# time into active-ping time for any trigger that queues behind a still-running
+# job — it does nothing for the ~10% of gaps over an hour, where GitHub simply
+# never granted a runner at all. That ceiling is why the real fixes below still
+# stand; this is squeezing what's left out of a workaround, not replacing one.
+#
 # This is still a workaround for the hosting tier, not a fix. The real fixes,
 # in order of preference:
 #   1. A Render plan that doesn't sleep (~$7/mo) — removes the problem.
@@ -36,7 +45,7 @@ on:
     inputs:
       window_minutes:
         description: "How long this run should keep pinging"
-        default: "50"
+        default: "57"
         required: false
 
 concurrency:
@@ -57,12 +66,12 @@ jobs:
     runs-on: ubuntu-latest
     # Comfortably above the ping window so the loop closes on its own terms
     # rather than being killed mid-request.
-    timeout-minutes: 60
+    timeout-minutes: 65
     steps:
       - name: Ping /healthz on a timer
         env:
           API_URL: ${{ vars.API_URL || 'https://carscore-api.onrender.com' }}
-          PING_WINDOW_MINUTES: ${{ inputs.window_minutes || '50' }}
+          PING_WINDOW_MINUTES: ${{ inputs.window_minutes || '57' }}
           PING_INTERVAL_SECONDS: "300"
         run: |
           set -u
