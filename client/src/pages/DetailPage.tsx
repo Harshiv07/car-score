@@ -217,7 +217,8 @@ export function DetailPage() {
               </div>
               <p className="mt-2 text-xs text-faint">
                 Assumes {ownership.assumptions.kmPerYear.toLocaleString()} km/yr at $
-                {ownership.assumptions.fuelPriceCadPerL}/L. Insurance varies by driver.
+                {ownership.assumptions.fuelPriceCadPerL}/L. Insurance is based on {ownership.assumptions.insuranceProvince}{" "}
+                averages and varies by driver.
               </p>
             </div>
           )}

@@ -119,7 +119,7 @@ export interface RecallHistoryEntry {
 export interface ListingDetailResponse {
   listing: ScoredListing;
   ownership: {
-    assumptions: { kmPerYear: number; fuelPriceCadPerL: number };
+    assumptions: { kmPerYear: number; fuelPriceCadPerL: number; insuranceProvince: string };
     fuelAnnual: number;
     insuranceAnnual: number;
     maintenanceAnnual: number;
