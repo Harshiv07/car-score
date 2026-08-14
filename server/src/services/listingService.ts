@@ -256,6 +256,87 @@ export function findAlternatives(listing: ScoredListing, all: ScoredListing[], n
     .map((x) => x.l);
 }
 
+/**
+ * Average annual car-insurance premium by province, before this app's own
+ * per-model risk tier (`insuranceTier`) is layered on top.
+ *
+ * These are province-wide market averages for a single driver with a clean
+ * record, not a rating engine — same caveat the payment estimator already
+ * states for financing. Manitoba and Quebec both run public (or
+ * partly-public) auto insurance — MPI/Autopac in Manitoba, the SAAQ's
+ * no-fault bodily-injury layer in Quebec — which is the structural reason
+ * both land well under Ontario's fully-private market, not noise.
+ *
+ * Sourced 2026-08-14:
+ *  - ON $2,000/yr — FSRA puts the provincial average at ~$2,164 as of late
+ *    2025 (reported via CBC); Ratehub/PolicyMe retail quotes for a
+ *    clean-record driver run ~$1,800-2,000/yr as of May 2026. $2,000 sits
+ *    at the low end of that band.
+ *  - QC $900/yr — PolicyMe cites ~$717-900/yr, consistent with Quebec's
+ *    well-documented standing as the cheapest province to insure in
+ *    (SAAQ public coverage); Statistics Canada's Apr-2025 profitability
+ *    report puts the 2024 all-in average at $1,044. $900 is conservative
+ *    within that spread.
+ *  - MB $1,150/yr — WealthNorth (May 2026) quotes $950-1,350/yr for basic
+ *    MPI Autopac coverage; IBC and the same StatCan report put the all-in
+ *    2024 average near $1,200-1,236. $1,150 sits inside both ranges.
+ *
+ * Keyed by the two-letter code the scrapers already normalize `province`
+ * to (see `TAX_BY_PROVINCE` in client/src/lib/finance.ts for the same
+ * pattern) — this app's inventory is restricted to ON/QC/MB, so that's the
+ * full table.
+ */
+const INSURANCE_BASE_BY_PROVINCE: Record<string, number> = {
+  ON: 2000,
+  QC: 900,
+  MB: 1150,
+};
+
+/**
+ * Fallback base when `listing.province` is null, blank, or (shouldn't
+ * happen given the app's ON/QC/MB scope, but scraped data is messy) some
+ * other jurisdiction. A silent default to one specific province's rate
+ * would misrepresent the other two, so this averages all three supported
+ * provinces instead — deliberately, not just whatever the table iterates
+ * to first.
+ */
+const INSURANCE_BASE_FALLBACK = Math.round(
+  Object.values(INSURANCE_BASE_BY_PROVINCE).reduce((a, b) => a + b, 0) /
+    Object.keys(INSURANCE_BASE_BY_PROVINCE).length
+); // (2000 + 900 + 1150) / 3 = 1350
+
+/** Full province names for the UI footnote — keep in sync with INSURANCE_BASE_BY_PROVINCE's keys. */
+const PROVINCE_NAMES: Record<string, string> = { ON: "Ontario", QC: "Quebec", MB: "Manitoba" };
+
+/** Resolves a listing's province to an insurance base + a readable label for the UI. */
+function insuranceBaseFor(province: string | null): { amount: number; label: string } {
+  const code = province?.trim().toUpperCase();
+  const amount = code ? INSURANCE_BASE_BY_PROVINCE[code] : undefined;
+  return amount != null
+    ? { amount, label: PROVINCE_NAMES[code as string] }
+    : { amount: INSURANCE_BASE_FALLBACK, label: "ON/QC/MB" };
+}
+
+/**
+ * insuranceTier is a 1-5 scale (5 = cheapest to insure, see
+ * vehicleModels.ts) for how insurance-expensive *this specific model* is
+ * relative to other models — a sports coupe vs. a minivan. Province base
+ * (above) is "what insurance costs to live here." The old formula
+ * (`2600 - tier*220`) collapsed both into one flat number applied to every
+ * province alike, so a Quebec and an identically-scored Ontario listing
+ * showed the same insurance line despite a real ~2x gap between them.
+ *
+ * Tier 3 — the middle of the scale — is treated as insurance-neutral: the
+ * estimate equals the province base exactly. Each step away from 3 shifts
+ * it 10%, so tier 1 (priciest models) lands at base * 1.2 and tier 5
+ * (cheapest) at base * 0.8. That's a deliberately modest swing: vehicle
+ * type is a real rating factor but a smaller one than jurisdiction, and
+ * this app has no data to justify claiming more than "this model skews a
+ * bit above/below its province's average."
+ */
+const NEUTRAL_INSURANCE_TIER = 3;
+const TIER_ADJUSTMENT_PER_STEP = 0.1;
+
 /** Rough annual ownership estimate for the detail page. */
 export function ownershipEstimate(listing: Listing) {
   const info = getModelInfo(listing.make, listing.model);
@@ -263,10 +344,14 @@ export function ownershipEstimate(listing: Listing) {
   const kmPerYear = 16000;
   const fuelPrice = 1.6; // CAD/L
   const fuelAnnual = Math.round((info.ownership.fuelCombLper100km / 100) * kmPerYear * fuelPrice);
-  const insuranceAnnual = Math.round(2600 - info.ownership.insuranceTier * 220); // tier 5 → ~$1500, tier 1 → ~$2400
+
+  const { amount: insuranceBase, label: insuranceProvince } = insuranceBaseFor(listing.province);
+  const tierMultiplier = 1 + (NEUTRAL_INSURANCE_TIER - info.ownership.insuranceTier) * TIER_ADJUSTMENT_PER_STEP;
+  const insuranceAnnual = Math.round(insuranceBase * tierMultiplier);
+
   const maintenanceAnnual = info.ownership.maintAnnualCad;
   return {
-    assumptions: { kmPerYear, fuelPriceCadPerL: fuelPrice },
+    assumptions: { kmPerYear, fuelPriceCadPerL: fuelPrice, insuranceProvince },
     fuelAnnual,
     insuranceAnnual,
     maintenanceAnnual,

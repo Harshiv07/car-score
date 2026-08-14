@@ -111,15 +111,29 @@ export interface KnownIssue {
   note?: string;
 }
 
+/**
+ * A recall Transport Canada has on record for this exact make/model/year.
+ * This means the recall was *issued*, not that this specific car's VIN
+ * still has it outstanding — completion status is only checkable per-VIN
+ * through the manufacturer.
+ */
+export interface RecallHistoryEntry {
+  year: number;
+  recallNumber: string;
+  date: string;
+  summary: string;
+}
+
 export interface ListingDetailResponse {
   listing: ScoredListing;
   ownership: {
-    assumptions: { kmPerYear: number; fuelPriceCadPerL: number };
+    assumptions: { kmPerYear: number; fuelPriceCadPerL: number; insuranceProvince: string };
     fuelAnnual: number;
     insuranceAnnual: number;
     maintenanceAnnual: number;
     totalAnnual: number;
   } | null;
+  recallHistory: RecallHistoryEntry[];
   modelInfo: {
     body: string;
     reliabilitySummary: string;

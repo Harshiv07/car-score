@@ -48,7 +48,7 @@ export function DetailPage() {
     );
   }
 
-  const { listing: l, ownership, modelInfo, alternatives, externalLinks } = data;
+  const { listing: l, ownership, recallHistory, modelInfo, alternatives, externalLinks } = data;
   const { market } = l.score;
   const fav = isFavorite(l.dedupeKey);
   const perYear = kmPerYear(l);
@@ -218,7 +218,8 @@ export function DetailPage() {
               </div>
               <p className="mt-2 text-xs text-faint">
                 Assumes {ownership.assumptions.kmPerYear.toLocaleString()} km/yr at $
-                {ownership.assumptions.fuelPriceCadPerL}/L. Insurance varies by driver.
+                {ownership.assumptions.fuelPriceCadPerL}/L. Insurance is based on {ownership.assumptions.insuranceProvince}{" "}
+                averages and varies by driver.
               </p>
             </div>
           )}
@@ -243,22 +244,50 @@ export function DetailPage() {
             </div>
           )}
 
-          {modelInfo && modelInfo.knownIssues.length > 0 && (
+          {((modelInfo && modelInfo.knownIssues.length > 0) || recallHistory.length > 0) && (
             <div className={card}>
               <h2 className={h2}>Known issues &amp; recalls</h2>
-              <ul className="space-y-2 text-sm">
-                {modelInfo.knownIssues.map((i) => (
-                  <li key={i.title} className="flex gap-2">
-                    <span className={`font-bold ${SEVERITY_STYLES[i.severity]}`}>•</span>
-                    <span className="text-text">
-                      {i.title}
-                      {i.note && <span className="text-muted"> — {i.note}</span>}
-                    </span>
-                  </li>
-                ))}
-              </ul>
+
+              {modelInfo && modelInfo.knownIssues.length > 0 && (
+                <ul className="space-y-2 text-sm">
+                  {modelInfo.knownIssues.map((i) => (
+                    <li key={i.title} className="flex gap-2">
+                      <span className={`font-bold ${SEVERITY_STYLES[i.severity]}`}>•</span>
+                      <span className="text-text">
+                        {i.title}
+                        {i.note && <span className="text-muted"> — {i.note}</span>}
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              )}
+
+              {recallHistory.length > 0 && (
+                <div className={modelInfo && modelInfo.knownIssues.length > 0 ? "mt-4 border-t border-line pt-4" : ""}>
+                  <p className="mb-2 text-xs font-bold uppercase tracking-wider text-faint">
+                    {recallHistory.length} recall{recallHistory.length === 1 ? "" : "s"} on file for {l.year}{" "}
+                    {l.make} {l.model}
+                  </p>
+                  <ul className="space-y-2.5 text-sm">
+                    {recallHistory.map((r) => (
+                      <li key={r.recallNumber} className="flex gap-2">
+                        <span className="font-bold text-warn">•</span>
+                        <span className="text-text">
+                          {r.summary}
+                          <span className="ml-1.5 whitespace-nowrap text-xs text-faint">
+                            (#{r.recallNumber}, {r.date})
+                          </span>
+                        </span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+
               <p className="mt-3 text-xs text-faint">
-                Model-level patterns, not this specific car. Confirm open recalls by VIN before you buy.
+                {recallHistory.length > 0
+                  ? "This is every recall Transport Canada has issued for this model year, not this specific car — it doesn't say whether this VIN's recalls were completed. Ask the dealer, or check with the manufacturer using the VIN."
+                  : "Model-level patterns, not this specific car. Confirm open recalls by VIN before you buy."}
               </p>
             </div>
           )}
