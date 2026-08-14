@@ -79,6 +79,55 @@ let inFlight: Promise<ScoredListing[]> | null = null;
  * everything, minus the 1.9M pointless comparisons an O(n²) scan does at 1,376
  * listings. Free locally, decisive on a 0.1-CPU dyno.
  */
+/**
+ * How long a listing can go unseen by a crawl before it stops being served.
+ *
+ * Measured against production on 2026-08-14: 68.5% of the 1,400 live
+ * listings hadn't been touched by a successful crawl in 17.1 days — nothing
+ * scheduled a scrape, only a manual "Refresh Listings" click did, so a car
+ * that sold or was delisted just sat in the inventory looking available
+ * indefinitely. `scrape-refresh.yml` fixes the cause (crawls now run on a
+ * schedule); this is the effect-side fix — once a source's crawl genuinely
+ * doesn't find a listing anymore, it should stop showing as for sale.
+ *
+ * This never deletes anything — `storage.getAllListings()` and the database
+ * are untouched. It's a read-time filter only, the safest shape available
+ * given this exact area (dedupe/upsert identity) caused a real production
+ * data-loss incident before: if this threshold is wrong, worst case is a
+ * listing reappears or disappears from view, never that data is lost.
+ * Default is deliberately generous (5 days against a ~3-hour scrape
+ * schedule) so a rough patch of failed/skipped crawls — which the earlier
+ * keep-warm investigation showed GitHub's own cron is prone to — doesn't
+ * false-hide a car that's still there.
+ *
+ * Applied only at the *discovery* boundary (the plain leaderboard) — never
+ * to a lookup by id or dedupeKey. `getScoredListings()` itself always
+ * returns the full set, stale included; `filterActive()` is applied by the
+ * caller. Learned this the careful way: the favourites page resolves saved
+ * cars via `?keys=` against this same data (see listings.ts), and prunes
+ * from localStorage any key that doesn't come back — a mechanism that
+ * exists precisely because an earlier version of that lookup silently
+ * dropped valid favourites. Filtering staleness upstream of that lookup
+ * would have made a car going stale (which is the *expected*, common case
+ * for something someone bookmarked weeks ago) permanently delete it from
+ * the user's saved list. Comparables for Market Value scoring are also
+ * computed over the full set, not just active listings — a 5-day-old price
+ * is still a real comparable.
+ */
+const STALE_AFTER_MS = 5 * 24 * 60 * 60 * 1000;
+
+/** True once a listing has gone unseen by a crawl for longer than STALE_AFTER_MS. */
+export function isStale(l: Listing): boolean {
+  const seen = Date.parse(l.lastSeenAt ?? "");
+  if (!Number.isFinite(seen)) return false; // malformed/missing timestamp: never hide on bad data
+  return Date.now() - seen > STALE_AFTER_MS;
+}
+
+/** The subset of `getScoredListings()` fit to discover — excludes anything unseen for too long. */
+export function filterActive(listings: ScoredListing[]): ScoredListing[] {
+  return listings.filter((l) => !isStale(l));
+}
+
 function bucketByModel(listings: Listing[]): Map<string, Listing[]> {
   const buckets = new Map<string, Listing[]>();
   for (const l of listings) {
@@ -106,7 +155,13 @@ async function buildScoredListings(): Promise<ScoredListing[]> {
   for (const l of all) {
     const comparables = buckets.get(`${l.make}|${l.model}`.toLowerCase()) ?? [l];
     const score = scoreListing(l, comparables);
-    if (score) scored.push({ ...l, score, badges: [] });
+    // Baked in at build time like score/badges, so it's only as fresh as the
+    // last rebuild (a scrape completing, or the TTL forcing a re-check) —
+    // same model as everything else on ScoredListing. filterActive() doesn't
+    // rely on this: it recomputes isStale() live, so what actually gets
+    // hidden from discovery is always correct regardless of cache age. This
+    // field is purely for display (the "not confirmed recently" banner/tag).
+    if (score) scored.push({ ...l, score, badges: [], stale: isStale(l) });
   }
   assignBadges(scored);
 

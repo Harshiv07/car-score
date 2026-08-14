@@ -130,6 +130,19 @@ export function NewBadge() {
   );
 }
 
+/** No crawl has confirmed this listing is still up in over 5 days — likely sold or delisted. */
+export function StaleBadge() {
+  return (
+    <span
+      className="inline-flex items-center gap-1 rounded-full bg-warn/15 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-warn ring-1 ring-warn/25"
+      title="No crawl has confirmed this listing is still up in over 5 days — it may be sold."
+    >
+      <span className="h-1.5 w-1.5 rounded-full bg-warn" />
+      Not confirmed recently
+    </span>
+  );
+}
+
 export function Stars({ value, className = "" }: { value: number; className?: string }) {
   const full = Math.floor(value);
   const half = value - full >= 0.5;

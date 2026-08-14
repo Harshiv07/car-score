@@ -2,6 +2,7 @@ import { Router, Request } from "express";
 import { ListingFilters, SortKey } from "../types";
 import {
   applyFilters,
+  filterActive,
   findAlternatives,
   getScoredListings,
   inventoryStats,
@@ -81,7 +82,11 @@ listingsRouter.get("/", async (req, res) => {
   try {
     const all = await getScoredListings();
     const keys = parseKeys(req);
-    const scoped = keys ? all.filter((l) => keys.includes(l.dedupeKey)) : all;
+    // A specific key lookup (favourites) resolves regardless of staleness —
+    // see filterActive()'s doc comment for why that matters. Staleness only
+    // hides listings from open-ended discovery.
+    const active = filterActive(all);
+    const scoped = keys ? all.filter((l) => keys.includes(l.dedupeKey)) : active;
     const filtered = applyFilters(scoped, parseFilters(req));
     const sortRaw = strq(req.query.sort) ?? "score";
     const sort: SortKey = (SORT_KEYS as string[]).includes(sortRaw) ? (sortRaw as SortKey) : "score";
@@ -94,7 +99,7 @@ listingsRouter.get("/", async (req, res) => {
     res.set("Cache-Control", READ_CACHE);
     res.json({
       total: sorted.length,
-      totalUnfiltered: all.length,
+      totalUnfiltered: keys ? all.length : active.length,
       page,
       pageSize,
       sort,
@@ -113,7 +118,7 @@ listingsRouter.get("/stats", async (_req, res) => {
   try {
     const all = await getScoredListings();
     res.set("Cache-Control", READ_CACHE);
-    res.json(inventoryStats(all));
+    res.json(inventoryStats(filterActive(all)));
   } catch (e) {
     res.status(500).json({ error: (e as Error).message });
   }

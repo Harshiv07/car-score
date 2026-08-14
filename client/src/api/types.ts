@@ -73,6 +73,8 @@ export interface ScoredListing {
   lastSeenAt: string;
   score: ScoreResult;
   badges: string[];
+  /** No crawl has confirmed this listing is still up in over 5 days — likely sold or delisted. */
+  stale: boolean;
 }
 
 export interface ListingsResponse {

@@ -1,0 +1,73 @@
+name: Refresh listings
+
+# The scrape pipeline itself is healthy — nothing schedules it. The only
+# trigger is a human clicking "Refresh Listings" in the UI. Measured against
+# production on 2026-08-14: 68.5% of the 1,400 live listings hadn't been
+# touched by a successful crawl in 17.1 days, all landing on the exact same
+# timestamp, matching `lastScrapeTime` from `/api/scrape/status` to the day —
+# one crawl, then nothing, for over two weeks. A listing that's sold or
+# delisted just sits in the inventory looking available, because nothing
+# ever re-crawls to notice it's gone.
+#
+# This is unrelated to keep-warm.yml: that workflow keeps the *process* from
+# idling out; this one makes sure the *data* actually gets refreshed even
+# when nobody happens to open the app and click the button. POST /api/scrape
+# is safe to call this often — it's already gated by its own cooldown and
+# "already running" checks server-side (a 409 here is the expected, healthy
+# response most of the time, not a failure).
+#
+# Every three hours is deliberately conservative: fresh enough that a sold
+# car doesn't linger for weeks, infrequent enough to stay polite to the
+# scraped sites and comfortably inside the run budget
+# (SCRAPE_RUN_BUDGET_MS, 8 min default). GitHub drops a meaningful fraction
+# of scheduled triggers under load (see keep-warm.yml's own measurements),
+# but unlike keeping a process warm, being off by an hour or two here doesn't
+# matter — the failure mode this fixes is measured in weeks, not minutes.
+
+on:
+  schedule:
+    - cron: "0 */3 * * *"
+  workflow_dispatch: {}
+
+concurrency:
+  group: scrape-refresh
+  cancel-in-progress: false
+
+permissions: {}
+
+jobs:
+  trigger:
+    if: github.repository == 'Harshiv07/car-score'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: POST /api/scrape
+        env:
+          API_URL: ${{ vars.API_URL || 'https://carscore-api.onrender.com' }}
+        run: |
+          set -u
+          url="${API_URL%/}/api/scrape"
+          # A cold instance can take a while to answer; that's expected, not
+          # a failure — allow for it rather than timing out early.
+          code=$(curl -sS -o /tmp/resp.json -w '%{http_code}' --max-time 90 -X POST "$url" || echo "000")
+          body=$(cat /tmp/resp.json 2>/dev/null || echo "")
+          echo "POST $url -> $code"
+          echo "$body"
+
+          {
+            echo "### Refresh listings"
+            echo ""
+            echo "- Endpoint: \`$url\`"
+            echo "- Response: **$code**"
+            echo '```json'
+            echo "$body"
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+          # 202 = a scrape started. 409 = one is already running or still in
+          # its cooldown window (e.g. a user just clicked Refresh) — both are
+          # the pipeline working as designed, not this workflow failing.
+          # Anything else (5xx, 000 for no response at all) is worth a look.
+          if [ "$code" != "202" ] && [ "$code" != "409" ]; then
+            echo "::warning::Unexpected response from POST /api/scrape: $code"
+          fi

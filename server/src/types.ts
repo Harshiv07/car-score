@@ -92,6 +92,8 @@ export interface ScoreResult {
 export interface ScoredListing extends Listing {
   score: ScoreResult;
   badges: string[];
+  /** No crawl has confirmed this listing is still up in over 5 days — likely sold or delisted. */
+  stale: boolean;
 }
 
 export interface ScrapeHistoryEntry {

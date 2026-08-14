@@ -60,6 +60,13 @@ export function DetailPage() {
         ← Back to leaderboard
       </Link>
 
+      {l.stale && (
+        <div className="mt-3 rounded-xl border border-warn/25 bg-warn/12 px-4 py-2.5 text-sm text-warn">
+          <span className="font-bold">Not confirmed recently.</span> No crawl has found this listing in over 5
+          days — it may already be sold. Double-check on {l.sourceWebsite} before making a decision based on it.
+        </div>
+      )}
+
       {/* Hero: photo and the verdict, side by side. */}
       <div className="mt-3 grid gap-5 lg:grid-cols-[1.15fr_1fr]">
         <CarPhoto
