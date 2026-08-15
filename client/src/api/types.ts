@@ -37,6 +37,12 @@ export interface ScoreResult {
   cons: string[];
 }
 
+export interface EvapEligibility {
+  eligible: boolean;
+  rebateAmount: number;
+  reason: string;
+}
+
 export interface ScoredListing {
   id: string;
   dedupeKey: string;
@@ -73,6 +79,8 @@ export interface ScoredListing {
   lastSeenAt: string;
   score: ScoreResult;
   badges: string[];
+  /** Federal EV Affordability Program read on this listing; null when not an eligible fuel type. */
+  evap: EvapEligibility | null;
 }
 
 export interface ListingsResponse {

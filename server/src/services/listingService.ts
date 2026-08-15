@@ -8,6 +8,7 @@ import { Listing, ListingFilters, ScoredListing, SortKey } from "../types";
 import { getStorage } from "../db/storage";
 import { scoreListing } from "../scoring/engine";
 import { getModelInfo } from "../data/vehicleModels";
+import { evapEligibility } from "../data/evapEligibility";
 
 function getCat(l: ScoredListing, key: string): number {
   return l.score.breakdown.find((c) => c.key === key)?.points ?? 0;
@@ -106,7 +107,9 @@ async function buildScoredListings(): Promise<ScoredListing[]> {
   for (const l of all) {
     const comparables = buckets.get(`${l.make}|${l.model}`.toLowerCase()) ?? [l];
     const score = scoreListing(l, comparables);
-    if (score) scored.push({ ...l, score, badges: [] });
+    // Cheap and doesn't depend on the comparable set, so it's baked in here
+    // alongside score/badges rather than recomputed per-route.
+    if (score) scored.push({ ...l, score, badges: [], evap: evapEligibility(l) });
   }
   assignBadges(scored);
 

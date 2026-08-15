@@ -8,7 +8,7 @@ import { usePrefetchListing } from "../api/hooks";
 import { CarPhoto } from "./CarPhoto";
 import { whyLine, kmPerYear, mileageVerdict } from "../lib/whyLine";
 import { quickMonthly } from "../lib/finance";
-import { Badge, cad, DealPill, Fact, isRecent, km, NewBadge, ScoreSpine, scoreHex, timeAgo } from "./ui";
+import { Badge, cad, DealPill, EvapBadge, Fact, isRecent, km, NewBadge, ScoreSpine, scoreHex, timeAgo } from "./ui";
 
 /**
  * One car on the leaderboard.
@@ -109,6 +109,7 @@ function ListingCardImpl({ listing, rank }: { listing: ScoredListing; rank?: num
             <DealPill rating={listing.score.dealRating} />
             {listing.cpo && <Badge label="CPO" />}
             {isRecent(listing.firstSeenAt) && <NewBadge />}
+            {listing.evap?.eligible && <EvapBadge rebateAmount={listing.evap.rebateAmount} reason={listing.evap.reason} />}
           </div>
 
           {/* Price line. The monthly figure is what this audience actually
