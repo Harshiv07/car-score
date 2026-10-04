@@ -7,6 +7,7 @@ import { AnimatedNumber, FillBar } from "../components/motion";
 import { useFavorites } from "../hooks/useFavorites";
 import { whyLine, scoreBand, kmPerYear } from "../lib/whyLine";
 import { Badge, cad, DealPill, EvapBadge, isRecent, km, NewBadge, scoreHex, Stars, timeAgo } from "../components/ui";
+import { ScoreRing } from "../components/ScoreRing";
 
 const SEVERITY_STYLES: Record<string, string> = {
   major: "text-bad",
@@ -170,6 +171,9 @@ export function DetailPage() {
         {/* Score breakdown — the reason anyone is on this page. */}
         <div className={card}>
           <h2 className={h2}>Why this score</h2>
+          {/* The same ring as the leaderboard hero, here as the overview; the
+              bars below stay as the exact numbers and the reason for each. */}
+          <ScoreRing breakdown={l.score.breakdown} className="mb-4 h-56 w-full" fallback={null} />
           {/* The bars fill in sequence rather than all at once: the total
               visibly assembles from its categories, which is the one thing this
               panel exists to explain. The stagger is capped so the last bar

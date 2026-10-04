@@ -4,6 +4,7 @@ import { AnimatePresence, motion } from "framer-motion";
 import { ScoredListing } from "../api/types";
 import { useFavorites } from "../hooks/useFavorites";
 import { useCompare } from "../hooks/useCompare";
+import { usePointerLight } from "../hooks/usePointerLight";
 import { usePrefetchListing } from "../api/hooks";
 import { CarPhoto } from "./CarPhoto";
 import { whyLine, kmPerYear, mileageVerdict } from "../lib/whyLine";
@@ -31,6 +32,7 @@ function ListingCardImpl({ listing, rank }: { listing: ScoredListing; rank?: num
   const comparing = inCompare(listing.id);
   const perYear = kmPerYear(listing);
   const prefetch = usePrefetchListing();
+  const light = usePointerLight<HTMLElement>();
   const mileage = mileageVerdict(listing);
   const where =
     [listing.dealer, listing.city && `${listing.city}${listing.province ? `, ${listing.province}` : ""}`]
@@ -49,9 +51,10 @@ function ListingCardImpl({ listing, rank }: { listing: ScoredListing; rank?: num
       // detail request is the whole wait. Warm it now; the click then paints.
       onPointerEnter={() => prefetch(listing.id)}
       onFocusCapture={() => prefetch(listing.id)}
+      onPointerMove={light.onPointerMove}
       whileHover={{ y: -2 }}
       transition={{ type: "spring", stiffness: 400, damping: 30 }}
-      className="group relative overflow-hidden rounded-2xl border border-line bg-surface transition-[border-color,box-shadow] hover:border-brand/40 hover:shadow-lg hover:shadow-black/20"
+      className="group lit relative overflow-hidden rounded-2xl border border-line bg-surface transition-[border-color,box-shadow] hover:border-brand/40 hover:shadow-lg hover:shadow-black/20"
     >
       <Link
         to={`/listing/${listing.id}`}

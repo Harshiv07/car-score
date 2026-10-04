@@ -8,6 +8,7 @@ import { scrapeRouter } from "./routes/scrape";
 import { metaRouter } from "./routes/meta";
 import { newCarsRouter } from "./routes/newcars";
 import { getStorage } from "./db/storage";
+import { asyncHandler, requestLog } from "./util/http";
 
 const PORT = Number(process.env.PORT ?? 4000);
 
@@ -69,6 +70,7 @@ async function main() {
     })
   );
 
+  app.use(requestLog());
   app.use(compression());
 
   app.use(
@@ -94,11 +96,26 @@ async function main() {
     })
   );
 
-  const health = (_req: express.Request, res: express.Response) =>
-    res.json({ ok: true, storage: storage.kind });
-  app.get("/api/health", health);
-  // Alias for hosts (Render, k8s, etc.) that default their health check to /healthz.
-  app.get("/healthz", health);
+  // Liveness: the process is up and the event loop is turning. Deliberately does
+  // not touch the database, so a Mongo blip can't get a healthy process killed.
+  app.get("/healthz", (_req, res) => res.json({ ok: true, storage: storage.kind }));
+
+  // Readiness: can this instance actually serve? A count is the cheapest round
+  // trip that proves the storage layer answers. This used to return ok
+  // unconditionally, so it kept reporting healthy through a dead database.
+  app.get(
+    "/api/health",
+    asyncHandler(async (_req, res) => {
+      try {
+        await storage.countListings();
+        res.json({ ok: true, storage: storage.kind });
+      } catch (e) {
+        // eslint-disable-next-line no-console
+        console.error("Health check: storage unreachable:", e);
+        res.status(503).json({ ok: false, storage: storage.kind });
+      }
+    })
+  );
 
   app.use("/api/listings", listingsRouter);
   // Starting a crawl is the one expensive, outbound-traffic-generating action
@@ -127,6 +144,7 @@ async function main() {
   // are masked, because leaking stack traces or driver messages tells an
   // attacker about the stack for no benefit to a legitimate caller.
   app.use((err: Error, _req: express.Request, res: express.Response, _next: express.NextFunction) => {
+    const requestId = res.locals.requestId as string | undefined;
     const status = (err as { status?: number; statusCode?: number }).status ??
       (err as { statusCode?: number }).statusCode ?? 500;
 
@@ -136,11 +154,13 @@ async function main() {
     }
 
     // eslint-disable-next-line no-console
-    console.error("Unhandled error:", err);
-    res.status(500).json({ error: "Internal server error" });
+    console.error(`Unhandled error (request ${requestId ?? "-"}):`, err);
+    // The id lets a user quote the failing request without the response ever
+    // carrying the cause.
+    res.status(500).json({ error: "Internal server error", requestId });
   });
 
-  app.listen(PORT, () => {
+  const server = app.listen(PORT, () => {
     // eslint-disable-next-line no-console
     console.log(
       `CarScore API listening on :${PORT} (storage: ${storage.kind}${
@@ -148,6 +168,27 @@ async function main() {
       })`
     );
   });
+
+  // Render sends SIGTERM on every deploy. Stop taking new connections, let
+  // in-flight requests finish, then drop the database connection — and give up
+  // after 10s so a hung socket can't hold the old instance open.
+  const shutdown = (signal: string) => {
+    // eslint-disable-next-line no-console
+    console.log(`${signal} received — shutting down.`);
+    const force = setTimeout(() => process.exit(1), 10_000);
+    force.unref();
+    server.close(async () => {
+      try {
+        const mongoose = (await import("mongoose")).default;
+        await mongoose.disconnect();
+      } catch {
+        /* nothing useful to do on the way out */
+      }
+      process.exit(0);
+    });
+  };
+  process.once("SIGTERM", () => shutdown("SIGTERM"));
+  process.once("SIGINT", () => shutdown("SIGINT"));
 }
 
 main().catch((e) => {

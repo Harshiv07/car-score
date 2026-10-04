@@ -132,6 +132,25 @@ export async function getScoredListings(): Promise<ScoredListing[]> {
   return inFlight;
 }
 
+/**
+ * id → listing lookup for one scored snapshot.
+ *
+ * A detail view used to `find()` through the whole array. Keyed on the array
+ * itself, the index lives exactly as long as that snapshot does: when a rescore
+ * builds a new array the old index is garbage-collected with it, so there is
+ * nothing to invalidate.
+ */
+const idIndexes = new WeakMap<ScoredListing[], Map<string, ScoredListing>>();
+
+export function findScoredById(scored: ScoredListing[], id: string): ScoredListing | undefined {
+  let index = idIndexes.get(scored);
+  if (!index) {
+    index = new Map(scored.map((l) => [l.id, l]));
+    idIndexes.set(scored, index);
+  }
+  return index.get(id);
+}
+
 /** Drop the cache — called after a scrape writes new inventory. */
 export function invalidateScoreCache(): void {
   scoreCache = null;

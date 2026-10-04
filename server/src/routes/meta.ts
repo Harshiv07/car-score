@@ -1,6 +1,7 @@
 import { Router } from "express";
 import { VEHICLE_MODELS } from "../data/vehicleModels";
 import { getStorage } from "../db/storage";
+import { asyncHandler } from "../util/http";
 
 export const metaRouter = Router();
 
@@ -8,8 +9,9 @@ export const metaRouter = Router();
  * GET /api/meta — filter options for the UI: supported brands/models,
  * plus the provinces/cities/sources actually present in the inventory.
  */
-metaRouter.get("/", async (_req, res) => {
-  try {
+metaRouter.get(
+  "/",
+  asyncHandler(async (_req, res) => {
     const storage = await getStorage();
     const listings = await storage.getAllListings();
     const uniq = (xs: (string | null)[]) => [...new Set(xs.filter((x): x is string => !!x))].sort();
@@ -35,7 +37,5 @@ metaRouter.get("/", async (_req, res) => {
       ],
       storage: storage.kind,
     });
-  } catch (e) {
-    res.status(500).json({ error: (e as Error).message });
-  }
-});
+  })
+);

@@ -2,6 +2,7 @@ import { Router } from "express";
 import { getProgress, startScrape } from "../services/scrapeService";
 import { getStorage } from "../db/storage";
 import { verifyPipeline } from "../services/selfCheck";
+import { asyncHandler } from "../util/http";
 
 export const scrapeRouter = Router();
 
@@ -12,8 +13,9 @@ scrapeRouter.get("/selfcheck", (_req, res) => {
 });
 
 /** POST /api/scrape — kick off a crawler run (409 if running or cooling down). */
-scrapeRouter.post("/", async (_req, res) => {
-  try {
+scrapeRouter.post(
+  "/",
+  asyncHandler(async (_req, res) => {
     const result = await startScrape();
     if (!result.started) {
       res.status(409).json({
@@ -26,26 +28,22 @@ scrapeRouter.post("/", async (_req, res) => {
       return;
     }
     res.status(202).json(result);
-  } catch (e) {
-    res.status(500).json({ error: (e as Error).message });
-  }
-});
+  })
+);
 
 /** GET /api/scrape/status — progress, live logs, cooldown state. */
-scrapeRouter.get("/status", async (_req, res) => {
-  try {
+scrapeRouter.get(
+  "/status",
+  asyncHandler(async (_req, res) => {
     res.json(await getProgress());
-  } catch (e) {
-    res.status(500).json({ error: (e as Error).message });
-  }
-});
+  })
+);
 
 /** GET /api/scrape/history — past runs. */
-scrapeRouter.get("/history", async (_req, res) => {
-  try {
+scrapeRouter.get(
+  "/history",
+  asyncHandler(async (_req, res) => {
     const storage = await getStorage();
     res.json(await storage.getScrapeHistory(20));
-  } catch (e) {
-    res.status(500).json({ error: (e as Error).message });
-  }
-});
+  })
+);

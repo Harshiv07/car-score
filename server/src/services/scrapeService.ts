@@ -80,14 +80,23 @@ export async function startScrape(): Promise<StartResult> {
   if (state.running) {
     return { started: false, reason: "running", cooldownSecondsRemaining: 0 };
   }
-  const remaining = await cooldownRemainingMs();
+
+  // Claim the run *before* the first await. The cooldown check below reads
+  // storage, so with the claim made after it two POSTs arriving together both
+  // saw `running === false`, both passed the cooldown, and both launched a
+  // crawl — the one thing the 409 exists to prevent.
+  state.running = true;
+  const remaining = await cooldownRemainingMs().catch((e) => {
+    state.running = false;
+    throw e;
+  });
   if (remaining > 0) {
+    state.running = false;
     return { started: false, reason: "cooldown", cooldownSecondsRemaining: Math.ceil(remaining / 1000) };
   }
 
   const runId = `run_${randomUUID().slice(0, 8)}`;
   const sources = activeScrapers();
-  state.running = true;
   state.runId = runId;
   state.startedAt = new Date().toISOString();
   state.currentSource = null;
@@ -151,42 +160,51 @@ async function runScrape(runId: string, sources: Scraper[]): Promise<void> {
     `Scrape ${runId} started — ${sources.length} source(s), ${Math.round(cfg.runBudgetMs / 1000)}s budget.`
   );
 
-  for (const scraper of sources) {
-    const remaining = deadline - Date.now();
-    if (remaining <= 1000) {
-      pushLog("warn", `Run budget exhausted — skipping ${sources.length - state.sourcesDone} remaining source(s).`);
-      break;
-    }
-    state.currentSource = scraper.source;
-    const perSource = Math.min(cfg.sourceTimeoutMs, remaining);
-    try {
-      const result = await runWithTimeout(scraper, pushLog, perSource);
-      entry.sources.push({
-        source: result.source,
-        found: result.listings.length,
-        ok: result.ok,
-        note: result.note,
-      });
-      entry.totalFound += result.listings.length;
-      if (result.listings.length > 0) {
-        const { inserted, updated } = await storage.upsertListings(result.listings);
-        entry.totalInserted += inserted;
-        entry.totalUpdated += updated;
-        // New inventory invalidates every score: Market Value is relative to
-        // the comparable set, so adding cars re-prices the ones already here.
-        invalidateScoreCache();
-        pushLog("info", `${result.source}: ${inserted} new, ${updated} refreshed.`);
+  // The history row was written as "running". Whatever happens below, it must
+  // leave that state: a throw from storage mid-run used to strand it there, and
+  // the run was invisible to the cooldown (which ignores "running" rows).
+  let crashed: Error | null = null;
+  try {
+    for (const scraper of sources) {
+      const remaining = deadline - Date.now();
+      if (remaining <= 1000) {
+        pushLog("warn", `Run budget exhausted — skipping ${sources.length - state.sourcesDone} remaining source(s).`);
+        break;
       }
-    } catch (e) {
-      const msg = (e as Error).message;
-      entry.sources.push({ source: scraper.source, found: 0, ok: false, note: msg.slice(0, 200) });
-      pushLog("error", `${scraper.source}: scraper threw — ${msg.slice(0, 200)}`);
+      state.currentSource = scraper.source;
+      const perSource = Math.min(cfg.sourceTimeoutMs, remaining);
+      try {
+        const result = await runWithTimeout(scraper, pushLog, perSource);
+        entry.sources.push({
+          source: result.source,
+          found: result.listings.length,
+          ok: result.ok,
+          note: result.note,
+        });
+        entry.totalFound += result.listings.length;
+        if (result.listings.length > 0) {
+          const { inserted, updated } = await storage.upsertListings(result.listings);
+          entry.totalInserted += inserted;
+          entry.totalUpdated += updated;
+          // New inventory invalidates every score: Market Value is relative to
+          // the comparable set, so adding cars re-prices the ones already here.
+          invalidateScoreCache();
+          pushLog("info", `${result.source}: ${inserted} new, ${updated} refreshed.`);
+        }
+      } catch (e) {
+        const msg = (e as Error).message;
+        entry.sources.push({ source: scraper.source, found: 0, ok: false, note: msg.slice(0, 200) });
+        pushLog("error", `${scraper.source}: scraper threw — ${msg.slice(0, 200)}`);
+      }
+      state.sourcesDone++;
+      await new Promise((r) => setImmediate(r)); // keep the API responsive between sources
     }
-    state.sourcesDone++;
-    await new Promise((r) => setImmediate(r)); // keep the API responsive between sources
+  } catch (e) {
+    crashed = e as Error;
+    pushLog("error", `scrape run crashed: ${crashed.message}`);
   }
 
-  entry.status = "completed";
+  entry.status = crashed ? "failed" : "completed";
   entry.finishedAt = new Date().toISOString();
   await storage.updateScrapeHistory(entry);
   const elapsed = Math.round((Date.now() - new Date(entry.startedAt).getTime()) / 1000);

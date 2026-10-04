@@ -252,6 +252,39 @@ input[type="range"].range::-moz-range-thumb {
   animation: cs-shimmer 1.4s linear infinite;
 }
 
+/* ---- pointer light & tilt ------------------------------------------------
+   Driven by --mx/--my/--rx/--ry, which usePointerLight writes straight to the
+   element. A soft gold pool follows the cursor across a surface; on the hero it
+   also leans the panel a few degrees toward the pointer. Hover-capable devices
+   only — on touch there is nothing to follow, so nothing is drawn. */
+@media (hover: hover) and (pointer: fine) {
+  .lit {
+    position: relative;
+  }
+  .lit::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+    pointer-events: none;
+    opacity: 0;
+    transition: opacity 0.25s ease;
+    background: radial-gradient(
+      380px circle at var(--mx, 50%) var(--my, 50%),
+      color-mix(in oklab, var(--brand) 16%, transparent),
+      transparent 62%
+    );
+  }
+  .lit:hover::after {
+    opacity: 1;
+  }
+  .tilt {
+    transform: perspective(1200px) rotateX(var(--rx, 0deg)) rotateY(var(--ry, 0deg));
+    transition: transform 0.18s ease-out, border-color 0.2s ease;
+    will-change: transform;
+  }
+}
+
 /* Respect the OS setting: keep state changes, drop the movement. */
 @media (prefers-reduced-motion: reduce) {
   *,
