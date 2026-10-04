@@ -175,24 +175,36 @@ export class MongoStorage implements Storage {
   async upsertListings(incoming: Listing[]): Promise<UpsertResult> {
     // Never trust a caller-supplied dedupeKey — derive it here. See withCurrentKeys.
     const listings = withCurrentKeys(incoming);
-    let inserted = 0;
-    let updated = 0;
+    if (listings.length === 0) return { inserted: 0, updated: 0 };
     const now = new Date().toISOString();
-    for (const l of listings) {
-      const existing = await this.ListingM.findOne({ dedupeKey: l.dedupeKey }).lean<Listing>();
-      if (existing) {
-        const set: Partial<Listing> = { lastSeenAt: now, price: l.price };
-        if (l.mileageKm != null) set.mileageKm = l.mileageKm;
-        if (l.listingUrl != null) set.listingUrl = l.listingUrl;
-        if (l.image != null) set.image = l.image;
-        await this.ListingM.updateOne({ dedupeKey: l.dedupeKey }, { $set: set });
-        updated++;
-      } else {
-        await this.ListingM.create(l);
-        inserted++;
-      }
-    }
-    return { inserted, updated };
+
+    // One round trip for the whole batch. This was a findOne + updateOne/create
+    // per listing, awaited in sequence — 1,000+ network hops to Atlas per crawl.
+    //
+    // For a known listing only these fields are refreshed (the rest of the row is
+    // the first sighting's and stays put); a new listing is inserted whole. The
+    // two operators must not name the same path, so $setOnInsert gets everything
+    // $set does not. `ordered` keeps a duplicate key inside one batch behaving as
+    // before: the first occurrence inserts, later ones count as refreshes.
+    const ops = listings.map((l) => {
+      const set: Partial<Listing> = { lastSeenAt: now, price: l.price };
+      if (l.mileageKm != null) set.mileageKm = l.mileageKm;
+      if (l.listingUrl != null) set.listingUrl = l.listingUrl;
+      if (l.image != null) set.image = l.image;
+      const onInsert: Record<string, unknown> = {};
+      for (const [k, v] of Object.entries(l)) if (!(k in set)) onInsert[k] = v;
+      return {
+        updateOne: {
+          filter: { dedupeKey: l.dedupeKey },
+          update: { $set: set, $setOnInsert: onInsert },
+          upsert: true,
+        },
+      };
+    });
+
+    const res = await this.ListingM.bulkWrite(ops, { ordered: true });
+    const inserted = res.upsertedCount;
+    return { inserted, updated: listings.length - inserted };
   }
 
   async countListings(): Promise<number> {

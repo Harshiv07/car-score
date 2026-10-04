@@ -3,6 +3,7 @@ import { ListingFilters, SortKey } from "../types";
 import {
   applyFilters,
   findAlternatives,
+  findScoredById,
   getScoredListings,
   inventoryStats,
   ownershipEstimate,
@@ -10,6 +11,7 @@ import {
 } from "../services/listingService";
 import { getModelInfo } from "../data/vehicleModels";
 import { getRecallHistory } from "../services/recallService";
+import { asyncHandler, intParam } from "../util/http";
 
 export const listingsRouter = Router();
 
@@ -77,79 +79,68 @@ function parseFilters(req: Request): ListingFilters {
 const SORT_KEYS: SortKey[] = ["score", "deal", "mileage", "price", "reliability", "newest", "resale"];
 
 /** GET /api/listings — filtered, sorted, paginated leaderboard. */
-listingsRouter.get("/", async (req, res) => {
-  try {
-    const all = await getScoredListings();
-    const keys = parseKeys(req);
-    const scoped = keys ? all.filter((l) => keys.includes(l.dedupeKey)) : all;
-    const filtered = applyFilters(scoped, parseFilters(req));
-    const sortRaw = strq(req.query.sort) ?? "score";
-    const sort: SortKey = (SORT_KEYS as string[]).includes(sortRaw) ? (sortRaw as SortKey) : "score";
-    const sorted = sortListings(filtered, sort);
+listingsRouter.get("/", asyncHandler(async (req, res) => {
+  const all = await getScoredListings();
+  const keys = parseKeys(req);
+  const keySet = keys ? new Set(keys) : null;
+  const scoped = keySet ? all.filter((l) => keySet.has(l.dedupeKey)) : all;
+  const filtered = applyFilters(scoped, parseFilters(req));
+  const sortRaw = strq(req.query.sort) ?? "score";
+  const sort: SortKey = (SORT_KEYS as string[]).includes(sortRaw) ? (sortRaw as SortKey) : "score";
+  const sorted = sortListings(filtered, sort);
 
-    const page = Math.max(1, num(req.query.page) ?? 1);
-    const pageSize = Math.min(100, Math.max(1, num(req.query.pageSize) ?? 50));
-    const start = (page - 1) * pageSize;
+  const page = intParam(req.query.page, 1, 1, 100_000);
+  const pageSize = intParam(req.query.pageSize, 50, 1, 100);
+  const start = (page - 1) * pageSize;
 
-    res.set("Cache-Control", READ_CACHE);
-    res.json({
-      total: sorted.length,
-      totalUnfiltered: all.length,
-      page,
-      pageSize,
-      sort,
-      listings: sorted.slice(start, start + pageSize),
-    });
-  } catch (e) {
-    res.status(500).json({ error: (e as Error).message });
-  }
-});
+  res.set("Cache-Control", READ_CACHE);
+  res.json({
+    total: sorted.length,
+    totalUnfiltered: all.length,
+    page,
+    pageSize,
+    sort,
+    listings: sorted.slice(start, start + pageSize),
+  });
+}));
 
 /**
  * GET /api/listings/stats — inventory-wide aggregates for the header.
  * Registered before `/:id` so "stats" isn't parsed as a listing id.
  */
-listingsRouter.get("/stats", async (_req, res) => {
-  try {
-    const all = await getScoredListings();
-    res.set("Cache-Control", READ_CACHE);
-    res.json(inventoryStats(all));
-  } catch (e) {
-    res.status(500).json({ error: (e as Error).message });
-  }
-});
+listingsRouter.get("/stats", asyncHandler(async (_req, res) => {
+  const all = await getScoredListings();
+  res.set("Cache-Control", READ_CACHE);
+  res.json(inventoryStats(all));
+}));
 
 /** GET /api/listings/:id — full detail: score breakdown, ownership estimate, alternatives. */
-listingsRouter.get("/:id", async (req, res) => {
-  try {
-    const all = await getScoredListings();
-    const listing = all.find((l) => l.id === req.params.id);
-    if (!listing) {
-      res.status(404).json({ error: "Listing not found" });
-      return;
-    }
-    const info = getModelInfo(listing.make, listing.model);
-    res.set("Cache-Control", READ_CACHE);
-    res.json({
-      listing,
-      ownership: ownershipEstimate(listing),
-      recallHistory: getRecallHistory(listing.make, listing.model, listing.year),
-      modelInfo: info
-        ? {
-            body: info.body,
-            reliabilitySummary: info.reliability.summary,
-            adasNote: info.safety.adasNote,
-            knownIssues: info.recallsAndIssues.issues,
-            typicalFeatures: info.typicalFeatures,
-          }
-        : null,
-      alternatives: findAlternatives(listing, all),
-      externalLinks: buildExternalLinks(listing),
-    });
-  } catch (e) {
-    res.status(500).json({ error: (e as Error).message });
+listingsRouter.get("/:id", asyncHandler(async (req, res) => {
+  const all = await getScoredListings();
+  const listing = findScoredById(all, req.params.id);
+  if (!listing) {
+    res.status(404).json({ error: "Listing not found" });
+    return;
   }
-});
+  const info = getModelInfo(listing.make, listing.model);
+  res.set("Cache-Control", READ_CACHE);
+  res.json({
+    listing,
+    ownership: ownershipEstimate(listing),
+    recallHistory: getRecallHistory(listing.make, listing.model, listing.year),
+    modelInfo: info
+      ? {
+          body: info.body,
+          reliabilitySummary: info.reliability.summary,
+          adasNote: info.safety.adasNote,
+          knownIssues: info.recallsAndIssues.issues,
+          typicalFeatures: info.typicalFeatures,
+        }
+      : null,
+    alternatives: findAlternatives(listing, all),
+    externalLinks: buildExternalLinks(listing),
+  });
+}));
 
 function buildExternalLinks(l: { make: string; model: string; vin: string | null; listingUrl: string | null }) {
   const slug = `${l.make}/${l.model}`.toLowerCase().replace(/\s+/g, "-").replace("mazda/mazda3", "mazda/3");
