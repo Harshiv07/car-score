@@ -7,14 +7,32 @@ used-car listings from multiple websites, evaluates every vehicle with a hybrid
 just the cheapest price.
 
 ```
-React (TypeScript, Tailwind, React Query, React Router)
+React (TypeScript, Tailwind, React Query, React Router)   → Vercel
         ↓  REST API
-Node (Express)
+Node (Express)                                            → Render (Docker)
         ↓
 Crawler service (Crawlee + Cheerio, Playwright fallback only)
         ↓
 MongoDB (Mongoose) — or a built-in file store for zero-config dev
 ```
+
+## What's in the app
+
+| Page | What it does |
+| ---- | ------------ |
+| **Leaderboard** (`/`) | Ranked listings with filters, 7 sort modes, pagination with scroll-reveal, and a **Top Pick** hero stating the best car for the current query. Every card gives a one-line *why* built only from what the engine scored. The hero and the detail page show a lazy-loaded **3D score ring** (Three.js + GSAP) — each scoring category is an arc you can drag, hover or arrow-key through, with a plain-text fallback when WebGL is unavailable and reduced-motion support. |
+| **Listing detail** (`/listing/:id`) | Full 100-point breakdown, market comparison, ownership and **monthly payment** estimate (province-aware tax, rate and term), Transport Canada **recall history**, known issues, pros/cons, alternatives and links to the seller. |
+| **Compare** (`/compare`) | Up to three cars side by side, category by category. The comparison set lives in `sessionStorage` — it's a decision you're making now. |
+| **Favourites** (`/favorites`) | Cars you've hearted, saved in this browser (`localStorage`, synced across tabs). |
+| **New cars** (`/new-cars`) | Current-model lineup scraped from official OEM sites. |
+| **Guide** (`/guide`) | A first-car buyer's guide: what it really costs, who is selling it, the three meanings of "certified", the walkaround, tyres, rust, test drive, paperwork, inspection, negotiating, when to walk away. |
+
+Electric listings get an **EVAP-eligible** badge on cards and the detail page (federal
+EV Affordability Program, BEV/FCEV tier only — see `data/evapEligibility.ts` for what it
+does and doesn't claim). Also: light/dark theme switch, a **Refresh Listings** control with live scrape
+logs and a cooldown timer, and a cold-start notice — the API sleeps on Render's
+free tier, so returning visitors repaint instantly from cached results and
+first-timers are told why the first load is slow instead of staring at a spinner.
 
 ## Supported models
 
@@ -33,8 +51,11 @@ Only these are scraped and scored:
 ```bash
 npm run setup             # npm install + downloads Chromium for the browser fallback
 npm run dev               # API on :4000, app on :3000 (proxied /api)
-npm test -w server        # unit + pipeline test suite (no network needed)
+npm test -w server        # 120 unit + pipeline tests (no network needed)
 npm run test:e2e          # Playwright e2e UI tests (boots API + client itself)
+npm run recalls:build -w server       # refresh server/src/data/recalls.generated.json
+                                      #   (Transport Canada recall data)
+npm run dealer:probe -w server        # probe a dealer site to see which platform it runs
 npm run scrape:check -w server          # confirm the pipeline is healthy (no network)
 npm run scrape:check -w server -- --live # + probe each source over the network
 npm run scrape:snapshot -w server    # run every scraper once, write real results to
@@ -48,7 +69,8 @@ local JSON-file store (`server/.data/db.json`), empty until a scrape (or
 `db:seed-snapshot`) populates it — the app never auto-seeds fabricated demo
 data, only real scraped listings.
 
-> **The two anchor sources are browser-free.** `AutoTrader.ca` (Ontario, paged
+> **The two anchor sources are browser-free.** `AutoTrader.ca` (Ontario, Quebec
+> and Manitoba — see below — paged
 > via its embedded `__NEXT_DATA__` JSON) and `Clutch.ca` (a combined API query
 > across every supported model) together return **1,000+ listings per run**
 > with **no browser required** — they work on Render and other hosts without
@@ -113,7 +135,7 @@ server/src/scrapers/
   convertus.ts     # Convertus VMS dealers (Wayne Toyota, Superior Hyundai) — browser-free JSON proxy
   stmMotors.ts     # STM Motors dealers (Gore Motors) — browser-free via listings-sitemap.xml
   edealer.ts       # eDealer-platform dealers (Half-Way Motors Mazda) — browser-free, embedded JS object
-  autotrader.ts    # AutoTrader.ca search pages per model (best-effort HTML)
+  autotrader.ts    # AutoTrader.ca — browser-free, paged via embedded __NEXT_DATA__ (ON/QC/MB)
   cargurus.ts      # CarGurus.ca — browser-rendered, best-effort (DataDome)
   dealer.ts        # dealership sites, configurable via src/config/dealers.json
   config.ts        # env-driven run budget, timeouts, source allow-list
@@ -166,8 +188,9 @@ entry has a `platform`:
 All return complete, structured vehicles (year, price, km, VIN where available,
 drivetrain, fuel).
 
-**AutoTrader** (`autotrader.ts`) is the largest source (1,000+ Ontario listings
-per run) and is fully browser-free. AutoTrader.ca is a Next.js app (AutoScout24
+**AutoTrader** (`autotrader.ts`) is the largest source (1,000+ listings per run
+across Ontario, Quebec and Manitoba — the provinces a Thunder Bay buyer can
+realistically drive to; set `AUTOTRADER_PROVINCES` to widen or narrow it) and is fully browser-free. AutoTrader.ca is a Next.js app (AutoScout24
 backend) whose server-rendered HTML embeds a clean, fully-structured
 `"listings":[…]` array inside `__NEXT_DATA__` — real year/price/km/trim/fuel/
 transmission plus the listing's true province and city, and a working VDP url.
@@ -175,9 +198,9 @@ Two things make this scale, both verified live: pagination works browser-free
 via `&page=N` (each page is a genuinely different set of listings — the older
 `rcs=` param does *not* paginate, which is why the previous tile-based
 approach was stuck at ~20 listings per model regardless of requested page
-size), and dropping the `prx=-1` "national" param filters results to Ontario
-server-side. `AUTOTRADER_PAGES_PER_MODEL` (default 6) controls how many pages
-per model to fetch; fetching is two-phase — page 1 of every model first, then
+size), and dropping the `prx=-1` "national" param scopes results to the province in
+the URL path server-side. `AUTOTRADER_PAGES_PER_MODEL` (default 6) controls how many pages
+per model to fetch (per province); fetching is two-phase — page 1 of every model first, then
 page 2..N interleaved across models up to each model's real page count — so a
 low-volume model never starves a high-volume one's depth or vice versa.
 `modelVersionInput` (the closest thing to a "trim" field) is dealer free text
@@ -261,23 +284,49 @@ Every listing exposes the full breakdown (points, stars, human-readable
 reason per category), market comparison (market vs asking vs savings), deal
 rating, known issues, pros and cons — the UI shows *why* a car ranks first.
 
+Two things are deliberately **not** folded into the score:
+
+- **Recall history** comes from Transport Canada data
+  (`data/recalls.generated.json`, rebuilt with `npm run recalls:build -w server`)
+  and is shown as its own labelled section. A recall on record means one was
+  *issued* for that make/model/year — only the manufacturer can say whether a
+  specific VIN still has it outstanding, so treating "12 recalls" as "12 open
+  recalls" would misinform the buyer. It never penalises the Recalls score.
+- **Insurance** in the ownership estimate is province-aware (a provincial
+  market-average base, with the per-model risk tier layered on top), and the
+  monthly-payment estimate uses the listing's provincial tax — neither is a
+  single flat national number.
+
 ## API
 
 | Endpoint                 | Description                                          |
 | ------------------------ | ---------------------------------------------------- |
-| `GET /api/listings`      | Filtered + sorted leaderboard. Filters: price, year, mileage, brand, model, province, city, drivetrain, fuel, CPO-only, dealer-only, source, score range. Sorts: score, deal, mileage, price, reliability, newest, resale. |
+| `GET /api/listings`      | Filtered + sorted leaderboard. Filters: price, year, mileage, brand, model, province, city, drivetrain, fuel, CPO-only, dealer-only, source, score range. Sorts: score, deal, mileage, price, reliability, newest, resale. `page` / `pageSize` are integer-clamped (pageSize ≤ 100); `?keys=a,b,c` fetches specific listings by dedupe key (≤ 200) — how Favourites loads. Cached `max-age=30, stale-while-revalidate=300`. |
+| `GET /api/listings/stats`| Inventory-wide aggregates for the header.            |
 | `GET /api/listings/:id`  | Full detail: breakdown, ownership estimate, known issues, alternatives, external links (AutoTrader, CarGurus, CARFAX when VIN known). |
-| `POST /api/scrape`       | Run the crawler (10-min cooldown, ≤3-min hard budget). |
+| `POST /api/scrape`       | Run the crawler (10-min cooldown, 8-min hard run budget). The run is claimed synchronously, so two concurrent POSTs can't both start a crawl. |
 | `GET /api/scrape/status` | Progress, live logs, cooldown state.                 |
 | `GET /api/scrape/history`| Past runs.                                            |
 | `GET /api/scrape/selfcheck`| Pipeline health check (extract→normalize→score).   |
 | `GET /api/meta`          | Filter options + sort keys for the UI.               |
+| `GET /healthz`           | Liveness only — never touches storage. Used by Render and the keep-warm workflow. |
+| `GET /api/health`        | Readiness: pings storage, `503` if it's unreachable. |
 | `GET /api/newcars`       | Current-model lineup scraped from official OEM sites — Hyundai (browser-free) + Toyota/Honda/Mazda/Subaru (needs the Playwright fallback; see the Chromium note above). Cached 6h; `?refresh=1` forces a re-fetch. |
+
+**Hardening.** Reads are rate-limited to 240/min per client and `POST
+/api/scrape` to 20/min on top of its cooldown (it stays unauthenticated — the
+Refresh button depends on it). Route errors go through one `asyncHandler` to a
+global handler that returns a masked 500 and logs the real error under a request
+id; every request gets an `x-request-id` and a JSON access-log line. `SIGTERM`
+(sent by Render on each deploy) stops new connections and drains in-flight
+ones. A crashed scrape marks its history row `failed` rather than leaving it
+`running` forever, and on MongoDB `upsertListings` is a single `bulkWrite`.
 
 ## Deployment
 
 - **Client**: static build (`client/dist`) — `vercel.json` is configured for
-  Vercel. Set `VITE_API_URL` at build time to your API origin.
+  Vercel (with an SPA rewrite that leaves `/api/*` alone). Set `VITE_API_URL`
+  at build time to your API origin. Vercel redeploys on every push to `master`.
 - **Server**: any Node host (Render, Railway, Fly.io). Set `MONGODB_URI`
   (MongoDB Atlas works) and optionally `PORT`. The crawler honors
   `HTTPS_PROXY` for hosts with egress proxies.
@@ -296,9 +345,52 @@ rating, known issues, pros and cons — the UI shows *why* a car ranks first.
   deliberately `sync: false` (not stored in the YAML) and will need to be
   re-entered in the new service's Environment tab.
 
+### Keeping the free-tier API awake
+
+Render's free tier sleeps an idle instance, and waking it takes 30–60 s.
+`.github/workflows/keep-warm.yml` pings `/healthz` on a timer to avoid that. It
+holds its runner and pings every few minutes for most of an hour per run,
+because GitHub throttles high-frequency cron triggers — measured over the first
+85 runs, the median gap between runs that actually fired was ~103 minutes, and
+none came in under Render's ~15-minute idle window, so a single ping per trigger
+never helped. It never fails the run on a non-200 (that would train everyone to
+ignore a red cron), and it's guarded to the upstream repo so forks don't wake
+someone else's API. It remains a workaround for the hosting tier: a plan that
+doesn't sleep, or an external pinger that honours a 5-minute schedule, is the
+real fix.
+
+### CI
+
+`.github/workflows/ci.yml` runs server typecheck + tests and the server and
+client builds on every push and PR to `master`; CodeQL runs alongside it.
+
+## Further reading
+
+- [`docs/SCALING-AND-SCRAPING.md`](docs/SCALING-AND-SCRAPING.md) — what it takes
+  to go national, and why in-house anti-bot evasion isn't the answer (the IP is
+  the layer that matters).
+- [`docs/plans/2026-10-03-3d-interactive-upgrade.md`](docs/plans/2026-10-03-3d-interactive-upgrade.md)
+  — the 3D score ring / pointer-effects / API-hardening plan.
+
 ## Workspace layout
 
 ```
-client/   Vite + React 18 + TS + Tailwind v4 + React Query + Router
-server/   Express + TS; scoring engine, scrapers, Mongoose models
+client/            Vite + React 18 + TS + Tailwind v4 + React Query + Router
+  src/pages/         Leaderboard, Detail, Compare, Favourites, New cars, Guide
+  src/components/    cards, filters, ScoreRing3D, CompareTray, PaymentEstimate, …
+  src/hooks/         useFavorites, useCompare, usePointerLight, useDebouncedCommit
+  src/lib/           finance (loan + provincial tax), whyLine
+  e2e/               Playwright UI tests
+server/            Express + TS
+  src/scoring/       the 100-point engine
+  src/scrapers/      one module per source + shared extract/normalize/crawl
+  src/newcars/       OEM new-car lineup
+  src/services/      listings, scraping, recalls, self-check
+  src/db/            Mongoose + file-store drivers, key migration
+  src/data/          model knowledge base, recalls, EVAP eligibility
+  src/scripts/       scrape:check, snapshot, seed, dealer probe, recall build
+  src/tests/         120 node:test unit + pipeline tests
+docs/              scaling/scraping assessment, plans
+Dockerfile         Render image (Node + Chromium for the browser fallback)
+render.yaml        Render Blueprint (Docker runtime)
 ```
