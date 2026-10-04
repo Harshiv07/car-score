@@ -1,5 +1,6 @@
-import { useState } from "react";
-import { AnimatePresence, motion } from "framer-motion";
+import { useMemo, useState } from "react";
+import { Stage, usePaint } from "../Stage";
+import { prefersReducedMotion } from "../../lib/motion";
 
 /**
  * The interactive walkaround: a car in profile with the points a first-time
@@ -95,126 +96,112 @@ const SPOTS: Spot[] = [
 export function Walkaround() {
   const [open, setOpen] = useState<string>(SPOTS[0].id);
   const active = SPOTS.find((s) => s.id === open) ?? SPOTS[0];
+  const idx = SPOTS.indexOf(active);
+  const clay = usePaint("--clay");
+  const reduced = useMemo(prefersReducedMotion, []);
+  const stageSpots = useMemo(() => SPOTS.map((s) => ({ id: s.id, n: s.n, label: s.title })), []);
 
   return (
-    <div className="grid gap-6 lg:grid-cols-[1.15fr_1fr]">
-      <div className="relative overflow-hidden rounded-3xl border border-line bg-surface p-4 sm:p-6">
-        <svg viewBox="0 0 400 200" className="w-full" role="img" aria-label="Side view of a car with seven inspection points">
-          {/* Ground line */}
-          <line x1="10" y1="168" x2="390" y2="168" stroke="var(--line)" strokeWidth="1.5" strokeDasharray="4 6" />
-
-          {/* Body */}
-          <motion.path
-            d="M42 140 L48 108 Q54 92 74 88 L140 80 Q168 60 214 60 Q262 60 288 82 L338 92 Q362 98 364 118 L366 140 Z"
-            fill="color-mix(in oklab, var(--brand) 12%, var(--surface))"
-            stroke="var(--brand)"
-            strokeWidth="2.5"
-            strokeLinejoin="round"
-            initial={{ pathLength: 0, opacity: 0 }}
-            whileInView={{ pathLength: 1, opacity: 1 }}
-            viewport={{ once: true }}
-            transition={{ duration: 1.1, ease: "easeInOut" }}
-          />
-          {/* Greenhouse */}
-          <path
-            d="M148 80 Q172 64 212 64 Q254 64 278 82 Z"
-            fill="color-mix(in oklab, var(--info) 18%, transparent)"
-            stroke="color-mix(in oklab, var(--brand) 55%, transparent)"
-            strokeWidth="1.5"
-          />
-          <line x1="212" y1="64" x2="212" y2="82" stroke="var(--line-strong)" strokeWidth="1.5" />
-
-          {/* Wheels */}
-          {[108, 300].map((cx) => (
-            <g key={cx}>
-              <circle cx={cx} cy="140" r="28" fill="var(--bg)" stroke="var(--brand)" strokeWidth="2.5" opacity="0.85" />
-              <circle cx={cx} cy="140" r="13" fill="none" stroke="var(--line)" strokeWidth="2" />
-            </g>
-          ))}
-
-          {/* Hotspots */}
-          {SPOTS.map((s) => {
-            const isActive = s.id === active.id;
-            return (
-              <g
-                key={s.id}
-                transform={`translate(${(s.x / 100) * 400} ${(s.y / 100) * 200})`}
-                onClick={() => setOpen(s.id)}
-                className="cursor-pointer"
-              >
-                {isActive && (
-                  // Scale rather than the `r` attribute: animating `r` without
-                  // an explicit initial leaves it undefined on the first frame,
-                  // and the browser rejects the attribute outright.
-                  <motion.circle
-                    r="15"
-                    fill="var(--brand)"
-                    opacity={0.18}
-                    style={{ transformOrigin: "center", transformBox: "fill-box" }}
-                    animate={{ scale: [1, 1.45, 1] }}
-                    transition={{ duration: 2, repeat: Infinity, ease: "easeInOut" }}
-                  />
-                )}
-                <circle
-                  r="12"
-                  fill={isActive ? "var(--brand)" : "var(--surface)"}
-                  stroke={isActive ? "var(--brand)" : "var(--line-strong)"}
-                  strokeWidth="2"
-                />
-                <text
-                  textAnchor="middle"
-                  dy="4"
-                  fontSize="12"
-                  fontWeight="700"
-                  fill={isActive ? "var(--on-brand)" : "var(--muted)"}
-                >
-                  {s.n}
-                </text>
-              </g>
-            );
-          })}
-        </svg>
-
-        <p className="mt-2 text-center text-[11px] text-faint">Tap a number to see what to check there.</p>
+    <div className="grid gap-6 lg:grid-cols-[minmax(0,1.25fr)_minmax(0,1fr)]">
+      <div className="studio relative overflow-hidden rounded-[20px] border border-line">
+        <Stage
+          style="sedan"
+          paint={clay}
+          mode="inspect"
+          reducedMotion={reduced}
+          spots={stageSpots}
+          activeSpot={active.id}
+          onSpot={setOpen}
+          label="A car you can turn, with seven numbered inspection points. Choosing a point turns the car to show it."
+          className="h-[300px] sm:h-[420px]"
+          fallback={<FlatWalkaround active={active.id} onPick={setOpen} />}
+        />
+        <p className="pointer-events-none absolute inset-x-0 bottom-3 text-center text-[13px] text-faint">
+          Pick a number, or drag to walk round the car.
+        </p>
       </div>
 
-      {/* The detail, and the buttons that are the accessible way through it. */}
+      {/* The steps, in walking order. These buttons are also the accessible way through. */}
       <div>
-        <div className="flex flex-wrap gap-1.5">
+        <ol className="flex flex-wrap gap-1.5">
           {SPOTS.map((s) => (
-            <button
-              key={s.id}
-              onClick={() => setOpen(s.id)}
-              aria-pressed={s.id === active.id}
-              className={`rounded-lg px-2.5 py-1.5 text-xs font-semibold transition ${
-                s.id === active.id ? "bg-brand" : "bg-surface2 text-muted hover:text-text"
-              }`}
-              style={s.id === active.id ? { color: "var(--on-brand)" } : undefined}
-            >
-              {s.n}
-            </button>
+            <li key={s.id}>
+              <button
+                onClick={() => setOpen(s.id)}
+                aria-pressed={s.id === active.id}
+                aria-label={`${s.n}. ${s.title}`}
+                className={`nums grid h-9 w-9 place-items-center rounded-full text-[14px] font-bold transition-colors ${
+                  s.id === active.id ? "bg-accent text-[var(--on-accent)]" : "border border-line-strong text-muted hover:text-text"
+                }`}
+              >
+                {s.n}
+              </button>
+            </li>
           ))}
+        </ol>
+
+        <div key={active.id} className="route-enter mt-5">
+          <p className="nums text-[14px] font-semibold text-accent-ink">
+            Stop {active.n} of {SPOTS.length}
+          </p>
+          <h3 className="wide mt-1 text-[22px] font-bold text-text">{active.title}</h3>
+
+          <h4 className="mt-4 text-[14px] font-bold text-text">What to do</h4>
+          <p className="mt-1 text-[15px] leading-relaxed text-muted">{active.look}</p>
+
+          <h4 className="mt-4 text-[14px] font-bold text-bad">What it means if it's wrong</h4>
+          <p className="mt-1 text-[15px] leading-relaxed text-muted">{active.bad}</p>
+
+          <div className="mt-6 flex gap-2">
+            <button className="btn btn-ghost py-2" disabled={idx === 0} onClick={() => setOpen(SPOTS[idx - 1].id)}>
+              Previous stop
+            </button>
+            <button
+              className="btn btn-primary py-2"
+              disabled={idx === SPOTS.length - 1}
+              onClick={() => setOpen(SPOTS[idx + 1].id)}
+            >
+              Next stop
+            </button>
+          </div>
         </div>
-
-        <AnimatePresence mode="wait">
-          <motion.div
-            key={active.id}
-            initial={{ opacity: 0, y: 8 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -6 }}
-            transition={{ duration: 0.22 }}
-            className="mt-4 rounded-2xl border border-line bg-surface p-5"
-          >
-            <h3 className="font-display text-lg font-extrabold text-text">{active.title}</h3>
-
-            <p className="mt-3 text-[13px] font-bold uppercase tracking-wider text-faint">What to do</p>
-            <p className="mt-1 text-sm leading-relaxed text-muted">{active.look}</p>
-
-            <p className="mt-4 text-[13px] font-bold uppercase tracking-wider text-bad">What it means if it's wrong</p>
-            <p className="mt-1 text-sm leading-relaxed text-muted">{active.bad}</p>
-          </motion.div>
-        </AnimatePresence>
       </div>
+    </div>
+  );
+}
+
+/** The flat diagram, for browsers without WebGL. */
+function FlatWalkaround({ active, onPick }: { active: string; onPick: (id: string) => void }) {
+  return (
+    <div className="p-4 sm:p-6">
+      <svg viewBox="0 0 400 200" className="w-full" role="img" aria-label="Side view of a car with seven inspection points">
+        <line x1="10" y1="168" x2="390" y2="168" stroke="var(--line)" strokeWidth="1.5" strokeDasharray="4 6" />
+        <path
+          d="M42 140 L48 108 Q54 92 74 88 L140 80 Q168 60 214 60 Q262 60 288 82 L338 92 Q362 98 364 118 L366 140 Z"
+          fill="var(--clay)"
+          stroke="var(--line-strong)"
+          strokeWidth="2"
+          strokeLinejoin="round"
+        />
+        <path d="M148 80 Q172 64 212 64 Q254 64 278 82 Z" fill="var(--text)" opacity="0.8" />
+        {[108, 300].map((cx) => (
+          <g key={cx}>
+            <circle cx={cx} cy="140" r="28" fill="var(--text)" />
+            <circle cx={cx} cy="140" r="13" fill="var(--line-strong)" />
+          </g>
+        ))}
+        {SPOTS.map((s) => {
+          const on = s.id === active;
+          return (
+            <g key={s.id} transform={`translate(${(s.x / 100) * 400} ${(s.y / 100) * 200})`} onClick={() => onPick(s.id)} className="cursor-pointer">
+              <circle r="12" fill={on ? "var(--accent)" : "var(--surface)"} stroke="var(--text)" strokeWidth="2" />
+              <text textAnchor="middle" dy="4" fontSize="12" fontWeight="700" fill={on ? "var(--on-accent)" : "var(--text)"}>
+                {s.n}
+              </text>
+            </g>
+          );
+        })}
+      </svg>
     </div>
   );
 }

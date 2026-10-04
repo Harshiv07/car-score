@@ -5,7 +5,10 @@ import { ListingDetailResponse } from "../api/types";
 import { CarPhoto } from "../components/CarPhoto";
 import { useCompare } from "../hooks/useCompare";
 import { quickMonthly } from "../lib/finance";
-import { cad, DealPill, km, scoreHex, Stars } from "../components/ui";
+import { ScoreStrip, round } from "../components/ScoreStrip";
+import { Icon } from "../components/Icon";
+import { scoreBand } from "../lib/whyLine";
+import { cad, DealTag, km, scoreHex } from "../components/ui";
 
 /**
  * Side-by-side comparison.
@@ -35,15 +38,15 @@ export function ComparePage() {
     return (
       <Empty
         title="Nothing to compare yet."
-        body="Pick two or three cars from the leaderboard using the ⇄ button on each card."
+        body="Pick two or three cars from the leaderboard with the compare button on each row."
       />
     );
   }
 
   if (loading) {
     return (
-      <div className="mx-auto max-w-6xl px-4 py-10">
-        <div className="h-72 animate-pulse rounded-2xl bg-surface" />
+      <div className="mx-auto max-w-[1240px] px-4 py-10 sm:px-6">
+        <div className="h-72 animate-pulse rounded-[var(--radius-card)] bg-surface" />
       </div>
     );
   }
@@ -52,7 +55,7 @@ export function ComparePage() {
     return (
       <Empty
         title="These cars are no longer listed."
-        body="Listings drop out of the inventory when a scrape no longer finds them. Pick fresh ones from the leaderboard."
+        body="Listings drop out of the inventory when a crawl no longer finds them. Pick fresh ones from the leaderboard."
       />
     );
   }
@@ -67,73 +70,54 @@ export function ComparePage() {
   const topScore = Math.max(...cars.map((c) => c.score.total));
 
   return (
-    <div className="mx-auto max-w-6xl px-4 py-6 fade-up">
+    <div className="mx-auto max-w-[1240px] px-4 pb-12 pt-6 sm:px-6">
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <Link to="/" className="text-sm font-semibold text-brand hover:text-brand-strong">
-          ← Back to leaderboard
+        <Link to="/" className="inline-flex items-center gap-1 text-[14px] font-semibold text-muted hover:text-text">
+          <Icon name="chevron-left" size={16} />
+          Back to the leaderboard
         </Link>
-        <button onClick={clear} className="text-sm font-semibold text-muted transition hover:text-text">
+        <button onClick={clear} className="link text-[14px]">
           Clear comparison
         </button>
       </div>
 
-      <h1 className="mt-3 font-display text-2xl font-extrabold tracking-tight text-text sm:text-3xl">
-        Comparing {cars.length} cars
-      </h1>
+      <h1 className="display mt-4 text-[clamp(2rem,4vw,3rem)] text-text">Side by side</h1>
+      <p className="mt-2 max-w-[60ch] text-[15px] text-muted">
+        The leader in each row is marked. The trade-off between two good cars usually lives in one or two categories,
+        and this is where you'll see it.
+      </p>
 
-      <div className="mt-5 overflow-x-auto">
-        {/* table-fixed keeps every car's column the same width regardless of
-            photo or title length, so the rows actually line up for comparison. */}
-        <table className="w-full min-w-[640px] table-fixed border-collapse">
+      <div className="mt-8 overflow-x-auto">
+        <table className="w-full min-w-[680px] table-fixed border-collapse">
           <caption className="sr-only">Score breakdown compared across selected cars</caption>
           <thead>
             <tr>
-              <th scope="col" className="w-40 p-2 text-left align-bottom">
+              <th scope="col" className="w-44 p-2 text-left align-bottom">
                 <span className="sr-only">Category</span>
               </th>
               {cars.map((c) => (
-                <th key={c.id} scope="col" className="p-2 align-bottom">
-                  <div className="rounded-2xl border border-line bg-surface p-3 text-left">
-                    <CarPhoto
-                      src={c.image}
-                      alt={c.title}
-                      ratio="4/3"
-                      width={480}
-                      sizes="200px"
-                      className="mb-3 w-full rounded-xl"
-                    />
-                    <div className="flex items-baseline gap-2">
-                      <span
-                        className="nums font-display text-2xl font-extrabold"
-                        style={{ color: scoreHex(c.score.total) }}
-                      >
-                        {Math.round(c.score.total)}
-                      </span>
-                      {c.score.total === topScore && cars.length > 1 && (
-                        <span className="rounded-full bg-good/15 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-good">
-                          Top score
-                        </span>
-                      )}
-                    </div>
-                    <Link
-                      to={`/listing/${c.id}`}
-                      className="mt-1 block text-sm font-bold leading-snug text-text hover:text-brand"
-                    >
-                      {c.title}
-                    </Link>
-                    <div className="mt-1.5 flex flex-wrap items-baseline gap-2">
-                      <span className="nums text-base font-extrabold text-text">{cad(c.price)}</span>
-                      {c.price === cheapest && cars.length > 1 && (
-                        <span className="text-[10px] font-bold uppercase tracking-wide text-good">Lowest price</span>
-                      )}
-                    </div>
-                    <div className="mt-1.5">
-                      <DealPill rating={c.score.dealRating} />
-                    </div>
-                    <button
-                      onClick={() => remove(c.id)}
-                      className="mt-3 text-xs font-semibold text-faint transition hover:text-bad"
-                    >
+                <th key={c.id} scope="col" className="p-2 text-left align-bottom font-normal">
+                  <CarPhoto src={c.image} alt={c.title} ratio="4/3" width={480} sizes="260px" className="w-full rounded-[10px] border border-line" />
+                  <div className="mt-3 flex items-end gap-2">
+                    <span className="nums display text-[40px] leading-[0.85]" style={{ color: scoreHex(c.score.total) }}>
+                      {Math.round(c.score.total)}
+                    </span>
+                    <span className="pb-0.5 text-[13px] font-semibold" style={{ color: scoreHex(c.score.total) }}>
+                      {scoreBand(c.score.total)}
+                      {c.score.total === topScore && cars.length > 1 && <span className="text-faint">, top score</span>}
+                    </span>
+                  </div>
+                  <ScoreStrip breakdown={c.score.breakdown} className="mt-3" />
+                  <Link to={`/listing/${c.id}`} className="wide mt-3 block text-[15px] font-bold leading-snug text-text hover:text-accent-ink">
+                    {c.title}
+                  </Link>
+                  <div className="mt-1.5 flex flex-wrap items-baseline gap-2">
+                    <span className="nums display text-[20px] text-text">{cad(c.price)}</span>
+                    {c.price === cheapest && cars.length > 1 && <span className="text-[12px] font-semibold text-good">Lowest price</span>}
+                  </div>
+                  <div className="mt-2 flex items-center justify-between gap-2">
+                    <DealTag rating={c.score.dealRating} />
+                    <button onClick={() => remove(c.id)} className="text-[13px] font-semibold text-faint transition-colors hover:text-bad">
                       Remove
                     </button>
                   </div>
@@ -143,51 +127,52 @@ export function ComparePage() {
           </thead>
 
           <tbody>
-            <Row label="Monthly (est.)" cars={cars} render={(c) => `≈${cad(quickMonthly(c.price, c.province))}`} />
-            <Row label="Mileage" cars={cars} render={(c) => (c.mileageKm != null ? km(c.mileageKm) : "—")} />
+            <Row label="Monthly, estimated" cars={cars} render={(c) => `≈${cad(quickMonthly(c.price, c.province))}`} />
+            <Row label="Mileage" cars={cars} render={(c) => (c.mileageKm != null ? km(c.mileageKm) : "n/a")} />
             <Row label="Year" cars={cars} render={(c) => String(c.year)} />
-            <Row label="Drivetrain" cars={cars} render={(c) => c.drivetrain} />
+            <Row label="Drivetrain" cars={cars} render={(c) => (c.drivetrain === "Unknown" ? "Not stated" : c.drivetrain)} />
             <Row
-              label="vs market"
+              label="Against market"
               cars={cars}
               render={(c) =>
                 c.score.market.savings > 0
                   ? `${cad(c.score.market.savings)} under`
                   : c.score.market.savings < 0
                     ? `${cad(-c.score.market.savings)} over`
-                    : "at market"
+                    : "At market"
               }
             />
 
             <tr>
-              <td colSpan={cars.length + 1} className="pt-6 pb-2">
-                <h2 className="text-xs font-bold uppercase tracking-wider text-faint">Score breakdown</h2>
+              <td colSpan={cars.length + 1} className="pb-2 pt-8">
+                <h2 className="wide text-[19px] font-bold text-text">Score by category</h2>
               </td>
             </tr>
 
             {categories.map((cat) => {
               const leader = best(cat.key);
+              const tie = cars.every((o) => (o.score.breakdown.find((b) => b.key === cat.key)?.points ?? 0) === leader);
               return (
                 <tr key={cat.key} className="border-t border-line">
-                  <th scope="row" className="py-2.5 pr-3 text-left text-sm font-semibold text-text">
+                  <th scope="row" className="py-3 pr-3 text-left text-[14px] font-semibold text-text">
                     {cat.label}
-                    <span className="ml-1 text-xs font-normal text-faint">/{cat.max}</span>
+                    <span className="ml-1 font-normal text-faint">of {cat.max}</span>
                   </th>
                   {cars.map((c) => {
                     const cell = c.score.breakdown.find((b) => b.key === cat.key);
                     const pts = cell?.points ?? 0;
-                    // Only call something a winner when it actually leads.
-                    const wins = cars.length > 1 && pts === leader && leader > 0 && !cars.every((o) => (o.score.breakdown.find((b) => b.key === cat.key)?.points ?? 0) === leader);
+                    const wins = cars.length > 1 && pts === leader && leader > 0 && !tie;
+                    const weak = cat.max > 0 && pts / cat.max < 0.5;
                     return (
-                      <td key={c.id} className="px-2 py-2.5 text-center">
-                        <div
-                          className={`inline-flex flex-col items-center rounded-lg px-3 py-1.5 ${
-                            wins ? "bg-good/10 ring-1 ring-good/25" : ""
+                      <td key={c.id} className="px-2 py-3">
+                        <span
+                          className={`nums inline-flex items-center gap-1.5 rounded-md px-2 py-0.5 text-[15px] font-bold ${
+                            wins ? "bg-good/12 text-good" : weak ? "text-bad" : "text-text"
                           }`}
                         >
-                          <span className={`nums text-sm font-bold ${wins ? "text-good" : "text-text"}`}>{pts}</span>
-                          <Stars value={cell?.stars ?? 0} className="text-[10px]" />
-                        </div>
+                          {round(pts)}
+                          {wins && <span className="text-[12px] font-semibold">leads</span>}
+                        </span>
                       </td>
                     );
                   })}
@@ -212,11 +197,11 @@ function Row<T extends { id: string }>({
 }) {
   return (
     <tr className="border-t border-line">
-      <th scope="row" className="py-2.5 pr-3 text-left text-sm font-semibold text-text">
+      <th scope="row" className="py-3 pr-3 text-left text-[14px] font-semibold text-text">
         {label}
       </th>
       {cars.map((c) => (
-        <td key={c.id} className="nums px-2 py-2.5 text-center text-sm text-muted">
+        <td key={c.id} className="nums px-2 py-3 text-[14px] text-muted">
           {render(c)}
         </td>
       ))}
@@ -226,15 +211,11 @@ function Row<T extends { id: string }>({
 
 function Empty({ title, body }: { title: string; body: string }) {
   return (
-    <div className="mx-auto max-w-lg px-4 py-20 text-center">
-      <p className="font-display text-xl font-bold text-text">{title}</p>
+    <div className="mx-auto max-w-lg px-4 py-24 text-center">
+      <p className="wide text-[24px] font-bold text-text">{title}</p>
       <p className="mt-2 text-sm text-muted">{body}</p>
-      <Link
-        to="/"
-        className="mt-5 inline-block rounded-lg bg-brand px-4 py-2 text-sm font-bold transition hover:bg-brand-strong"
-        style={{ color: "var(--on-brand)" }}
-      >
-        Back to leaderboard
+      <Link to="/" className="btn btn-primary mt-6">
+        Back to the leaderboard
       </Link>
     </div>
   );

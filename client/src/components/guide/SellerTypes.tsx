@@ -1,4 +1,3 @@
-import { motion } from "framer-motion";
 
 /**
  * What changes depending on who is selling the car.
@@ -47,7 +46,7 @@ const TYPES: SellerType[] = [
     name: "Online retailer",
     who: "Buys cars, reconditions them, delivers to your door. No lot, no test drive first.",
     sources: "Clutch.ca",
-    accent: "var(--info)",
+    accent: "var(--strong)",
     rows: [
       { label: "Regulated seller", answer: "yes", note: "A registered dealer, with the same obligations as a physical one." },
       { label: "Compensation fund", answer: "yes", note: "Same protection as any registered dealer." },
@@ -76,31 +75,24 @@ const TYPES: SellerType[] = [
 
 const MARK: Record<Answer, { glyph: string; color: string; label: string }> = {
   yes: { glyph: "✓", color: "var(--good)", label: "Yes" },
-  maybe: { glyph: "~", color: "var(--warn)", label: "Sometimes" },
+  maybe: { glyph: "~", color: "var(--fair)", label: "Sometimes" },
   no: { glyph: "✕", color: "var(--bad)", label: "No" },
 };
 
 export function SellerTypes() {
   return (
     <div className="grid gap-4 lg:grid-cols-3">
-      {TYPES.map((t, i) => (
-        <motion.div
-          key={t.key}
-          initial={{ opacity: 0, y: 16 }}
-          whileInView={{ opacity: 1, y: 0 }}
-          viewport={{ once: true, margin: "-60px" }}
-          transition={{ duration: 0.45, delay: i * 0.08, ease: [0.22, 1, 0.36, 1] }}
-          className="flex flex-col rounded-2xl border border-line bg-surface p-5"
-        >
+      {TYPES.map((t) => (
+        <div key={t.key} className="flex flex-col rounded-[var(--radius-card)] border border-line bg-surface p-5">
           <div className="border-b border-line pb-4">
             <span
               className="inline-block h-1.5 w-10 rounded-full"
               style={{ backgroundColor: t.accent }}
               aria-hidden
             />
-            <h3 className="mt-3 font-display text-lg font-extrabold text-text">{t.name}</h3>
-            <p className="mt-1.5 text-sm leading-relaxed text-muted">{t.who}</p>
-            <p className="mt-2 text-[11px] leading-relaxed text-faint">{t.sources}</p>
+            <h3 className="wide mt-3 text-[18px] font-bold text-text">{t.name}</h3>
+            <p className="mt-1.5 text-[15px] leading-relaxed text-muted">{t.who}</p>
+            <p className="mt-2 text-[13px] leading-relaxed text-faint">{t.sources.replace(/ · /g, ", ")}</p>
           </div>
 
           <dl className="mt-4 space-y-3.5">
@@ -109,7 +101,7 @@ export function SellerTypes() {
               return (
                 <div key={r.label} className="flex gap-2.5">
                   <span
-                    className="mt-0.5 grid h-5 w-5 shrink-0 place-items-center rounded-full text-[11px] font-bold"
+                    className="mt-0.5 grid h-5 w-5 shrink-0 place-items-center rounded-full text-[12px] font-bold"
                     style={{ color: m.color, backgroundColor: `color-mix(in oklab, ${m.color} 14%, transparent)` }}
                     title={m.label}
                   >
@@ -117,14 +109,14 @@ export function SellerTypes() {
                     <span className="sr-only">{m.label}:</span>
                   </span>
                   <div className="min-w-0">
-                    <dt className="text-sm font-semibold text-text">{r.label}</dt>
-                    <dd className="mt-0.5 text-xs leading-relaxed text-muted">{r.note}</dd>
+                    <dt className="text-[14px] font-semibold text-text">{r.label}</dt>
+                    <dd className="mt-0.5 text-[13px] leading-relaxed text-muted">{r.note}</dd>
                   </div>
                 </div>
               );
             })}
           </dl>
-        </motion.div>
+        </div>
       ))}
     </div>
   );
@@ -145,7 +137,7 @@ const CERTIFIED = [
     covers: "Brakes, tyres, lights, steering, structure",
     notCovers: "Engine, transmission, anything wearing out but not yet unsafe",
     life: "Valid 36 days",
-    accent: "var(--warn)",
+    accent: "var(--fair)",
   },
   {
     term: "Certified Pre-Owned (CPO)",
@@ -161,28 +153,22 @@ const CERTIFIED = [
     covers: "210-point inspection, 90-day/6,000 km warranty, 10-day return",
     notCovers: "Not a factory warranty, and not a legal standard",
     life: "Return window is short — use it",
-    accent: "var(--info)",
+    accent: "var(--strong)",
   },
 ];
 
 export function CertifiedMeanings() {
   return (
     <div className="grid gap-4 md:grid-cols-3">
-      {CERTIFIED.map((c, i) => (
-        <motion.div
-          key={c.term}
-          initial={{ opacity: 0, y: 14 }}
-          whileInView={{ opacity: 1, y: 0 }}
-          viewport={{ once: true, margin: "-60px" }}
-          transition={{ duration: 0.4, delay: i * 0.07 }}
-          className="rounded-2xl border border-line bg-surface p-5"
-        >
-          <p className="font-display text-sm font-extrabold" style={{ color: c.accent }}>
+      {CERTIFIED.map((c) => (
+        <div key={c.term} className="rounded-[var(--radius-card)] border border-line bg-surface p-5">
+          <p className="wide text-[16px] font-bold text-text">
+            <span className="mr-2 inline-block h-2.5 w-2.5 rounded-sm align-[1px]" style={{ backgroundColor: c.accent }} aria-hidden />
             {c.term}
           </p>
-          <p className="mt-2 text-sm leading-relaxed text-muted">{c.what}</p>
+          <p className="mt-2 text-[15px] leading-relaxed text-muted">{c.what}</p>
 
-          <dl className="mt-4 space-y-2 border-t border-line pt-3 text-xs">
+          <dl className="mt-4 space-y-2.5 border-t border-line pt-3 text-[14px]">
             <div>
               <dt className="font-semibold text-good">Covers</dt>
               <dd className="text-muted">{c.covers}</dd>
@@ -196,7 +182,7 @@ export function CertifiedMeanings() {
               <dd className="text-muted">{c.life}</dd>
             </div>
           </dl>
-        </motion.div>
+        </div>
       ))}
     </div>
   );

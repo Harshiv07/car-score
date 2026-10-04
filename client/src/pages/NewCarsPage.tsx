@@ -2,7 +2,8 @@ import { useMemo, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import { useNewCars } from "../api/hooks";
 import { NewCar } from "../api/types";
-import { cad, ScoreBadge, timeAgo } from "../components/ui";
+import { cad, ScoreChip, timeAgo } from "../components/ui";
+import { Icon } from "../components/Icon";
 import { WakingNotice } from "../components/WakingNotice";
 
 export function NewCarsPage() {
@@ -21,14 +22,13 @@ export function NewCarsPage() {
   const visible = activeMake ? byMake.filter(([make]) => make === activeMake) : byMake;
 
   return (
-    <div className="mx-auto max-w-7xl px-4 py-8">
-      <div className="fade-up">
-        <h1 className="font-display text-3xl font-bold tracking-tight text-text sm:text-4xl">
-          New <span className="text-brand">Cars</span>
-        </h1>
-        <p className="mt-2 max-w-xl text-sm leading-relaxed text-muted">
-          Current-model lineups pulled straight from the manufacturers' official Canadian sites — starting MSRP,
-          powertrain and specs. Click through to build &amp; price on the OEM site.
+    <div className="mx-auto max-w-[1240px] px-4 pb-12 pt-8 sm:px-6 sm:pt-12">
+      <div>
+        <h1 className="display text-[clamp(2.25rem,5vw,3.75rem)] text-text">New cars</h1>
+        <p className="mt-3 max-w-[58ch] text-[16px] leading-relaxed text-muted">
+          This year's lineups from the manufacturers' Canadian sites: starting MSRP, powertrain and specs. Worth a
+          look before you settle on used, because a new car's warranty and financing rates can close more of the
+          price gap than you'd expect.
         </p>
       </div>
 
@@ -48,8 +48,8 @@ export function NewCarsPage() {
       </div>
 
       {data?.loading && (
-        <div className="mt-5 flex items-center gap-2 rounded-xl border border-line bg-surface px-4 py-2.5 text-sm text-muted">
-          <span className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-brand/40 border-t-brand" />
+        <div className="mt-5 flex items-center gap-2 rounded-[var(--radius-card)] border border-line bg-surface px-4 py-2.5 text-sm text-muted">
+          <span className="spin h-3.5 w-3.5 rounded-full border-2 border-line border-t-accent" />
           Loading more manufacturers…
         </div>
       )}
@@ -57,22 +57,22 @@ export function NewCarsPage() {
       {isLoading && !data && (
         <div className="mt-8 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
           {Array.from({ length: 6 }).map((_, i) => (
-            <div key={i} className="h-72 animate-pulse rounded-2xl bg-surface" />
+            <div key={i} className="h-80 animate-pulse rounded-[var(--radius-card)] bg-surface" />
           ))}
         </div>
       )}
 
       {visible.map(([make, cars]) => (
-        <section key={make} className="mt-8">
+        <section key={make} className="mt-10">
           {!activeMake && (
-            <h2 className="mb-3 flex items-center gap-2 text-lg font-bold text-text">
-              {make}
-              <span className="nums rounded-full bg-surface2 px-2 py-0.5 text-xs font-semibold text-muted">
-                {cars.length}
+            <h2 className="mb-4 flex items-baseline gap-2 border-b border-line pb-2">
+              <span className="wide text-[22px] font-bold text-text">{make}</span>
+              <span className="nums text-[14px] text-faint">
+                {cars.length} model{cars.length === 1 ? "" : "s"}
               </span>
             </h2>
           )}
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+          <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3">
             {cars.map((c) => (
               <NewCarCard key={c.id} car={c} />
             ))}
@@ -81,20 +81,20 @@ export function NewCarsPage() {
       ))}
 
       {data && !data.loading && data.cars.length === 0 && (
-        <div className="mt-8 rounded-2xl border border-line bg-surface p-10 text-center text-muted">
-          No new-car data available right now.
+        <div className="mt-8 rounded-[var(--radius-card)] border border-dashed border-line-strong p-10 text-center text-muted">
+          No new-car data right now. The manufacturer sites may be slow; try again in a few minutes.
         </div>
       )}
 
       {activeMake && visible.length === 0 && (
-        <div className="mt-8 rounded-2xl border border-line bg-surface p-10 text-center text-muted">
+        <div className="mt-8 rounded-[var(--radius-card)] border border-dashed border-line-strong p-10 text-center text-muted">
           No {activeMake} models yet.
         </div>
       )}
 
       {data?.fetchedAt && (
-        <p className="mt-8 text-center text-xs text-faint">
-          Data from official manufacturer sites · updated {timeAgo(data.fetchedAt)}
+        <p className="mt-10 text-center text-[13px] text-faint">
+          From official manufacturer sites, updated {timeAgo(data.fetchedAt)}
         </p>
       )}
     </div>
@@ -114,13 +114,13 @@ function BrandTabs({
   onChange: (make: string) => void;
 }) {
   const pill = (isActive: boolean) =>
-    `shrink-0 rounded-full px-3.5 py-1.5 text-sm font-semibold transition ${
-      isActive ? "bg-brand shadow-sm [color:var(--on-brand)]" : "bg-surface2 text-muted hover:text-text"
+    `relative shrink-0 px-3 py-2.5 text-[14px] font-semibold transition-colors ${
+      isActive ? "text-text after:absolute after:inset-x-3 after:-bottom-px after:h-[2px] after:rounded-full after:bg-accent" : "text-muted hover:text-text"
     }`;
   return (
-    <div role="tablist" aria-label="Filter by brand" className="mt-5 flex gap-2 overflow-x-auto pb-1">
+    <div role="tablist" aria-label="Filter by brand" className="mt-8 flex overflow-x-auto border-b border-line">
       <button type="button" role="tab" aria-selected={!active} onClick={() => onChange("")} className={pill(!active)}>
-        All <span className="nums opacity-70">({total})</span>
+        All <span className="nums font-normal text-faint">({total})</span>
       </button>
       {byMake.map(([make, cars]) => (
         <button
@@ -131,7 +131,7 @@ function BrandTabs({
           onClick={() => onChange(make)}
           className={pill(active === make)}
         >
-          {make} <span className="nums opacity-70">({cars.length})</span>
+          {make} <span className="nums font-normal text-faint">({cars.length})</span>
         </button>
       ))}
     </div>
@@ -140,7 +140,7 @@ function BrandTabs({
 
 function Chip({ children }: { children: React.ReactNode }) {
   return (
-    <span className="inline-flex items-center rounded-md bg-surface2 px-2 py-0.5 text-[11px] font-semibold text-muted ring-1 ring-line">
+    <span className="inline-flex items-center rounded-md bg-surface/92 px-2 py-0.5 text-[12px] font-semibold text-text backdrop-blur-sm">
       {children}
     </span>
   );
@@ -149,7 +149,7 @@ function Chip({ children }: { children: React.ReactNode }) {
 function Spec({ label, value }: { label: string; value: string | null }) {
   if (!value) return null;
   return (
-    <div className="flex justify-between gap-3 border-t border-line py-1.5 text-xs">
+    <div className="flex justify-between gap-3 border-t border-line py-2 text-[13px]">
       <span className="shrink-0 text-faint">{label}</span>
       <span className="truncate text-right text-muted" title={value}>
         {value}
@@ -167,20 +167,29 @@ function CarImage({ car }: { car: NewCar }) {
   const [failed, setFailed] = useState(false);
   if (!car.image || failed) {
     return (
-      <div className="font-display grid h-full w-full place-items-center text-3xl font-bold text-line-strong">
+      <div className="display grid h-full w-full place-items-center text-[28px] text-line-strong">
         {car.make}
       </div>
     );
   }
   return (
-    <img
-      src={car.image}
-      alt={`${car.year} ${car.make} ${car.model}`}
-      loading="lazy"
-      referrerPolicy="no-referrer"
-      onError={() => setFailed(true)}
-      className="h-full w-full object-cover transition duration-300 group-hover:scale-[1.03]"
-    />
+    <>
+      <img
+        src={car.image}
+        alt={`${car.year} ${car.make} ${car.model}`}
+        loading="lazy"
+        referrerPolicy="no-referrer"
+        onError={() => setFailed(true)}
+        className="h-full w-full object-cover transition duration-300 group-hover:scale-[1.03]"
+      />
+      {/* Scrim: these are stock photos we don't control, and a white car on a
+          bright sky left the chips over it unreadable. */}
+      <div
+        className="pointer-events-none absolute inset-x-0 top-0 h-20"
+        style={{ background: "linear-gradient(to bottom, rgb(0 0 0 / 0.4), transparent)" }}
+        aria-hidden
+      />
+    </>
   );
 }
 
@@ -190,18 +199,10 @@ function NewCarCard({ car }: { car: NewCar }) {
       href={car.officialUrl}
       target="_blank"
       rel="noopener noreferrer"
-      className="group flex flex-col overflow-hidden rounded-2xl border border-line bg-surface transition hover:border-brand/40 hover:shadow-lg hover:shadow-black/20"
+      className="group flex flex-col overflow-hidden rounded-[var(--radius-card)] border border-line bg-surface transition-colors hover:border-line-strong"
     >
       <div className="relative aspect-[16/10] overflow-hidden bg-surface2">
         <CarImage car={car} />
-
-        {/* Scrim. These are stock/Wikimedia photos we don't control — a white
-            car against a bright sky left the chips and score unreadable. */}
-        <div
-          className="pointer-events-none absolute inset-x-0 top-0 h-24"
-          style={{ background: "linear-gradient(to bottom, color-mix(in oklab, #000 55%, transparent), transparent)" }}
-          aria-hidden
-        />
 
         <div className="absolute left-3 top-3 flex gap-1.5">
           {car.bodyType && <Chip>{car.bodyType}</Chip>}
@@ -209,28 +210,30 @@ function NewCarCard({ car }: { car: NewCar }) {
         </div>
         {car.score != null && (
           <div className="absolute right-3 top-3">
-            <ScoreBadge total={car.score} />
+            <ScoreChip total={car.score} />
           </div>
         )}
       </div>
 
       <div className="flex flex-1 flex-col p-4">
-        <h3 className="text-base font-bold text-text transition group-hover:text-brand">
+        <h3 className="wide text-[17px] font-bold text-text">
           {car.year} {car.make} {car.model}
         </h3>
 
         <div className="mt-1.5">
           {car.startingPriceCad ? (
-            <span className="nums text-lg font-extrabold text-text">
+            <span className="nums display text-[22px] text-text">
               {cad(car.startingPriceCad)}
-              <span className="ml-1 text-xs font-medium text-faint">starting MSRP</span>
+              <span className="ml-1.5 text-[13px] font-medium text-faint" style={{ fontStretch: "100%", letterSpacing: 0 }}>
+                starting MSRP
+              </span>
             </span>
           ) : (
             <span className="text-sm font-semibold text-muted">See official site for pricing</span>
           )}
         </div>
 
-        {car.description && <p className="mt-2 line-clamp-2 text-xs text-muted">{car.description}</p>}
+        {car.description && <p className="mt-2 line-clamp-2 text-[14px] text-muted">{car.description}</p>}
 
         <div className="mt-3">
           <Spec label="Engine" value={car.engine} />
@@ -239,7 +242,10 @@ function NewCarCard({ car }: { car: NewCar }) {
           <Spec label="Fuel tank" value={car.fuelCapacity} />
         </div>
 
-        <div className="mt-auto pt-3 text-xs font-semibold text-brand">Build &amp; price on {car.source} ↗</div>
+        <div className="mt-auto inline-flex items-center gap-1.5 pt-4 text-[14px] font-semibold text-accent-ink">
+          Build and price on {car.source}
+          <Icon name="external" size={14} />
+        </div>
       </div>
     </a>
   );

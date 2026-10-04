@@ -1,8 +1,8 @@
-/** Shared UI atoms: score badge, pills, badges, stars, segmented, toggle, select, fmt. */
+/** Shared UI atoms: formatting, score bands, tags, and the form controls. */
 
 import { useEffect, useRef, useState } from "react";
 import { DealRating } from "../api/types";
-import { FillRail } from "./motion";
+import { Icon } from "./Icon";
 
 export const cad = (n: number) => `$${Math.round(n).toLocaleString("en-CA")}`;
 export const km = (n: number) => `${Math.round(n).toLocaleString("en-CA")} km`;
@@ -26,183 +26,118 @@ export function isRecent(iso: string, hours = 48): boolean {
   return Date.now() - new Date(iso).getTime() < hours * 3600 * 1000;
 }
 
-/* ---- score colour bands -------------------------------------------------- */
+/* ---- score bands ------------------------------------------------------------ */
 
 /**
- * Score colour bands. Four steps, and they read the same way everywhere in the
- * app: green is earned, gold is the middle, red is a warning. Gold doubles as
- * the brand colour, which is deliberate — a mid-70s score is the honest
- * default for most of this inventory.
+ * Four bands, read the same way everywhere: spruce is earned, lake is solid,
+ * amber is a caution, brake-light red is a warning. Orange is deliberately not
+ * one of them — it belongs to actions and the number-one car.
  */
 export function scoreHex(total: number): string {
   if (total >= 80) return "var(--good)";
-  if (total >= 65) return "var(--brand-strong)";
-  if (total >= 50) return "var(--warn)";
+  if (total >= 65) return "var(--strong)";
+  if (total >= 50) return "var(--fair)";
   return "var(--bad)";
 }
 
-/** Tailwind text class (token-based) for score numbers elsewhere. */
 export function scoreColor(total: number): string {
   if (total >= 80) return "text-good";
-  if (total >= 65) return "text-brand";
-  if (total >= 50) return "text-warn";
+  if (total >= 65) return "text-strong";
+  if (total >= 50) return "text-fair";
   return "text-bad";
 }
 
-/* ---- score spine --------------------------------------------------------- */
-
-/**
- * The leaderboard's signature element.
- *
- * A vertical rail down the left edge of every card, filled to the car's score
- * in its band colour, with the numeral at the top and the rank beneath. Read a
- * single card and it's a score; scroll the list and the cards themselves draw a
- * bar chart of quality down the page, so "this one is clearly better than the
- * three under it" is legible without reading a word.
- */
-export function ScoreSpine({ total, rank }: { total: number; rank?: number }) {
-  const hex = scoreHex(total);
+/** Compact score for places without room for the strip (new-car tiles). */
+export function ScoreChip({ total }: { total: number }) {
   const n = Math.round(total);
   return (
-    <div className="flex w-9 shrink-0 flex-col items-center gap-1.5 self-stretch sm:w-11">
-      {rank != null && (
-        <span className="nums text-[11px] font-bold text-faint" aria-hidden>
-          #{rank}
-        </span>
-      )}
-
-      <div className="flex flex-col items-center leading-none">
-        <span className="nums font-display text-[26px] font-extrabold sm:text-[30px]" style={{ color: hex }}>
-          {n}
-        </span>
-        <span className="mt-0.5 text-[10px] font-bold uppercase tracking-[0.12em] text-faint">/100</span>
-      </div>
-
-      {/* The rail, which fills from the bottom as the card scrolls into view —
-          so the leaderboard draws its own bar chart as you move down it. The
-          unfilled track stays visible so the proportion reads: at 87/100 a
-          track-coloured remainder is the only thing distinguishing it from a
-          solid bar. aria-hidden: the numeral already announces the score. */}
-      <FillRail percent={n} color={hex} />
-    </div>
-  );
-}
-
-/* ---- score badge --------------------------------------------------------- */
-
-/** Compact score tile, for places without room for the spine (detail hero,
- *  compare tray, alternatives). Big number in the band colour on a tinted tile. */
-export function ScoreBadge({ total, variant = "card" }: { total: number; variant?: "card" | "hero" }) {
-  const hex = scoreHex(total);
-  const hero = variant === "hero";
-  const n = Math.round(total);
-  return (
-    <div
-      className={`flex shrink-0 flex-col items-center justify-center rounded-2xl ${hero ? "h-24 w-24" : "h-14 w-14"}`}
-      style={{
-        backgroundColor: `color-mix(in oklab, ${hex} 13%, var(--surface) 30%)`,
-        boxShadow: `inset 0 0 0 1.5px color-mix(in oklab, ${hex} 40%, transparent)`,
-      }}
+    <span
+      className="nums display inline-flex items-baseline gap-0.5 rounded-lg bg-surface px-2 py-1 text-lg shadow-[var(--shadow)]"
+      style={{ color: scoreHex(total) }}
       aria-label={`Score ${n} out of 100`}
-      title={`CarScore ${n} / 100`}
     >
-      <span className="nums font-display font-bold" style={{ color: hex, fontSize: hero ? 42 : 22, lineHeight: 1 }}>
-        {n}
-      </span>
-      <span
-        className="font-semibold uppercase text-faint"
-        style={{ fontSize: hero ? 10 : 7.5, letterSpacing: "0.1em", marginTop: hero ? 5 : 3, lineHeight: 1 }}
-      >
+      {n}
+      <span className="text-[11px] font-semibold text-faint" style={{ fontStretch: "100%" }}>
         /100
       </span>
-    </div>
+    </span>
   );
 }
 
-/* ---- pills, badges, stars ------------------------------------------------ */
+/* ---- tags ------------------------------------------------------------------- */
+
+const DEAL_TONE: Record<DealRating, string> = {
+  "Excellent Deal": "var(--good)",
+  "Great Deal": "var(--good)",
+  "Good Deal": "var(--strong)",
+  "Fair Price": "var(--muted)",
+  "Above Market": "var(--fair)",
+  Overpriced: "var(--bad)",
+};
+
+/** "Excellent Deal" → "Excellent deal". The data's title case reads as shouting in a sentence. */
+export const dealLabel = (r: DealRating) => r.charAt(0) + r.slice(1).toLowerCase();
+
+export function DealTag({ rating }: { rating: DealRating }) {
+  const tone = DEAL_TONE[rating];
+  return (
+    <span
+      className="inline-flex items-center gap-1.5 rounded-md px-2 py-0.5 text-[12px] font-semibold"
+      style={{ color: tone, backgroundColor: `color-mix(in oklab, ${tone} 11%, transparent)` }}
+    >
+      {dealLabel(rating)}
+    </span>
+  );
+}
+
+const BADGE_TONE: Record<string, string> = {
+  "Best Reliability": "var(--strong)",
+  "Best Winter": "var(--strong)",
+  "Lowest Mileage": "var(--good)",
+  "Best Resale": "var(--good)",
+  "Excellent Deal": "var(--good)",
+  CPO: "var(--good)",
+};
+
+/** A quieter tag than the deal rating: outlined, for secondary facts. */
+export function Badge({ label }: { label: string }) {
+  const tone = BADGE_TONE[label] ?? "var(--muted)";
+  const text = label === "CPO" ? "Certified pre-owned" : label.charAt(0) + label.slice(1).toLowerCase();
+  return (
+    <span
+      className="inline-flex items-center rounded-md border px-2 py-0.5 text-[12px] font-medium"
+      style={{ color: tone, borderColor: `color-mix(in oklab, ${tone} 35%, transparent)` }}
+    >
+      {text}
+    </span>
+  );
+}
 
 export function NewBadge() {
   return (
-    <span className="inline-flex items-center gap-1 rounded-full bg-info/15 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-info ring-1 ring-info/25">
-      <span className="h-1.5 w-1.5 rounded-full bg-info" />
-      New
+    <span className="inline-flex items-center gap-1.5 rounded-md bg-strong/10 px-2 py-0.5 text-[12px] font-semibold text-strong">
+      <span className="h-1.5 w-1.5 rounded-full bg-strong" aria-hidden />
+      Added recently
     </span>
   );
 }
 
 /**
- * "May qualify for the federal EV Affordability Program" — money back, not a
- * warning, so it borrows the same green used for savings and CPO rather than
- * gold (reserved for the score) or a caution colour. `rebateAmount` and
- * `reason` come straight from the server's `evapEligibility` check; the title
- * attribute carries the "may qualify, confirm before you buy" caveat so it's
- * one hover away without cluttering the card.
+ * "May qualify for the federal EV Affordability Program" — money back, so it
+ * takes the savings colour. The title carries the confirm-before-you-buy caveat.
  */
 export function EvapBadge({ rebateAmount, reason }: { rebateAmount: number; reason: string }) {
   return (
     <span
-      className="inline-flex items-center gap-1 rounded-full bg-good/15 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-good ring-1 ring-good/25"
+      className="inline-flex items-center gap-1 rounded-md bg-good/10 px-2 py-0.5 text-[12px] font-semibold text-good"
       title={reason}
     >
-      <span className="h-1.5 w-1.5 rounded-full bg-good" />
-      EVAP eligible · ${rebateAmount.toLocaleString("en-CA")}
+      EVAP rebate up to ${rebateAmount.toLocaleString("en-CA")}
     </span>
   );
 }
 
-export function Stars({ value, className = "" }: { value: number; className?: string }) {
-  const full = Math.floor(value);
-  const half = value - full >= 0.5;
-  return (
-    <span className={`tracking-tight text-brand ${className}`} title={`${value}/5`}>
-      {"★".repeat(full)}
-      {half ? "⯨" : ""}
-      <span className="text-line-strong">{"★".repeat(Math.max(0, 5 - full - (half ? 1 : 0)))}</span>
-    </span>
-  );
-}
-
-const DEAL_STYLES: Record<DealRating, string> = {
-  "Excellent Deal": "bg-good/15 text-good ring-good/30",
-  "Great Deal": "bg-good/12 text-good ring-good/25",
-  "Good Deal": "bg-info/12 text-info ring-info/25",
-  "Fair Price": "bg-muted/12 text-muted ring-line-strong/40",
-  "Above Market": "bg-warn/12 text-warn ring-warn/25",
-  Overpriced: "bg-bad/12 text-bad ring-bad/30",
-};
-
-export function DealPill({ rating }: { rating: DealRating }) {
-  return (
-    <span
-      className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-[11px] font-bold uppercase tracking-wide ring-1 ${DEAL_STYLES[rating]}`}
-    >
-      {rating}
-    </span>
-  );
-}
-
-const BADGE_STYLES: Record<string, string> = {
-  "Excellent Deal": "bg-good/12 text-good ring-good/25",
-  "Best Reliability": "bg-info/12 text-info ring-info/25",
-  "Best Winter": "bg-cool/12 text-cool ring-cool/25",
-  "Lowest Mileage": "bg-cool/12 text-cool ring-cool/25",
-  "Best Resale": "bg-brand/12 text-brand ring-brand/25",
-  CPO: "bg-good/12 text-good ring-good/25",
-};
-
-export function Badge({ label }: { label: string }) {
-  return (
-    <span
-      className={`inline-flex items-center rounded-md px-2 py-0.5 text-[11px] font-semibold ring-1 ${
-        BADGE_STYLES[label] ?? "bg-raised text-muted ring-line"
-      }`}
-    >
-      {label}
-    </span>
-  );
-}
-
-/* ---- form controls ------------------------------------------------------- */
+/* ---- form controls ---------------------------------------------------------- */
 
 export function Segmented<T extends string>({
   value,
@@ -216,7 +151,7 @@ export function Segmented<T extends string>({
   ariaLabel?: string;
 }) {
   return (
-    <div role="group" aria-label={ariaLabel} className="grid grid-flow-col auto-cols-fr gap-1 rounded-lg bg-surface2 p-1">
+    <div role="group" aria-label={ariaLabel} className="grid grid-flow-col auto-cols-fr rounded-lg border border-line p-0.5">
       {options.map((o) => {
         const active = o.value === value;
         return (
@@ -225,10 +160,9 @@ export function Segmented<T extends string>({
             type="button"
             aria-pressed={active}
             onClick={() => onChange(o.value)}
-            className={`rounded-md px-2 py-1.5 text-xs font-semibold transition ${
-              active ? "bg-brand shadow-sm" : "text-muted hover:text-text"
+            className={`rounded-md px-2 py-1.5 text-[13px] font-semibold transition-colors ${
+              active ? "bg-text text-bg" : "text-muted hover:text-text"
             }`}
-            style={active ? { color: "var(--on-brand)" } : undefined}
           >
             {o.label}
           </button>
@@ -244,8 +178,8 @@ export interface Option {
 }
 
 /**
- * Fully-themed dropdown (native <select> option lists can't be styled and look
- * broken in dark mode). Button + popover list, closes on outside-click/Escape.
+ * Themed dropdown — native option lists can't be styled and look broken in
+ * night mode. Button plus listbox; closes on outside click and Escape.
  */
 export function Select({
   value,
@@ -286,15 +220,15 @@ export function Select({
         aria-expanded={open}
         aria-label={ariaLabel}
         onClick={() => setOpen((v) => !v)}
-        className="flex w-full items-center justify-between gap-2 rounded-lg border border-line bg-surface2 px-3 py-2 text-sm font-medium text-text transition hover:border-line-strong"
+        className="flex w-full items-center justify-between gap-2 rounded-lg border border-line bg-surface px-3 py-2 text-sm font-medium text-text transition-colors hover:border-line-strong"
       >
         <span className="truncate">{current?.label ?? ""}</span>
-        <span className={`text-faint transition-transform ${open ? "rotate-180" : ""}`}>▾</span>
+        <Icon name="chevron-down" size={16} className={`shrink-0 text-faint transition-transform ${open ? "rotate-180" : ""}`} />
       </button>
       {open && (
         <ul
           role="listbox"
-          className="absolute z-30 mt-1 max-h-64 w-full overflow-auto rounded-lg border border-line bg-surface p-1 shadow-xl shadow-black/30"
+          className="absolute z-30 mt-1 max-h-64 w-full min-w-max overflow-auto rounded-lg border border-line bg-surface p-1 shadow-[var(--shadow)]"
         >
           {options.map((o) => {
             const active = o.value === value;
@@ -306,12 +240,12 @@ export function Select({
                     onChange(o.value);
                     setOpen(false);
                   }}
-                  className={`flex w-full items-center justify-between gap-2 rounded-md px-2.5 py-1.5 text-left text-sm transition ${
-                    active ? "bg-brand/15 font-semibold text-brand" : "text-text hover:bg-surface2"
+                  className={`flex w-full items-center justify-between gap-3 rounded-md px-2.5 py-1.5 text-left text-sm transition-colors ${
+                    active ? "bg-surface2 font-semibold text-text" : "text-text hover:bg-surface2"
                   }`}
                 >
                   <span className="truncate">{o.label}</span>
-                  {active && <span className="text-brand">✓</span>}
+                  {active && <Icon name="check" size={15} className="text-accent-ink" />}
                 </button>
               </li>
             );
@@ -319,20 +253,6 @@ export function Select({
         </ul>
       )}
     </div>
-  );
-}
-
-/**
- * A single hard fact on a card — value first, then its unit/label. Keeping the
- * value at text weight and the label faint lets someone scan a column of cards
- * for "km" or "AWD" without reading sentences.
- */
-export function Fact({ value, label }: { value: string; label?: string }) {
-  return (
-    <span className="inline-flex items-baseline gap-1">
-      <span className="nums font-semibold text-text">{value}</span>
-      {label && <span className="text-faint">{label}</span>}
-    </span>
   );
 }
 
@@ -354,15 +274,14 @@ export function Toggle({
         aria-checked={checked}
         aria-label={label}
         onClick={() => onChange(!checked)}
-        className={`relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-colors ${
-          checked ? "bg-brand" : "bg-line-strong"
+        className={`relative inline-flex h-6 w-10 shrink-0 items-center rounded-full transition-colors ${
+          checked ? "bg-text" : "bg-line-strong"
         }`}
       >
         <span
-          className={`inline-block rounded-full bg-white shadow transition-transform ${
-            checked ? "translate-x-[22px]" : "translate-x-[3px]"
+          className={`inline-block h-[18px] w-[18px] rounded-full bg-surface shadow transition-transform ${
+            checked ? "translate-x-[19px]" : "translate-x-[3px]"
           }`}
-          style={{ height: 18, width: 18 }}
         />
       </button>
     </label>

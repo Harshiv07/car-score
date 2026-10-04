@@ -127,14 +127,28 @@ test("new cars brand tabs filter the grid and write make= into the URL", async (
   await expect(page).not.toHaveURL(/make=/);
 });
 
-test("theme switch toggles dark mode", async ({ page }) => {
+test("theme switch toggles night mode and remembers it", async ({ page }) => {
+  // The default follows the system setting, so assert the flip, not a fixed start.
   await page.goto("/");
   const html = page.locator("html");
-  await expect(html).toHaveClass(/dark/);
-  await page.getByRole("switch", { name: /light mode/i }).click();
-  await expect(html).not.toHaveClass(/dark/);
-  await page.getByRole("switch", { name: /dark mode/i }).click();
-  await expect(html).toHaveClass(/dark/);
+  const startsDark = await html.evaluate((el) => el.classList.contains("dark"));
+  await page.getByRole("switch", { name: startsDark ? /light mode/i : /dark mode/i }).click();
+  await expect(html).toHaveClass(startsDark ? /^(?!.*dark)/ : /dark/);
+  await page.reload();
+  await expect(html).toHaveClass(startsDark ? /^(?!.*dark)/ : /dark/);
+  await page.getByRole("switch", { name: startsDark ? /dark mode/i : /light mode/i }).click();
+  await expect(html).toHaveClass(startsDark ? /dark/ : /^(?!.*dark)/);
+});
+
+test("guide walkaround steps through its stops", async ({ page }) => {
+  await page.goto("/guide");
+  await expect(page.getByRole("heading", { level: 1 })).toContainText(/how to buy a car/i, { timeout: 15_000 });
+  await expect(page.getByText("Stop 1 of 7")).toBeVisible();
+  await page.getByRole("button", { name: "Next stop" }).click();
+  await expect(page.getByText("Stop 2 of 7")).toBeVisible();
+  await page.getByRole("button", { name: /^7\. Underneath/ }).first().click();
+  await expect(page.getByText("Stop 7 of 7")).toBeVisible();
+  await expect(page.getByRole("button", { name: "Next stop" })).toBeDisabled();
 });
 
 test("saved-cars page shows the empty state", async ({ page }) => {

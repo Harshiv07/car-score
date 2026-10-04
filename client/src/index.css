@@ -3,100 +3,101 @@
 @custom-variant dark (&:where(.dark, .dark *));
 
 /*
- * CarScore design tokens — "boreal & gold".
+ * CarScore — "winter daylight".
  *
- * The base is a deep boreal green-black rather than a neutral near-black: it
- * reads Canadian, it keeps the amber/red warning states legible instead of
- * fighting a grey field, and gold-on-green is the natural palette for a
- * *leaderboard*. Gold (`--brand`) is reserved for one job — the score and the
- * primary action. Everything else earns its colour from meaning, not decoration.
+ * The app is for first-time buyers in Canada, and the setting it borrows from
+ * is a dealer lot on a clear February morning: cold, bright, salt-white air
+ * (frost, not cream), asphalt-blue ink, and one colour you can't miss — the
+ * hi-vis orange of a snowplough. Orange does exactly two jobs: it marks the
+ * thing you can do next, and it marks the number-one car. Everything else
+ * earns its colour from data.
  *
- * One semantic palette, mapped to Tailwind utilities so components write
- * `bg-surface text-muted border-line` instead of scattered literals. Values
- * live in :root / .dark below and switch with the `.dark` class.
+ * Score bands have their own four-step scale (spruce, lake, amber, brake),
+ * and they read the same everywhere. Night mode keeps the same roles on a
+ * night-highway blue-black.
+ *
+ * One family, Archivo, used across its width axis: wide and heavy for
+ * headlines, scores and prices, the way automotive badging is set; normal
+ * width for reading; slightly condensed for dense data.
  */
 @theme {
-  /* Bricolage Grotesque for display (wordmark, headings, score numerals) — it
-     has real character and strong tabular figures. Inter for body/UI, JetBrains
-     Mono for VINs and dense data. All variable, all self-hosted. */
-  --font-sans: "Inter Variable", "Inter", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
-  --font-display: "Bricolage Grotesque Variable", "Bricolage Grotesque", ui-sans-serif, system-ui, sans-serif;
-  --font-mono: "JetBrains Mono Variable", "JetBrains Mono", ui-monospace, "SFMono-Regular", monospace;
+  --font-sans: "Archivo Variable", "Archivo", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
 
   --color-bg: var(--bg);
+  --color-bg-deep: var(--bg-deep);
   --color-surface: var(--surface);
   --color-surface2: var(--surface-2);
-  --color-raised: var(--raised);
   --color-line: var(--line);
   --color-line-strong: var(--line-strong);
   --color-text: var(--text);
   --color-muted: var(--muted);
   --color-faint: var(--faint);
 
-  --color-brand: var(--brand);
-  --color-brand-strong: var(--brand-strong);
+  --color-accent: var(--accent);
+  --color-accent-ink: var(--accent-ink);
   --color-good: var(--good);
+  --color-strong: var(--strong);
+  --color-fair: var(--fair);
   --color-bad: var(--bad);
-  --color-warn: var(--warn);
-  --color-info: var(--info);
-  --color-cool: var(--cool);
+  --color-info: var(--strong);
+
+  --radius-card: 14px;
 }
 
-/* Dark is the default look. */
-:root,
-.dark {
-  --bg: #0a1410;
-  --surface: #10201a;
-  --surface-2: #0d1a15;
-  --raised: #172c22;
-  --line: #1e362a;
-  --line-strong: #305444;
-  --text: #e8f1ea;
-  --muted: #93aa9c;
-  --faint: #64796d;
-
-  --brand: #e8b93f;
-  --brand-strong: #f5cd63;
-  --good: #56d9a0;
-  --bad: #ff7b6b;
-  --warn: #f0a83c;
-  --info: #6fc3e8;
-  --cool: #b9a2f0;
-
-  /* Ink used on top of a gold fill — always the dark base, never white. */
-  --on-brand: #0a1410;
-
-  color-scheme: dark;
-}
-
-:root:not(.dark) {
-  --bg: #f4f2ec;
+:root {
+  --bg: #eef2f5;
+  --bg-deep: #dfe6ec;
   --surface: #ffffff;
-  --surface-2: #eae7df;
-  --raised: #faf8f4;
-  --line: #ddd8cd;
-  --line-strong: #b9b1a1;
-  --text: #0e1f17;
-  --muted: #4d6157;
-  --faint: #7b8c82;
+  --surface-2: #f4f7f9;
+  --line: #d6dee5;
+  --line-strong: #aab7c2;
+  --text: #16212b;
+  --muted: #4d5b68;
+  --faint: #5f6c78;
 
-  --brand: #8f6608;
-  --brand-strong: #6f4f05;
-  --good: #0a7550;
-  --bad: #bd3527;
-  --warn: #96610a;
-  --info: #146387;
-  --cool: #5f3fbb;
+  --accent: #f26419;
+  --accent-ink: #b5410a;
+  --on-accent: #16212b;
+  --paint: #e9581b;
+  --clay: #dfe5ea;
 
-  --on-brand: #ffffff;
+  --good: #0b7a55;
+  --strong: #2259a0;
+  --fair: #8f5a05;
+  --bad: #ba3628;
 
+  --shadow: 0 1px 2px rgb(22 33 43 / 0.06), 0 8px 24px -12px rgb(22 33 43 / 0.18);
   color-scheme: light;
+}
+
+.dark {
+  --bg: #0e151c;
+  --bg-deep: #0a1016;
+  --surface: #151f28;
+  --surface-2: #1a2631;
+  --line: #24323e;
+  --line-strong: #3a4b5a;
+  --text: #e6edf2;
+  --muted: #9aa8b4;
+  --faint: #7d8b97;
+
+  --accent: #ff7a33;
+  --accent-ink: #ff8f52;
+  --on-accent: #0e151c;
+  --paint: #f0631f;
+  --clay: #7b8794;
+
+  --good: #45c99a;
+  --strong: #7eadeb;
+  --fair: #e2a33e;
+  --bad: #f2735f;
+
+  --shadow: 0 1px 2px rgb(0 0 0 / 0.3), 0 12px 32px -16px rgb(0 0 0 / 0.6);
+  color-scheme: dark;
 }
 
 html {
   scrollbar-gutter: stable;
-  /* Anchor jumps (the skip link, in-page links) glide instead of teleporting.
-     Programmatic scroll restoration suspends this — see ScrollManager. */
   scroll-behavior: smooth;
 }
 
@@ -104,42 +105,168 @@ body {
   background-color: var(--bg);
   color: var(--text);
   font-family: var(--font-sans);
+  font-size: 15px;
+  line-height: 1.55;
   -webkit-font-smoothing: antialiased;
   text-rendering: optimizelegibility;
-  /* Nothing in this layout is meant to scroll sideways. */
   overflow-x: hidden;
 }
 
-/* Long result lists: let the browser skip layout and paint for cards that are
-   nowhere near the viewport. `contain-intrinsic-size` supplies a placeholder
-   height so the scrollbar stays honest and scrolling doesn't jump. */
-.card-list > * {
-  content-visibility: auto;
-  contain-intrinsic-size: auto 150px;
+@layer components {
+/* ---- type ------------------------------------------------------------------ */
+
+/* Wide and heavy: headlines, scores, prices. */
+.display {
+  font-stretch: 125%;
+  font-weight: 800;
+  letter-spacing: -0.025em;
+  line-height: 0.98;
+}
+/* A notch wide: titles and sub-heads. */
+.wide {
+  font-stretch: 112%;
+  letter-spacing: -0.01em;
+}
+/* A notch narrow: dense data and small labels. */
+.cond {
+  font-stretch: 88%;
 }
 
-/* Tabular figures for prices/scores/mileage so columns don't jitter. */
 .nums {
   font-variant-numeric: tabular-nums;
   font-feature-settings: "tnum";
 }
 
-/* Consistent, brand-tinted focus ring on every interactive control. */
+/* Small field labels: sentence case, never shouted. */
+.label {
+  display: block;
+  font-size: 13px;
+  font-weight: 600;
+  font-stretch: 92%;
+  color: var(--muted);
+}
+
+/* ---- controls ------------------------------------------------------------- */
+
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  border-radius: 10px;
+  padding: 0.65rem 1.1rem;
+  font-size: 14px;
+  font-weight: 700;
+  line-height: 1.2;
+  transition: background-color 0.15s ease, border-color 0.15s ease, color 0.15s ease, transform 0.1s ease;
+}
+.btn:active {
+  transform: translateY(1px);
+}
+.btn:disabled,
+.btn[aria-disabled="true"] {
+  opacity: 0.4;
+  cursor: not-allowed;
+  transform: none;
+}
+.btn-primary {
+  background: var(--accent);
+  color: var(--on-accent);
+}
+.btn-primary:hover {
+  background: color-mix(in oklab, var(--accent) 88%, var(--text));
+}
+.btn-ghost {
+  border: 1px solid var(--line-strong);
+  color: var(--text);
+}
+.btn-ghost:hover {
+  border-color: var(--text);
+}
+
+.link {
+  color: var(--accent-ink);
+  font-weight: 600;
+  text-decoration: underline;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 3px;
+  text-decoration-color: color-mix(in oklab, var(--accent-ink) 40%, transparent);
+}
+.link:hover {
+  text-decoration-color: currentColor;
+}
+
+/* Round icon buttons on listing rows. */
+.icon-btn {
+  display: grid;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  border-radius: 999px;
+  color: var(--muted);
+  transition: background-color 0.15s ease, color 0.15s ease;
+}
+.icon-btn:hover {
+  background: var(--surface-2);
+  color: var(--text);
+}
+.icon-btn[aria-pressed="true"] {
+  color: var(--accent-ink);
+}
+.icon-btn:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+}
+
+/* Long result lists: skip layout and paint for rows far from the viewport. */
+.row-list > * {
+  content-visibility: auto;
+  contain-intrinsic-size: auto 168px;
+}
+
+/* ---- the studio ------------------------------------------------------------ */
+
+/* The cyclorama behind the 3D car: a floor that fades into the wall. */
+.studio {
+  background:
+    radial-gradient(120% 70% at 50% 78%, var(--surface) 0%, transparent 60%),
+    linear-gradient(to bottom, var(--bg-deep), var(--bg) 70%);
+}
+
+/* Inspection points over the 3D walkaround. */
+.hotspot {
+  background: var(--surface);
+  color: var(--text);
+  box-shadow: 0 0 0 2px var(--text), 0 4px 12px -4px rgb(0 0 0 / 0.4);
+}
+.hotspot:hover {
+  background: var(--surface-2);
+}
+.hotspot-active,
+.hotspot-active:hover {
+  background: var(--accent);
+  color: var(--on-accent);
+  box-shadow: 0 0 0 2px var(--on-accent), 0 0 0 6px color-mix(in oklab, var(--accent) 35%, transparent);
+}
+
+}
+
+/* ---- focus, skip link, scrollbars ---------------------------------------- */
+
 *:focus-visible {
-  outline: none;
-  box-shadow: 0 0 0 2px var(--bg), 0 0 0 4px color-mix(in oklab, var(--brand) 70%, transparent);
+  outline: 2px solid var(--accent-ink);
+  outline-offset: 2px;
   border-radius: 6px;
 }
 
-/* Skip link — first tab stop, visible only when focused. */
 .skip-link {
   position: absolute;
   left: 12px;
   top: -60px;
   z-index: 60;
   border-radius: 8px;
-  background: var(--brand);
-  color: var(--on-brand);
+  background: var(--accent);
+  color: var(--on-accent);
   padding: 8px 14px;
   font-weight: 700;
   font-size: 14px;
@@ -149,90 +276,103 @@ body {
   top: 12px;
 }
 
-/* Slim, themed scrollbars. */
 * {
   scrollbar-width: thin;
   scrollbar-color: var(--line-strong) transparent;
 }
-*::-webkit-scrollbar {
-  width: 10px;
-  height: 10px;
-}
-*::-webkit-scrollbar-thumb {
-  background: var(--line-strong);
-  border-radius: 999px;
-  border: 2px solid transparent;
-  background-clip: content-box;
-}
 
-/* Range slider, themed to the brand. */
+/* ---- range slider ---------------------------------------------------------- */
+
 input[type="range"].range {
   -webkit-appearance: none;
   appearance: none;
   width: 100%;
-  height: 6px;
+  height: 4px;
   border-radius: 999px;
-  background: var(--surface-2);
-  outline-offset: 4px;
+  background: var(--line);
+  outline-offset: 6px;
 }
 input[type="range"].range::-webkit-slider-runnable-track {
-  height: 6px;
+  height: 4px;
   border-radius: 999px;
   background: linear-gradient(
     to right,
-    var(--brand) 0%,
-    var(--brand) var(--pct, 50%),
-    var(--surface-2) var(--pct, 50%),
-    var(--surface-2) 100%
+    var(--text) 0%,
+    var(--text) var(--pct, 50%),
+    var(--line) var(--pct, 50%),
+    var(--line) 100%
   );
 }
 input[type="range"].range::-moz-range-progress {
-  height: 6px;
+  height: 4px;
   border-radius: 999px;
-  background: var(--brand);
+  background: var(--text);
 }
 input[type="range"].range::-webkit-slider-thumb {
   -webkit-appearance: none;
   appearance: none;
-  margin-top: -6px;
-  height: 18px;
-  width: 18px;
+  margin-top: -8px;
+  height: 20px;
+  width: 20px;
   border-radius: 999px;
-  background: var(--brand);
-  border: 3px solid var(--surface);
-  box-shadow: 0 1px 4px rgb(0 0 0 / 0.35);
+  background: var(--surface);
+  border: 2px solid var(--text);
   cursor: pointer;
   transition: transform 0.1s ease;
 }
 input[type="range"].range::-webkit-slider-thumb:hover {
-  transform: scale(1.12);
+  transform: scale(1.1);
 }
 input[type="range"].range::-moz-range-thumb {
-  height: 18px;
-  width: 18px;
+  height: 16px;
+  width: 16px;
   border-radius: 999px;
-  background: var(--brand);
-  border: 3px solid var(--surface);
+  background: var(--surface);
+  border: 2px solid var(--text);
   cursor: pointer;
 }
 
-/* ---- motion ------------------------------------------------------------- */
+/* ---- motion ---------------------------------------------------------------- */
 
-@keyframes cs-fade-up {
+/* Route changes cross-fade; nothing slides. */
+@keyframes cs-fade {
   from {
     opacity: 0;
-    transform: translateY(6px);
   }
   to {
     opacity: 1;
-    transform: none;
   }
 }
-.fade-up {
-  animation: cs-fade-up 0.35s ease both;
+.route-enter {
+  animation: cs-fade 0.22s ease both;
 }
 
-/* Photo shimmer while the dealer image loads. */
+/* Overlays (drawers, popovers) toggled by data-state, so they animate out too. */
+.overlay {
+  transition: opacity 0.2s ease;
+}
+.overlay[data-state="closed"] {
+  opacity: 0;
+}
+.sheet {
+  transition: transform 0.32s cubic-bezier(0.22, 1, 0.36, 1);
+}
+.sheet[data-state="closed"][data-side="bottom"] {
+  transform: translateY(100%);
+}
+.sheet[data-state="closed"][data-side="right"] {
+  transform: translateX(100%);
+}
+.pop {
+  transition: opacity 0.16s ease, transform 0.16s ease;
+  transform-origin: top right;
+}
+.pop[data-state="closed"] {
+  opacity: 0;
+  transform: translateY(-4px) scale(0.98);
+}
+
+/* Photo shimmer while a dealer image loads. */
 @keyframes cs-shimmer {
   from {
     background-position: 200% 0;
@@ -252,40 +392,22 @@ input[type="range"].range::-moz-range-thumb {
   animation: cs-shimmer 1.4s linear infinite;
 }
 
-/* ---- pointer light & tilt ------------------------------------------------
-   Driven by --mx/--my/--rx/--ry, which usePointerLight writes straight to the
-   element. A soft gold pool follows the cursor across a surface; on the hero it
-   also leans the panel a few degrees toward the pointer. Hover-capable devices
-   only — on touch there is nothing to follow, so nothing is drawn. */
-@media (hover: hover) and (pointer: fine) {
-  .lit {
-    position: relative;
-  }
-  .lit::after {
-    content: "";
-    position: absolute;
-    inset: 0;
-    border-radius: inherit;
-    pointer-events: none;
-    opacity: 0;
-    transition: opacity 0.25s ease;
-    background: radial-gradient(
-      380px circle at var(--mx, 50%) var(--my, 50%),
-      color-mix(in oklab, var(--brand) 16%, transparent),
-      transparent 62%
-    );
-  }
-  .lit:hover::after {
-    opacity: 1;
-  }
-  .tilt {
-    transform: perspective(1200px) rotateX(var(--rx, 0deg)) rotateY(var(--ry, 0deg));
-    transition: transform 0.18s ease-out, border-color 0.2s ease;
-    will-change: transform;
+@keyframes cs-spin {
+  to {
+    transform: rotate(360deg);
   }
 }
+.spin {
+  animation: cs-spin 0.9s linear infinite;
+}
 
-/* Respect the OS setting: keep state changes, drop the movement. */
+/* SplitText line masks for the headline reveal. */
+.line-mask {
+  overflow: clip;
+  padding-bottom: 0.08em;
+  margin-bottom: -0.08em;
+}
+
 @media (prefers-reduced-motion: reduce) {
   *,
   *::before,

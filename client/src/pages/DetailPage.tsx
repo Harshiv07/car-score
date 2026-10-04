@@ -1,49 +1,54 @@
 import { Link, useParams } from "react-router-dom";
 import { useListingDetail } from "../api/hooks";
-import { ListingCard } from "../components/ListingCard";
+import { ListingRow, Delta, tidyCity } from "../components/ListingRow";
 import { CarPhoto } from "../components/CarPhoto";
 import { PaymentEstimate } from "../components/PaymentEstimate";
-import { AnimatedNumber, FillBar } from "../components/motion";
+import { CountUp, FillBar } from "../components/motion";
+import { ScoreStrip, round } from "../components/ScoreStrip";
+import { Icon } from "../components/Icon";
 import { useFavorites } from "../hooks/useFavorites";
+import { useCompare } from "../hooks/useCompare";
 import { whyLine, scoreBand, kmPerYear } from "../lib/whyLine";
-import { Badge, cad, DealPill, EvapBadge, isRecent, km, NewBadge, scoreHex, Stars, timeAgo } from "../components/ui";
-import { ScoreRing } from "../components/ScoreRing";
+import { Badge, cad, DealTag, EvapBadge, isRecent, km, NewBadge, scoreHex, timeAgo } from "../components/ui";
+import { CompareTray } from "../components/CompareTray";
 
-const SEVERITY_STYLES: Record<string, string> = {
-  major: "text-bad",
-  moderate: "text-warn",
-  minor: "text-faint",
+const SEVERITY: Record<string, { color: string; label: string }> = {
+  major: { color: "var(--bad)", label: "Major" },
+  moderate: { color: "var(--fair)", label: "Moderate" },
+  minor: { color: "var(--faint)", label: "Minor" },
 };
 
-const card = "rounded-2xl border border-line bg-surface p-5";
-const h2 = "text-xs font-bold uppercase tracking-wider text-faint mb-3.5";
+const panel = "rounded-[var(--radius-card)] border border-line bg-surface p-5 sm:p-6";
+const ruled = "border-t border-line pt-5";
+const h2 = "wide text-[19px] font-bold text-text";
 
 export function DetailPage() {
   const { id } = useParams<{ id: string }>();
   const { data, isLoading, isError } = useListingDetail(id);
   const { isFavorite, toggle } = useFavorites();
+  const { has, toggle: toggleCompare, canAdd } = useCompare();
 
   if (isLoading) {
     return (
-      <div className="mx-auto max-w-6xl px-4 py-10">
-        <div className="h-96 animate-pulse rounded-3xl bg-surface" />
+      <div className="mx-auto grid max-w-[1240px] gap-10 px-4 py-10 sm:px-6 lg:grid-cols-2">
+        <div className="aspect-[4/3] animate-pulse rounded-[16px] bg-surface" />
+        <div className="space-y-4 pt-4">
+          <div className="h-10 w-3/4 animate-pulse rounded bg-surface" />
+          <div className="h-24 w-1/2 animate-pulse rounded bg-surface" />
+        </div>
       </div>
     );
   }
 
   if (isError || !data) {
     return (
-      <div className="mx-auto max-w-lg px-4 py-20 text-center">
-        <p className="font-display text-xl font-bold text-text">This listing is gone.</p>
+      <div className="mx-auto max-w-lg px-4 py-24 text-center">
+        <p className="wide text-[24px] font-bold text-text">This listing is gone.</p>
         <p className="mt-2 text-sm text-muted">
-          Cars drop out of the inventory when a scrape no longer finds them — usually because they sold.
+          Cars drop out of the inventory when a crawl no longer finds them. Usually that means they sold.
         </p>
-        <Link
-          to="/"
-          className="mt-5 inline-block rounded-lg bg-brand px-4 py-2 text-sm font-bold transition hover:bg-brand-strong"
-          style={{ color: "var(--on-brand)" }}
-        >
-          Back to leaderboard
+        <Link to="/" className="btn btn-primary mt-6">
+          Back to the leaderboard
         </Link>
       </div>
     );
@@ -52,339 +57,329 @@ export function DetailPage() {
   const { listing: l, ownership, recallHistory, modelInfo, alternatives, externalLinks } = data;
   const { market } = l.score;
   const fav = isFavorite(l.dedupeKey);
+  const comparing = has(l.id);
   const perYear = kmPerYear(l);
   const original = externalLinks.find((x) => x.label === "Original listing");
+  const hex = scoreHex(l.score.total);
+  const n = Math.round(l.score.total);
+  const place = [l.dealer, l.city && `${tidyCity(l.city)}${l.province ? `, ${l.province}` : ""}`].filter(Boolean).join(", ");
+  const lost = l.score.breakdown.reduce((s, c) => s + (c.max - c.points), 0);
 
   return (
-    <div className="mx-auto max-w-6xl px-4 py-6 fade-up">
-      <Link to="/" className="text-sm font-semibold text-brand hover:text-brand-strong">
-        ← Back to leaderboard
+    <div className="mx-auto max-w-[1240px] px-4 pb-12 pt-6 sm:px-6">
+      <Link to="/" className="inline-flex items-center gap-1 text-[14px] font-semibold text-muted hover:text-text">
+        <Icon name="chevron-left" size={16} />
+        Back to the leaderboard
       </Link>
 
-      {/* Hero: photo and the verdict, side by side. */}
-      <div className="mt-3 grid gap-5 lg:grid-cols-[1.15fr_1fr]">
-        <CarPhoto
-          src={l.image}
-          alt={l.title}
-          ratio="4/3"
-          width={1024}
-          priority
-          sizes="(max-width: 1024px) 100vw, 620px"
-          className="w-full rounded-3xl border border-line"
-        />
+      {/* Hero: the actual car, and the verdict on it. */}
+      <div className="mt-4 grid gap-8 lg:grid-cols-[minmax(0,1.1fr)_minmax(0,1fr)] lg:gap-12">
+        <div>
+          <CarPhoto
+            src={l.image}
+            alt={l.title}
+            ratio="4/3"
+            width={1024}
+            priority
+            sizes="(max-width: 1024px) 100vw, 640px"
+            className="w-full rounded-[16px] border border-line"
+          />
+          <p className="mt-2 text-[13px] text-faint">
+            Listed on {l.sourceWebsite}, first seen {timeAgo(l.firstSeenAt)}
+          </p>
+        </div>
 
-        <div className="flex flex-col justify-center">
+        <div className="flex flex-col">
           <div className="flex flex-wrap items-center gap-2">
-            <DealPill rating={l.score.dealRating} />
+            <DealTag rating={l.score.dealRating} />
             {l.cpo && <Badge label="CPO" />}
             {isRecent(l.firstSeenAt) && <NewBadge />}
             {l.evap?.eligible && <EvapBadge rebateAmount={l.evap.rebateAmount} reason={l.evap.reason} />}
           </div>
 
-          <h1 className="mt-2 font-display text-3xl font-extrabold leading-tight tracking-tight text-text">
-            {l.title}
-          </h1>
+          <h1 className="wide mt-3 text-[clamp(1.75rem,3.4vw,2.6rem)] font-extrabold leading-[1.08] text-text">{l.title}</h1>
+          <p className="mt-2 text-[15px] text-muted">{place || "Private or aggregator listing"}</p>
 
-          <p className="mt-1.5 text-sm text-muted">
-            {[l.dealer, l.city && `${l.city}${l.province ? `, ${l.province}` : ""}`].filter(Boolean).join(" · ") ||
-              "Private / aggregator listing"}
-            {" · via "}
-            {l.sourceWebsite}
-          </p>
-
-          {/* Score, stated as a verdict rather than a chip. It counts up on
-              arrival — the number is a measurement, and watching it settle says
-              so more honestly than printing it fully formed. */}
-          <div className="mt-5 flex items-end gap-4 border-y border-line py-4">
-            <div className="leading-none">
-              <AnimatedNumber
-                value={l.score.total}
-                className="nums font-display text-6xl font-extrabold"
-                style={{ color: scoreHex(l.score.total) }}
-              />
-              <span className="ml-1 text-sm font-bold text-faint">/100</span>
-            </div>
+          {/* The verdict, stated as a measurement: it counts up as you arrive. */}
+          <div className="mt-6 flex items-end gap-4">
+            <CountUp value={l.score.total} className="nums display text-[96px] leading-[0.8]" style={{ color: hex }} />
             <div className="pb-1">
-              <div
-                className="text-[11px] font-bold uppercase tracking-[0.16em]"
-                style={{ color: scoreHex(l.score.total) }}
-              >
+              <p className="text-[17px] font-bold" style={{ color: hex }}>
                 {scoreBand(l.score.total)}
-              </div>
-              <p className="mt-1 max-w-xs text-[13px] leading-snug text-muted">{whyLine(l)}</p>
+              </p>
+              <p className="text-[13px] text-faint">out of 100</p>
             </div>
           </div>
+          <p className="mt-4 max-w-[52ch] text-[16px] leading-relaxed text-muted">{whyLine(l, { omitPrice: true })}</p>
 
-          <div className="mt-4 flex flex-wrap items-baseline gap-x-4 gap-y-2">
-            <span className="nums font-display text-3xl font-extrabold text-text">{cad(l.price)}</span>
-            {market.savings > 0 ? (
-              <span className="nums text-sm font-semibold text-good">{cad(market.savings)} under market</span>
-            ) : market.savings < -500 ? (
-              <span className="nums text-sm font-semibold text-bad">{cad(-market.savings)} over market</span>
-            ) : (
-              <span className="text-sm text-muted">priced at market</span>
-            )}
+          <div className="mt-6 flex flex-wrap items-baseline gap-x-4 gap-y-1 border-t border-line pt-5">
+            <span className="nums display text-[34px] text-text">{cad(l.price)}</span>
+            <Delta savings={market.savings} />
           </div>
 
           <div className="mt-5 flex flex-wrap gap-2">
             {original && (
-              <a
-                href={original.url}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="rounded-xl bg-brand px-5 py-2.5 text-sm font-bold transition hover:bg-brand-strong"
-                style={{ color: "var(--on-brand)" }}
-              >
-                View on {l.sourceWebsite} ↗
+              <a href={original.url} target="_blank" rel="noopener noreferrer" className="btn btn-primary">
+                View on {l.sourceWebsite}
+                <Icon name="external" size={15} />
               </a>
             )}
+            <button onClick={() => toggle(l.dedupeKey)} aria-pressed={fav} className="btn btn-ghost">
+              <Icon name={fav ? "heart-fill" : "heart"} size={16} className={fav ? "text-accent-ink" : ""} />
+              {fav ? "Saved" : "Save this car"}
+            </button>
             <button
-              onClick={() => toggle(l.dedupeKey)}
-              aria-pressed={fav}
-              className={`rounded-xl border px-4 py-2.5 text-sm font-bold transition ${
-                fav ? "border-bad/40 bg-bad/10 text-bad" : "border-line text-text hover:border-line-strong"
-              }`}
+              onClick={() => toggleCompare(l.id)}
+              aria-pressed={comparing}
+              disabled={!comparing && !canAdd}
+              className="btn btn-ghost disabled:opacity-40"
             >
-              {fav ? "♥ Saved" : "♡ Save this car"}
+              <Icon name="compare" size={16} />
+              {comparing ? "In comparison" : "Compare"}
             </button>
           </div>
         </div>
       </div>
 
-      {/* Key numbers */}
-      <div className="mt-5 grid grid-cols-2 gap-3 sm:grid-cols-4">
-        <Stat label="Mileage" value={l.mileageKm != null ? km(l.mileageKm) : "n/a"} sub={perYear ? `${perYear.toLocaleString("en-CA")} km/yr` : undefined} />
+      {/* Key numbers, as one ruled band rather than four boxes. */}
+      <dl className="mt-10 grid grid-cols-2 overflow-hidden rounded-[var(--radius-card)] border border-line sm:grid-cols-4">
+        <Stat label="Mileage" value={l.mileageKm != null ? km(l.mileageKm) : "n/a"} sub={perYear ? `${perYear.toLocaleString("en-CA")} km a year` : undefined} />
         <Stat
           label="Market price"
           value={cad(market.marketPrice)}
-          sub={market.method === "comparables" ? `${market.sampleSize} comparables` : "model baseline"}
+          sub={market.method === "comparables" ? `From ${market.sampleSize} comparable listings` : "Model baseline"}
         />
         <Stat label="Year" value={String(l.year)} sub={l.drivetrain !== "Unknown" ? l.drivetrain : undefined} />
-        <Stat
-          label="Running cost"
-          value={ownership ? cad(ownership.totalAnnual) : "—"}
-          sub="per year, estimated"
-        />
-      </div>
+        <Stat label="Running cost" value={ownership ? cad(ownership.totalAnnual) : "n/a"} sub="A year, estimated" />
+      </dl>
 
-      <div className="mt-5 grid grid-cols-1 gap-4 lg:grid-cols-2">
-        {/* Score breakdown — the reason anyone is on this page. */}
-        <div className={card}>
-          <h2 className={h2}>Why this score</h2>
-          {/* The same ring as the leaderboard hero, here as the overview; the
-              bars below stay as the exact numbers and the reason for each. */}
-          <ScoreRing breakdown={l.score.breakdown} className="mb-4 h-56 w-full" fallback={null} />
-          {/* The bars fill in sequence rather than all at once: the total
-              visibly assembles from its categories, which is the one thing this
-              panel exists to explain. The stagger is capped so the last bar
-              isn't left waiting. */}
-          <div className="space-y-3">
-            {l.score.breakdown.map((c, i) => {
-              const frac = c.max ? c.points / c.max : 0;
-              const fill = frac >= 0.75 ? "bg-good" : frac >= 0.5 ? "bg-brand" : "bg-bad";
-              return (
-                <div key={c.key}>
-                  <div className="flex items-baseline justify-between gap-2">
-                    <span className="text-sm font-semibold text-text">{c.label}</span>
-                    <span className="flex items-center gap-2">
-                      <Stars value={c.stars} className="text-xs" />
-                      <span className="nums w-14 text-right text-xs text-muted">
-                        {c.points}/{c.max}
-                      </span>
-                    </span>
-                  </div>
-                  <div className="mt-1">
-                    <FillBar percent={frac * 100} className={fill} delay={Math.min(i * 0.06, 0.5)} height={6} />
-                  </div>
-                  <p className="mt-1 text-xs text-muted">{c.detail}</p>
-                </div>
-              );
-            })}
-          </div>
+      {/* The scorecard — the reason anyone is on this page. */}
+      <section className={`${panel} mt-6`} aria-labelledby="scorecard-heading">
+        <div className="flex flex-wrap items-baseline justify-between gap-2">
+          <h2 id="scorecard-heading" className={h2}>
+            Where the {n} points came from
+          </h2>
+          <p className="nums text-[13px] text-faint">{round(lost)} points lost across ten categories</p>
         </div>
+        <ScoreStrip breakdown={l.score.breakdown} size="lg" animate className="mt-5" />
 
-        <div className="space-y-4">
-          {/* What it costs per month — the number this audience decides on. */}
-          <div className={card}>
-            <h2 className={h2}>What you'd pay monthly</h2>
+        <ul className="mt-6 grid gap-x-10 md:grid-cols-2">
+          {l.score.breakdown.map((c) => {
+            const frac = c.max ? c.points / c.max : 0;
+            const weak = frac < 0.5;
+            return (
+              <li key={c.key} className="border-t border-line py-3.5">
+                <div className="flex items-baseline justify-between gap-3">
+                  <span className="text-[15px] font-semibold text-text">
+                    {weak && <span className="mr-2 inline-block h-2 w-2 rounded-full bg-bad align-[2px]" aria-label="Weak spot" />}
+                    {c.label}
+                  </span>
+                  <span className="nums shrink-0 text-[14px] text-muted">
+                    <span className={`font-bold ${weak ? "text-bad" : "text-text"}`}>{round(c.points)}</span> of {c.max}
+                  </span>
+                </div>
+                <p className="mt-1 text-[14px] leading-snug text-muted">{c.detail}</p>
+              </li>
+            );
+          })}
+        </ul>
+      </section>
+
+      <div className="mt-6 grid grid-cols-1 gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
+        <section className={`${panel} lg:sticky lg:top-24 lg:self-start`} aria-labelledby="pay-heading">
+          <h2 id="pay-heading" className={h2}>
+            What you'd pay each month
+          </h2>
+          <div className="mt-4">
             <PaymentEstimate price={l.price} province={l.province} />
           </div>
+        </section>
 
+        <div className="space-y-6">
           {ownership && (
-            <div className={card}>
+            <section className={ruled}>
               <h2 className={h2}>Running costs, per year</h2>
-              <OwnershipBar label="Fuel" value={ownership.fuelAnnual} max={ownership.totalAnnual} index={0} />
-              <OwnershipBar label="Insurance" value={ownership.insuranceAnnual} max={ownership.totalAnnual} index={1} />
-              <OwnershipBar label="Maintenance" value={ownership.maintenanceAnnual} max={ownership.totalAnnual} index={2} />
-              <div className="mt-3 flex items-baseline justify-between border-t border-line pt-3">
-                <span className="text-sm font-bold text-text">Total / year</span>
-                <span className="nums text-lg font-extrabold text-brand">{cad(ownership.totalAnnual)}</span>
+              <div className="mt-4 space-y-3">
+                <CostBar label="Fuel" value={ownership.fuelAnnual} max={ownership.totalAnnual} index={0} />
+                <CostBar label="Insurance" value={ownership.insuranceAnnual} max={ownership.totalAnnual} index={1} />
+                <CostBar label="Maintenance" value={ownership.maintenanceAnnual} max={ownership.totalAnnual} index={2} />
               </div>
-              <p className="mt-2 text-xs text-faint">
-                Assumes {ownership.assumptions.kmPerYear.toLocaleString()} km/yr at $
-                {ownership.assumptions.fuelPriceCadPerL}/L. Insurance is based on {ownership.assumptions.insuranceProvince}{" "}
+              <div className="mt-4 flex items-baseline justify-between border-t border-line pt-3">
+                <span className="text-[15px] font-semibold text-text">Total a year</span>
+                <span className="nums display text-[22px] text-text">{cad(ownership.totalAnnual)}</span>
+              </div>
+              <p className="mt-2 text-[13px] text-faint">
+                Assumes {ownership.assumptions.kmPerYear.toLocaleString("en-CA")} km a year at $
+                {ownership.assumptions.fuelPriceCadPerL}/L. Insurance uses {ownership.assumptions.insuranceProvince}{" "}
                 averages and varies by driver.
               </p>
-            </div>
+            </section>
           )}
 
           {l.evap && (
-            <div className={card}>
-              <h2 className={h2}>EV incentive (EVAP)</h2>
-              <div className="flex items-baseline justify-between gap-3">
-                <span className={`text-sm font-bold ${l.evap.eligible ? "text-good" : "text-muted"}`}>
+            <section className={ruled}>
+              <h2 className={h2}>EV rebate (EVAP)</h2>
+              <div className="mt-3 flex items-baseline justify-between gap-3">
+                <span className={`text-[15px] font-bold ${l.evap.eligible ? "text-good" : "text-muted"}`}>
                   {l.evap.eligible ? "May qualify" : "Doesn't appear to qualify"}
                 </span>
-                {l.evap.eligible && (
-                  <span className="nums text-lg font-extrabold text-good">{cad(l.evap.rebateAmount)}</span>
-                )}
+                {l.evap.eligible && <span className="nums display text-[22px] text-good">{cad(l.evap.rebateAmount)}</span>}
               </div>
-              <p className="mt-2 text-xs leading-relaxed text-muted">{l.evap.reason}</p>
-              <p className="mt-2 text-[11px] text-faint">
-                Canada's Electric Vehicle Affordability Program, April 2026–March 2031. This is a simplified read
-                based on price and make, not a legal determination — confirm against the government's official
-                eligible-vehicle list before you buy.
+              <p className="mt-2 text-[14px] leading-relaxed text-muted">{l.evap.reason}</p>
+              <p className="mt-2 text-[13px] text-faint">
+                Canada's Electric Vehicle Affordability Program, April 2026 to March 2031. A simplified read based on
+                price and make, not a legal determination. Confirm against the official eligible-vehicle list before
+                you buy.
               </p>
-            </div>
+            </section>
           )}
 
           {((modelInfo && modelInfo.knownIssues.length > 0) || recallHistory.length > 0) && (
-            <div className={card}>
-              <h2 className={h2}>Known issues &amp; recalls</h2>
-
+            <section className={ruled}>
+              <h2 className={h2}>Known issues and recalls</h2>
               {modelInfo && modelInfo.knownIssues.length > 0 && (
-                <ul className="space-y-2 text-sm">
+                <ul className="mt-3 space-y-2.5 text-[14px]">
                   {modelInfo.knownIssues.map((i) => (
-                    <li key={i.title} className="flex gap-2">
-                      <span className={`font-bold ${SEVERITY_STYLES[i.severity]}`}>•</span>
+                    <li key={i.title} className="flex gap-3">
+                      <span
+                        className="mt-0.5 shrink-0 rounded px-1.5 text-[12px] font-semibold"
+                        style={{ color: SEVERITY[i.severity].color, backgroundColor: `color-mix(in oklab, ${SEVERITY[i.severity].color} 12%, transparent)` }}
+                      >
+                        {SEVERITY[i.severity].label}
+                      </span>
                       <span className="text-text">
                         {i.title}
-                        {i.note && <span className="text-muted"> — {i.note}</span>}
+                        {i.note && <span className="text-muted">. {i.note}</span>}
                       </span>
                     </li>
                   ))}
                 </ul>
               )}
-
               {recallHistory.length > 0 && (
-                <div className={modelInfo && modelInfo.knownIssues.length > 0 ? "mt-4 border-t border-line pt-4" : ""}>
-                  <p className="mb-2 text-xs font-bold uppercase tracking-wider text-faint">
-                    {recallHistory.length} recall{recallHistory.length === 1 ? "" : "s"} on file for {l.year}{" "}
-                    {l.make} {l.model}
+                <div className="mt-4">
+                  <p className="text-[14px] font-semibold text-text">
+                    {recallHistory.length} recall{recallHistory.length === 1 ? "" : "s"} on file for the {l.year} {l.make} {l.model}
                   </p>
-                  <ul className="space-y-2.5 text-sm">
+                  <ul className="mt-2 space-y-2 text-[14px]">
                     {recallHistory.map((r) => (
-                      <li key={r.recallNumber} className="flex gap-2">
-                        <span className="font-bold text-warn">•</span>
-                        <span className="text-text">
-                          {r.summary}
-                          <span className="ml-1.5 whitespace-nowrap text-xs text-faint">
-                            (#{r.recallNumber}, {r.date})
-                          </span>
+                      <li key={r.recallNumber} className="text-muted">
+                        {r.summary}{" "}
+                        <span className="nums whitespace-nowrap text-[12px] text-faint">
+                          (#{r.recallNumber}, {r.date})
                         </span>
                       </li>
                     ))}
                   </ul>
                 </div>
               )}
-
-              <p className="mt-3 text-xs text-faint">
+              <p className="mt-3 text-[13px] text-faint">
                 {recallHistory.length > 0
-                  ? "This is every recall Transport Canada has issued for this model year, not this specific car — it doesn't say whether this VIN's recalls were completed. Ask the dealer, or check with the manufacturer using the VIN."
+                  ? "Every recall Transport Canada has issued for this model year, not this specific car. It doesn't say whether this VIN's recalls were completed: ask the dealer, or check with the manufacturer using the VIN."
                   : "Model-level patterns, not this specific car. Confirm open recalls by VIN before you buy."}
               </p>
-            </div>
+            </section>
           )}
 
-          <div className={card}>
-            <h2 className={h2}>Pros &amp; cons</h2>
-            <ul className="space-y-1.5 text-sm">
-              {l.score.pros.map((p) => (
-                <li key={p} className="flex gap-2 text-text">
-                  <span className="font-bold text-good">+</span>
-                  {p}
-                </li>
-              ))}
-              {l.score.cons.map((c) => (
-                <li key={c} className="flex gap-2 text-text">
-                  <span className="font-bold text-bad">–</span>
-                  {c}
-                </li>
-              ))}
-            </ul>
-          </div>
+          {(l.score.pros.length > 0 || l.score.cons.length > 0) && (
+            <section className={ruled}>
+              <h2 className={h2}>For and against</h2>
+              <div className="mt-3 grid gap-5 sm:grid-cols-2">
+                <ul className="space-y-1.5 text-[14px]">
+                  {l.score.pros.map((p) => (
+                    <li key={p} className="flex gap-2 text-text">
+                      <span className="font-bold text-good" aria-hidden>
+                        +
+                      </span>
+                      {p}
+                    </li>
+                  ))}
+                </ul>
+                <ul className="space-y-1.5 text-[14px]">
+                  {l.score.cons.map((c) => (
+                    <li key={c} className="flex gap-2 text-text">
+                      <span className="font-bold text-bad" aria-hidden>
+                        −
+                      </span>
+                      {c}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            </section>
+          )}
         </div>
       </div>
 
       {/* Specs and links — reference material, so it sits quiet and last. */}
-      <div className={`mt-4 ${card}`}>
+      <section className={`${ruled} mt-10`}>
         <h2 className={h2}>Vehicle details</h2>
-        <dl className="grid grid-cols-2 gap-x-4 gap-y-3 text-sm sm:grid-cols-3 lg:grid-cols-4">
+        <dl className="mt-4 grid grid-cols-2 gap-x-6 gap-y-4 text-[14px] sm:grid-cols-3 lg:grid-cols-6">
           <Spec k="Body" v={modelInfo?.body} />
-          <Spec k="Drivetrain" v={l.drivetrain} />
+          <Spec k="Drivetrain" v={l.drivetrain !== "Unknown" ? l.drivetrain : null} />
           <Spec k="Engine" v={l.engine} />
           <Spec k="Transmission" v={l.transmission} />
-          <Spec k="Fuel type" v={l.fuelType} />
+          <Spec k="Fuel" v={l.fuelType} />
           <Spec k="Exterior" v={l.exteriorColour} />
           <Spec k="VIN" v={l.vin} mono />
-          <Spec k="CPO" v={l.cpo ? "Yes" : "No"} />
+          <Spec k="Certified pre-owned" v={l.cpo ? "Yes" : "No"} />
           <Spec k="CARFAX" v={l.carfaxAvailable ? "Available" : "Not stated"} />
           <Spec
             k="Accidents"
             v={l.accidentReported === false ? "None reported" : l.accidentReported === true ? "Reported" : "Unknown"}
           />
-          <Spec k="First seen" v={timeAgo(l.firstSeenAt)} />
         </dl>
-
-        <div className="mt-5 flex flex-wrap gap-2 border-t border-line pt-4">
+        <div className="mt-6 flex flex-wrap gap-2">
           {externalLinks.map((link) => (
             <a
               key={link.url + link.label}
               href={link.url}
               target="_blank"
               rel="noopener noreferrer"
-              className="rounded-lg border border-line px-3 py-1.5 text-sm font-semibold text-brand transition hover:border-brand/50 hover:bg-brand/10"
+              className="btn btn-ghost py-2 text-[13px]"
             >
-              {link.label} ↗
+              {link.label}
+              <Icon name="external" size={14} />
             </a>
           ))}
         </div>
-      </div>
+      </section>
 
       {alternatives.length > 0 && (
-        <div className="mt-8">
-          <h2 className="mb-1 font-display text-lg font-bold text-text">Similar cars worth checking</h2>
-          <p className="mb-3 text-sm text-muted">Same shortlist, scored the same way.</p>
-          <div className="space-y-3">
+        <section className="mt-12">
+          <h2 className={h2}>Similar cars worth a look</h2>
+          <p className="mt-1 text-[14px] text-muted">Same shortlist, scored the same way.</p>
+          <div className="row-list mt-4 divide-y divide-line overflow-hidden rounded-[var(--radius-card)] border border-line bg-surface">
             {alternatives.map((a) => (
-              <ListingCard key={a.id} listing={a} />
+              <ListingRow key={a.id} listing={a} />
             ))}
           </div>
-        </div>
+        </section>
       )}
+
+      <CompareTray />
     </div>
   );
 }
 
-function OwnershipBar({ label, value, max, index = 0 }: { label: string; value: number; max: number; index?: number }) {
+function CostBar({ label, value, max, index }: { label: string; value: number; max: number; index: number }) {
   const pct = max ? Math.min(100, (value / max) * 100) : 0;
   return (
-    <div className="mb-2.5">
-      <div className="mb-1 flex items-baseline justify-between text-sm">
+    <div>
+      <div className="mb-1.5 flex items-baseline justify-between text-[14px]">
         <span className="text-muted">{label}</span>
         <span className="nums font-semibold text-text">{cad(value)}</span>
       </div>
-      <FillBar percent={pct} className="bg-info" delay={index * 0.08} height={8} />
+      <FillBar percent={pct} delay={index * 0.08} height={6} />
     </div>
   );
 }
 
 function Stat({ label, value, sub }: { label: string; value: string; sub?: string }) {
   return (
-    <div className="rounded-2xl border border-line bg-surface p-4">
-      <div className="text-[11px] font-semibold uppercase tracking-wide text-faint">{label}</div>
-      <div className="nums font-display mt-1 text-xl font-extrabold text-text">{value}</div>
-      {sub && <div className="mt-0.5 truncate text-[11px] text-faint">{sub}</div>}
+    <div className="border-line p-4 even:border-l sm:border-l sm:first:border-l-0 [&:nth-child(n+3)]:border-t sm:[&:nth-child(n+3)]:border-t-0 sm:p-5">
+      <dt className="label">{label}</dt>
+      <dd className="nums display mt-1.5 text-[22px] text-text">{value}</dd>
+      {sub && <dd className="mt-1 truncate text-[13px] text-faint">{sub}</dd>}
     </div>
   );
 }
@@ -392,9 +387,9 @@ function Stat({ label, value, sub }: { label: string; value: string; sub?: strin
 function Spec({ k, v, mono }: { k: string; v: string | null | undefined; mono?: boolean }) {
   if (!v) return null;
   return (
-    <div>
-      <dt className="text-[11px] font-semibold uppercase tracking-wide text-faint">{k}</dt>
-      <dd className={`text-text ${mono ? "font-mono text-xs" : ""}`}>{v}</dd>
+    <div className="min-w-0">
+      <dt className="label">{k}</dt>
+      <dd className={`mt-0.5 break-words text-text ${mono ? "cond nums tracking-wide" : ""}`}>{v}</dd>
     </div>
   );
 }

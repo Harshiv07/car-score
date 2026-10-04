@@ -4,10 +4,7 @@ import { BrowserRouter } from "react-router-dom";
 import { QueryClient } from "@tanstack/react-query";
 import { PersistQueryClientProvider } from "@tanstack/react-query-persist-client";
 import { createSyncStoragePersister } from "@tanstack/query-sync-storage-persister";
-import { MotionConfig } from "framer-motion";
-import "@fontsource-variable/inter";
-import "@fontsource-variable/bricolage-grotesque";
-import "@fontsource-variable/jetbrains-mono";
+import "@fontsource-variable/archivo/wdth.css";
 import App from "./App";
 import "./index.css";
 
@@ -66,14 +63,9 @@ ReactDOM.createRoot(document.getElementById("root") as HTMLElement).render(
         },
       }}
     >
-      {/* `reducedMotion="user"` makes every motion component honour the OS
-          setting: transforms are dropped, opacity changes stay, so the UI
-          still reads as responsive without moving. */}
-      <MotionConfig reducedMotion="user">
-        <BrowserRouter>
-          <App />
-        </BrowserRouter>
-      </MotionConfig>
+      <BrowserRouter>
+        <App />
+      </BrowserRouter>
     </PersistQueryClientProvider>
   </React.StrictMode>
 );

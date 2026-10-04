@@ -22,17 +22,19 @@ export function PaymentEstimate({ price, province }: { price: number; province: 
   return (
     <div>
       <div className="flex items-baseline justify-between gap-3">
-        <span className="text-sm text-muted">Estimated payment</span>
-        <span className="nums font-display text-3xl font-extrabold text-brand">
+        <span className="text-[14px] text-muted">Estimated payment</span>
+        <span className="nums display text-[40px] text-text">
           {cad(loan.monthly)}
-          <span className="text-base font-bold text-faint">/mo</span>
+          <span className="text-[15px] font-semibold text-faint" style={{ fontStretch: "100%" }}>
+            /mo
+          </span>
         </span>
       </div>
 
-      <div className="mt-4 space-y-4">
+      <div className="mt-5 space-y-5">
         <Slider
           label="Down payment"
-          value={`${downPercent}% · ${cad(downPayment)}`}
+          value={`${downPercent}%, ${cad(downPayment)}`}
           min={0}
           max={50}
           step={5}
@@ -51,33 +53,32 @@ export function PaymentEstimate({ price, province }: { price: number; province: 
           ariaLabel="Annual interest rate"
         />
         <div>
-          <span className="mb-1.5 block text-[11px] font-semibold uppercase tracking-wide text-faint">Term</span>
-          <div className="grid grid-flow-col auto-cols-fr gap-1 rounded-lg bg-surface2 p-1">
+          <span className="label mb-2">Term</span>
+          <div role="group" aria-label="Loan term" className="grid grid-flow-col auto-cols-fr rounded-lg border border-line p-0.5">
             {[36, 48, 60, 72, 84].map((m) => (
               <button
                 key={m}
                 type="button"
                 aria-pressed={termMonths === m}
                 onClick={() => setTermMonths(m)}
-                className={`rounded-md px-1 py-1.5 text-xs font-semibold transition ${
-                  termMonths === m ? "bg-brand shadow-sm" : "text-muted hover:text-text"
+                className={`nums rounded-md px-1 py-1.5 text-[13px] font-semibold transition-colors ${
+                  termMonths === m ? "bg-text text-bg" : "text-muted hover:text-text"
                 }`}
-                style={termMonths === m ? { color: "var(--on-brand)" } : undefined}
               >
-                {m}mo
+                {m} mo
               </button>
             ))}
           </div>
         </div>
       </div>
 
-      <dl className="mt-4 space-y-1.5 border-t border-line pt-3 text-sm">
+      <dl className="mt-5 space-y-2 border-t border-line pt-4 text-[14px]">
         <Line label={`Price + tax (${taxPercent}%)`} value={cad(price * (1 + taxPercent / 100))} />
         <Line label="Amount financed" value={cad(loan.amountFinanced)} />
         <Line label="Total interest" value={cad(loan.totalInterest)} tone="bad" />
       </dl>
 
-      <p className="mt-3 text-xs text-faint">
+      <p className="mt-3 text-[13px] text-faint">
         An estimate. Your rate depends on credit history and lender; tax assumes {province ?? "Ontario"} and excludes
         licensing and dealer fees.
       </p>
@@ -107,12 +108,12 @@ function Slider({
   return (
     <div>
       <div className="flex items-baseline justify-between">
-        <span className="text-[11px] font-semibold uppercase tracking-wide text-faint">{label}</span>
-        <span className="nums text-xs font-semibold text-text">{value}</span>
+        <span className="label">{label}</span>
+        <span className="nums text-[13px] font-semibold text-text">{value}</span>
       </div>
       <input
         type="range"
-        className="range mt-1.5"
+        className="range mt-3"
         min={min}
         max={max}
         step={step}

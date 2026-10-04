@@ -17,17 +17,20 @@ function FiltersSidebarImpl({
   params,
   onChange,
   onClear,
+  inDrawer = false,
 }: {
   meta: MetaResponse | undefined;
   params: URLSearchParams;
   onChange: (key: string, value: string) => void;
   onClear: () => void;
+  /** The drawer has its own title; don't repeat it. */
+  inDrawer?: boolean;
 }) {
   const get = (k: string) => params.get(k) ?? "";
   const models = meta?.models.filter((m) => !get("make") || m.make === get("make")) ?? [];
   const activeCount = [...params.keys()].filter((k) => !["sort", "page", "pageSize"].includes(k)).length;
 
-  const label = "block text-[11px] font-semibold uppercase tracking-wide text-faint mb-1.5";
+  const label = "label mb-2";
 
   // The sliders move instantly; only the committed value is debounced, so a
   // drag across the range is one request instead of one per pixel.
@@ -57,13 +60,11 @@ function FiltersSidebarImpl({
   const sourceOptions: Option[] = [{ value: "", label: "All sources" }, ...(meta?.sources ?? []).map((s) => ({ value: s, label: s }))];
 
   return (
-    <aside className="space-y-5">
-      <div className="flex items-center justify-between">
-        <h2 className="flex items-center gap-2 text-sm font-bold uppercase tracking-wide text-text">
-          <span className="h-2 w-2 rounded-full bg-brand" /> Filters
-        </h2>
+    <aside className="space-y-6">
+      <div className="flex min-h-7 items-center justify-between">
+        {inDrawer ? <span /> : <h2 className="wide text-[17px] font-bold text-text">Narrow it down</h2>}
         {activeCount > 0 && (
-          <button onClick={onClear} className="text-xs font-semibold text-brand hover:text-brand-strong">
+          <button onClick={onClear} className="link text-[13px]">
             Clear all ({activeCount})
           </button>
         )}
@@ -73,7 +74,7 @@ function FiltersSidebarImpl({
       <div>
         <div className="flex items-baseline justify-between">
           <span className={label}>Max price</span>
-          <span className="nums text-xs font-semibold text-text">{priceMax >= PRICE_MAX ? "Any" : cad(priceMax)}</span>
+          <span className="nums text-[13px] font-semibold text-text">{priceMax >= PRICE_MAX ? "Any" : cad(priceMax)}</span>
         </div>
         <input
           type="range"
@@ -92,7 +93,7 @@ function FiltersSidebarImpl({
       <div>
         <div className="flex items-baseline justify-between">
           <span className={label}>Max mileage</span>
-          <span className="nums text-xs font-semibold text-text">{mileageMax >= MILEAGE_MAX ? "Any" : km(mileageMax)}</span>
+          <span className="nums text-[13px] font-semibold text-text">{mileageMax >= MILEAGE_MAX ? "Any" : km(mileageMax)}</span>
         </div>
         <input
           type="range"
@@ -150,8 +151,8 @@ function FiltersSidebarImpl({
       </div>
 
       {/* Toggles */}
-      <div className="space-y-3 border-t border-line pt-4">
-        <Toggle label="Certified Pre-Owned only" checked={get("cpoOnly") === "true"} onChange={(v) => onChange("cpoOnly", v ? "true" : "")} />
+      <div className="space-y-3.5 border-t border-line pt-5">
+        <Toggle label="Certified pre-owned only" checked={get("cpoOnly") === "true"} onChange={(v) => onChange("cpoOnly", v ? "true" : "")} />
         <Toggle label="Dealer listings only" checked={get("dealerOnly") === "true"} onChange={(v) => onChange("dealerOnly", v ? "true" : "")} />
       </div>
     </aside>

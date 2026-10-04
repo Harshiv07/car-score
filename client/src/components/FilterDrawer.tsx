@@ -1,36 +1,32 @@
 import { useEffect, useRef } from "react";
-import { AnimatePresence, motion } from "framer-motion";
 import { createPortal } from "react-dom";
+import { usePresence } from "../hooks/usePresence";
+import { Icon } from "./Icon";
 
 /**
- * Bottom sheet holding the filters on small screens.
- *
- * The sidebar used to render inline above the results on mobile, which meant
- * scrolling past every control before seeing a single car. Filters are a
- * detour, not the destination, so on mobile they move behind a button and the
- * first thing under the header is a listing.
- *
- * Focus is trapped while open, Escape closes, and the background is inert —
- * a sheet you can tab out of behind the scrim is worse than no sheet.
+ * Filters on small screens, as a bottom sheet. Filters are a detour, not the
+ * destination, so on a phone the first thing under the header is a car.
+ * Focus is trapped while open, Escape closes, and the page behind can't scroll.
  */
 export function FilterDrawer({
   open,
   onClose,
   activeCount,
+  resultCount,
   children,
 }: {
   open: boolean;
   onClose: () => void;
   activeCount: number;
+  resultCount?: number;
   children: React.ReactNode;
 }) {
   const panelRef = useRef<HTMLDivElement>(null);
+  const p = usePresence(open, 320);
 
   useEffect(() => {
     if (!open) return;
-
     const previouslyFocused = document.activeElement as HTMLElement | null;
-    // Stop the page behind the sheet from scrolling with it.
     const prevOverflow = document.body.style.overflow;
     document.body.style.overflow = "hidden";
 
@@ -41,7 +37,7 @@ export function FilterDrawer({
         ) ?? []
       ).filter((el) => el.offsetParent !== null);
 
-    focusable()[0]?.focus();
+    const raf = requestAnimationFrame(() => focusable()[0]?.focus());
 
     const onKey = (e: KeyboardEvent) => {
       if (e.key === "Escape") {
@@ -64,66 +60,45 @@ export function FilterDrawer({
 
     document.addEventListener("keydown", onKey);
     return () => {
+      cancelAnimationFrame(raf);
       document.removeEventListener("keydown", onKey);
       document.body.style.overflow = prevOverflow;
       previouslyFocused?.focus();
     };
   }, [open, onClose]);
 
-  // AnimatePresence rather than the CSS keyframe it used to run: a sheet that
-  // animates in but vanishes on close feels broken, and only a presence
-  // wrapper can hold the node in the tree long enough to animate it out.
+  if (!p.mounted) return null;
+
   return createPortal(
-    <AnimatePresence>
-      {open && (
     <div className="fixed inset-0 z-50 lg:hidden">
-      <motion.div
-        initial={{ opacity: 0 }}
-        animate={{ opacity: 1 }}
-        exit={{ opacity: 0 }}
-        transition={{ duration: 0.2 }}
-        className="absolute inset-0 bg-black/60 backdrop-blur-sm"
-        onClick={onClose}
-        aria-hidden
-      />
-      <motion.div
+      <div data-state={p.state} className="overlay absolute inset-0 bg-black/45" onClick={onClose} aria-hidden />
+      <div
         ref={panelRef}
         role="dialog"
         aria-modal="true"
         aria-label="Filters"
-        initial={{ y: "100%" }}
-        animate={{ y: 0 }}
-        exit={{ y: "100%" }}
-        transition={{ type: "spring", stiffness: 340, damping: 34 }}
-        className="absolute inset-x-0 bottom-0 flex max-h-[85vh] flex-col rounded-t-3xl border-t border-line bg-surface"
+        data-state={p.state}
+        data-side="bottom"
+        className="sheet absolute inset-x-0 bottom-0 flex max-h-[88vh] flex-col rounded-t-[20px] bg-surface"
       >
-        <div className="flex items-center justify-between border-b border-line px-4 py-3">
-          <h2 className="font-display text-base font-bold text-text">
+        <div className="flex items-center justify-between border-b border-line px-5 py-3">
+          <h2 className="wide text-[17px] font-bold text-text">
             Filters{activeCount > 0 ? ` (${activeCount})` : ""}
           </h2>
-          <button
-            onClick={onClose}
-            className="rounded-lg px-3 py-1.5 text-sm font-semibold text-muted transition hover:text-text"
-          >
-            Close
+          <button onClick={onClose} aria-label="Close filters" className="icon-btn">
+            <Icon name="close" />
           </button>
         </div>
 
-        <div className="overflow-y-auto px-4 py-4">{children}</div>
+        <div className="overflow-y-auto px-5 py-5">{children}</div>
 
         <div className="border-t border-line p-3">
-          <button
-            onClick={onClose}
-            className="w-full rounded-xl bg-brand py-3 text-sm font-bold transition hover:bg-brand-strong"
-            style={{ color: "var(--on-brand)" }}
-          >
-            Show results
+          <button onClick={onClose} className="btn btn-primary w-full py-3">
+            {resultCount != null ? `Show ${resultCount.toLocaleString("en-CA")} cars` : "Show results"}
           </button>
         </div>
-      </motion.div>
-    </div>
-      )}
-    </AnimatePresence>,
+      </div>
+    </div>,
     document.body
   );
 }
