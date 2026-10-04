@@ -134,7 +134,7 @@ async function launchBrowser(log: LogFn): Promise<Browser | null> {
       log(
         "warn",
         "Browser fallback disabled: Chromium is not installed (or can't launch) on this host. " +
-          "See README for how to enable it on your deploy host."
+          "See docs/scraping.md and docs/deployment.md for how to enable it on your deploy host."
       );
     } else {
       log("warn", `browser launch failed: ${msg.slice(0, 120)}`);

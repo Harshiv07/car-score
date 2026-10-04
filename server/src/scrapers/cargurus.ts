@@ -250,7 +250,7 @@ export const cargurus: Scraper = {
     const failedModels: string[] = [];
     const entries = Object.entries(MODEL_PATHS);
 
-    log("info", `CarGurus.ca: trying ${entries[0][0]} first (best-effort — see README for why)…`);
+    log("info", `CarGurus.ca: trying ${entries[0][0]} first (best-effort — see docs/scraping.md for why)…`);
     const [firstKey, firstPath] = entries[0];
     const first = await runModel(firstKey, firstPath, pagesPerModel, listings, seen, log);
 
