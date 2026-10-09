@@ -25,6 +25,15 @@ export interface Storage {
   /** Insert new listings / refresh lastSeenAt+price of known ones, by dedupeKey. */
   upsertListings(listings: Listing[]): Promise<UpsertResult>;
   countListings(): Promise<number>;
+  /** How many listings are held per `sourceWebsite`. */
+  countBySource(): Promise<Record<string, number>>;
+  /**
+   * Delete `source`'s listings whose `lastSeenAt` is before `before` (ISO) and
+   * return how many went. Every upsert, from any source, stamps `lastSeenAt`, so
+   * a car still listed elsewhere is not "unseen". Callers decide whether the
+   * source's run can be believed (see services/sweep.ts).
+   */
+  removeUnseen(source: string, before: string): Promise<number>;
 
   addScrapeHistory(entry: ScrapeHistoryEntry): Promise<void>;
   updateScrapeHistory(entry: ScrapeHistoryEntry): Promise<void>;

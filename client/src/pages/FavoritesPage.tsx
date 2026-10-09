@@ -1,4 +1,4 @@
-import { useEffect, useMemo } from "react";
+import { useMemo } from "react";
 import { Link } from "react-router-dom";
 import { useListings } from "../api/hooks";
 import { useFavorites } from "../hooks/useFavorites";
@@ -7,12 +7,18 @@ import { CompareTray } from "../components/CompareTray";
 import { Icon } from "../components/Icon";
 
 /**
- * Saved cars, looked up by dedupeKey on the server — so anything saved from
- * deep in the leaderboard still appears, and only keys the server genuinely
- * no longer has are pruned.
+ * Saved cars, looked up by dedupeKey on the server, so anything saved from
+ * deep in the leaderboard still appears.
+ *
+ * A saved car the server no longer has is shown as "No longer listed", never
+ * silently dropped: the refresh sweeps sold cars, and a saved list that quietly
+ * shrinks looks like a bug. Nothing is ever removed on the reader's behalf;
+ * and the claim is only made when it can be trusted, i.e. the inventory is not
+ * empty (a cold or mid-scrape database knows nothing) and the response was not
+ * cut off at the page size.
  */
 export function FavoritesPage() {
-  const { ids, prune } = useFavorites();
+  const { ids, toggle } = useFavorites();
 
   const params = useMemo(() => {
     const p = new URLSearchParams({ pageSize: "100" });
@@ -23,10 +29,10 @@ export function FavoritesPage() {
   const { data, isLoading } = useListings(params);
   const saved = ids.length ? (data?.listings ?? []) : [];
 
-  useEffect(() => {
-    if (!data || ids.length === 0) return;
-    prune(data.listings.map((l) => l.dedupeKey));
-  }, [data, ids.length, prune]);
+  const trustworthy = !!data && data.totalUnfiltered > 0 && data.total <= data.listings.length;
+  const found = new Set(saved.map((l) => l.dedupeKey));
+  const gone = trustworthy ? ids.filter((k) => !found.has(k)) : [];
+  const empty = !isLoading && saved.length === 0 && gone.length === 0;
 
   return (
     <div className="mx-auto max-w-[1240px] px-4 pb-12 pt-8 sm:px-6 sm:pt-12">
@@ -45,7 +51,7 @@ export function FavoritesPage() {
           </div>
         )}
 
-        {!isLoading && saved.length === 0 && (
+        {empty && (
           <div className="rounded-[var(--radius-card)] border border-dashed border-line-strong px-6 py-16 text-center">
             <span className="mx-auto grid h-12 w-12 place-items-center rounded-full bg-surface text-accent-ink">
               <Icon name="heart" size={22} />
@@ -67,6 +73,24 @@ export function FavoritesPage() {
               .map((l) => (
                 <ListingRow key={l.id} listing={l} />
               ))}
+          </div>
+        )}
+
+        {gone.length > 0 && (
+          <div className={saved.length > 0 ? "mt-6" : ""}>
+            <h2 className="wide text-[16px] font-bold text-text">No longer listed</h2>
+            <ul className="mt-3 divide-y divide-line overflow-hidden rounded-[var(--radius-card)] border border-line bg-surface">
+              {gone.map((key) => (
+                <li key={key} className="flex items-center justify-between gap-4 px-5 py-4" data-testid="gone-saved">
+                  <p className="text-[14px] text-muted">
+                    This car is not in the latest search, so it has probably sold.
+                  </p>
+                  <button onClick={() => toggle(key)} className="btn btn-ghost shrink-0 py-2">
+                    Remove
+                  </button>
+                </li>
+              ))}
+            </ul>
           </div>
         )}
       </div>

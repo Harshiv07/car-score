@@ -157,6 +157,37 @@ test("saved-cars page shows the empty state", async ({ page }) => {
   await expect(page.getByRole("link", { name: /browse the leaderboard/i })).toBeVisible();
 });
 
+test("a saved car the server no longer has is shown as no longer listed, not dropped", async ({ page }) => {
+  await page.addInitScript(() => localStorage.setItem("carscore:v2:favorites", JSON.stringify(["vin:2T1BURHE0JC034461"])));
+  // A healthy inventory (50 cars) that simply doesn't contain the saved one.
+  await page.route(/\/api\/listings\?/, (route) =>
+    route.fulfill({ json: { total: 0, totalUnfiltered: 50, page: 1, pageSize: 100, sort: "score", listings: [] } })
+  );
+  await page.goto("/favorites");
+
+  await expect(page.getByRole("heading", { name: "No longer listed" })).toBeVisible();
+  await expect(page.getByTestId("gone-saved")).toHaveCount(1);
+  await expect(page.getByText("Nothing saved yet")).toHaveCount(0);
+
+  // Only the reader removes it.
+  await page.getByRole("button", { name: "Remove" }).click();
+  await expect(page.getByText("Nothing saved yet")).toBeVisible();
+});
+
+test("an empty inventory never makes a saved car look sold", async ({ page }) => {
+  await page.addInitScript(() => localStorage.setItem("carscore:v2:favorites", JSON.stringify(["vin:2T1BURHE0JC034461"])));
+  // A cold or mid-scrape database knows nothing, so it can't say anything is gone.
+  await page.route(/\/api\/listings\?/, (route) =>
+    route.fulfill({ json: { total: 0, totalUnfiltered: 0, page: 1, pageSize: 100, sort: "score", listings: [] } })
+  );
+  await page.goto("/favorites");
+
+  await expect(page.getByRole("heading", { name: "No longer listed" })).toHaveCount(0);
+  // And the save survives: it is still in storage for when the inventory is back.
+  const stored = await page.evaluate(() => localStorage.getItem("carscore:v2:favorites"));
+  expect(stored).toContain("vin:2T1BURHE0JC034461");
+});
+
 test("the next pages are fetched before the reader asks for them", async ({ page }) => {
   // The e2e inventory is empty, so stand in a 100-car ranking (9 pages of 12)
   // and record which pages the app asks for.

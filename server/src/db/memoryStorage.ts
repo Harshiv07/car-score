@@ -105,6 +105,22 @@ export class MemoryStorage implements Storage {
     return this.data.listings.length;
   }
 
+  async countBySource(): Promise<Record<string, number>> {
+    const out: Record<string, number> = {};
+    for (const l of this.data.listings) out[l.sourceWebsite] = (out[l.sourceWebsite] ?? 0) + 1;
+    return out;
+  }
+
+  async removeUnseen(source: string, before: string): Promise<number> {
+    const kept = this.data.listings.filter((l) => !(l.sourceWebsite === source && l.lastSeenAt < before));
+    const removed = this.data.listings.length - kept.length;
+    if (removed > 0) {
+      this.data.listings = kept;
+      await this.flush();
+    }
+    return removed;
+  }
+
   async addScrapeHistory(entry: ScrapeHistoryEntry): Promise<void> {
     this.data.scrapeHistory.unshift(entry);
     this.data.scrapeHistory = this.data.scrapeHistory.slice(0, 50);

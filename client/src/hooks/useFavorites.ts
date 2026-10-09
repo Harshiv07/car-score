@@ -62,12 +62,5 @@ export function useFavorites() {
     toggle: (id: string) => {
       write(cache.includes(id) ? cache.filter((x) => x !== id) : [...cache, id]);
     },
-    /** Drop saved keys that are no longer in the current inventory, so the
-     *  count never shows phantom favourites (e.g. after a re-scrape). */
-    prune: (validKeys: string[]) => {
-      const valid = new Set(validKeys);
-      const next = cache.filter((k) => valid.has(k));
-      if (next.length !== cache.length) write(next);
-    },
   };
 }

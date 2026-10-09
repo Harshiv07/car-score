@@ -110,7 +110,8 @@ export interface ScrapeHistoryEntry {
   totalFound: number;
   totalInserted: number;
   totalUpdated: number;
-  sources: { source: string; found: number; ok: boolean; note: string }[];
+  /** `removed`: listings the run swept because the source no longer showed them. Absent on older rows. */
+  sources: { source: string; found: number; ok: boolean; note: string; removed?: number }[];
 }
 
 export interface ScrapeProgress {

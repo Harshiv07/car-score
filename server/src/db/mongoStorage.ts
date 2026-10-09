@@ -60,7 +60,7 @@ const scrapeHistorySchema = new Schema<ScrapeHistoryEntry>(
     totalFound: Number,
     totalInserted: Number,
     totalUpdated: Number,
-    sources: [{ source: String, found: Number, ok: Boolean, note: String }],
+    sources: [{ source: String, found: Number, ok: Boolean, note: String, removed: Number }],
   },
   { versionKey: false }
 );
@@ -209,6 +209,19 @@ export class MongoStorage implements Storage {
 
   async countListings(): Promise<number> {
     return this.ListingM.countDocuments();
+  }
+
+  async countBySource(): Promise<Record<string, number>> {
+    const rows = await this.ListingM.aggregate<{ _id: string; n: number }>([
+      { $group: { _id: "$sourceWebsite", n: { $sum: 1 } } },
+    ]);
+    return Object.fromEntries(rows.map((r) => [r._id, r.n]));
+  }
+
+  async removeUnseen(source: string, before: string): Promise<number> {
+    // lastSeenAt is an ISO-8601 UTC string, so lexicographic order is time order.
+    const res = await this.ListingM.deleteMany({ sourceWebsite: source, lastSeenAt: { $lt: before } });
+    return res.deletedCount ?? 0;
   }
 
   async addScrapeHistory(entry: ScrapeHistoryEntry): Promise<void> {

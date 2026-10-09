@@ -16,6 +16,7 @@ import { activeScrapers } from "../scrapers";
 import { loadScrapeConfig } from "../scrapers/config";
 import { LogFn, Scraper, ScraperRunResult } from "../scrapers/types";
 import { invalidateScoreCache } from "./listingService";
+import { planSweep, SweepResult } from "./sweep";
 
 export const COOLDOWN_MS = 10 * 60 * 1000;
 const MAX_LOGS = 200;
@@ -140,6 +141,29 @@ export async function runWithTimeout(scraper: Scraper, log: LogFn, timeoutMs: nu
   }
 }
 
+/** Remove listings that trusted sources no longer show, and record what went. */
+async function sweepUnseen(
+  storage: Awaited<ReturnType<typeof getStorage>>,
+  entry: ScrapeHistoryEntry,
+  results: SweepResult[],
+  heldBefore: Record<string, number>
+): Promise<void> {
+  let removedTotal = 0;
+  for (const d of planSweep(results, heldBefore)) {
+    if (!d.sweep) {
+      if ((heldBefore[d.source] ?? 0) > 0) pushLog("info", `${d.source}: ${d.reason}.`);
+      continue;
+    }
+    const removed = await storage.removeUnseen(d.source, entry.startedAt);
+    const row = entry.sources.find((s) => s.source === d.source);
+    if (row) row.removed = removed;
+    removedTotal += removed;
+    pushLog("info", `${d.source}: ${removed} no longer listed, removed (${d.reason}).`);
+  }
+  // Fewer cars, so every Market Value comparison shifts.
+  if (removedTotal > 0) invalidateScoreCache();
+}
+
 async function runScrape(runId: string, sources: Scraper[]): Promise<void> {
   const cfg = loadScrapeConfig();
   const deadline = Date.now() + cfg.runBudgetMs;
@@ -164,6 +188,10 @@ async function runScrape(runId: string, sources: Scraper[]): Promise<void> {
   // leave that state: a throw from storage mid-run used to strand it there, and
   // the run was invisible to the cooldown (which ignores "running" rows).
   let crashed: Error | null = null;
+  // What we held per source before this run touched anything, and what each
+  // source then reported: the sweep below needs both.
+  const heldBefore = await storage.countBySource().catch(() => ({}) as Record<string, number>);
+  const swept: SweepResult[] = [];
   try {
     for (const scraper of sources) {
       const remaining = deadline - Date.now();
@@ -182,6 +210,7 @@ async function runScrape(runId: string, sources: Scraper[]): Promise<void> {
           note: result.note,
         });
         entry.totalFound += result.listings.length;
+        swept.push({ source: result.source, found: result.listings.length, ok: result.ok, complete: result.complete });
         if (result.listings.length > 0) {
           const { inserted, updated } = await storage.upsertListings(result.listings);
           entry.totalInserted += inserted;
@@ -199,6 +228,10 @@ async function runScrape(runId: string, sources: Scraper[]): Promise<void> {
       state.sourcesDone++;
       await new Promise((r) => setImmediate(r)); // keep the API responsive between sources
     }
+    // Only after every source has had its say: a car held under one source's
+    // name that another source re-saw this run has a fresh `lastSeenAt` and
+    // survives. Skipped when the run crashed; a half-finished run proves nothing.
+    await sweepUnseen(storage, entry, swept, heldBefore);
   } catch (e) {
     crashed = e as Error;
     pushLog("error", `scrape run crashed: ${crashed.message}`);

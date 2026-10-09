@@ -165,7 +165,9 @@ export function makeConvertusScraper(dealer: ConvertusDealer): Scraper {
             ? "Convertus proxy unreachable — skipped"
             : "no supported-model listings in current inventory";
       log(listings.length > 0 ? "info" : "warn", `${dealer.source}: ${note}`);
-      return { key: dealer.key, source: dealer.source, listings, ok, note };
+      // The proxy answered and paged through its whole inventory.
+      const complete = !anyError && fetched > 0;
+      return { key: dealer.key, source: dealer.source, listings, ok, note, complete };
     },
   };
 }

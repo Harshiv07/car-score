@@ -220,7 +220,8 @@ export function makeEdealerScraper(dealer: EdealerDealer): Scraper {
           ? `${listings.length} supported-model listing(s) found`
           : `no supported-model listings among ${totalSeen} in current inventory`;
       log(listings.length > 0 ? "info" : "warn", `${dealer.source}: ${note}`);
-      return { key: dealer.key, source: dealer.source, listings, ok, note };
+      // The whole lot is embedded in the page, so a parsed feed is the full inventory.
+      return { key: dealer.key, source: dealer.source, listings, ok, note, complete: true };
     },
   };
 }

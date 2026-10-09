@@ -135,7 +135,9 @@ export function makeStmMotorsScraper(dealer: StmDealer): Scraper {
           ? `${listings.length} supported-model listing(s) found`
           : "no supported-model listings in current inventory";
       log(listings.length > 0 ? "info" : "warn", `${dealer.source}: ${note}`);
-      return { key: dealer.key, source: dealer.source, listings, ok, note };
+      // Every vehicle page in the sitemap was fetched, none blocked or failed.
+      const complete = !outcome.blocked && outcome.errors.length === 0;
+      return { key: dealer.key, source: dealer.source, listings, ok, note, complete };
     },
   };
 }

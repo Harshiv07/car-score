@@ -35,6 +35,13 @@ export interface ScraperRunResult {
   listings: Listing[];
   ok: boolean;
   note: string;
+  /**
+   * What the source's own inventory feed said, vouched for by the scraper:
+   * `true` = it read the whole inventory (so a car it no longer lists is gone,
+   * even if that means zero cars); `false` = it knows the run was cut short;
+   * absent = a bounded sample (the aggregators), judged by the sweep's floor.
+   */
+  complete?: boolean;
 }
 
 export interface Scraper {
