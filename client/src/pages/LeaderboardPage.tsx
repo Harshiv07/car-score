@@ -197,7 +197,7 @@ export function LeaderboardPage() {
               )}
             </h2>
 
-            <div className="flex items-center gap-2">
+            <div className="flex flex-wrap items-center gap-2">
               <button
                 onClick={() => setDrawerOpen(true)}
                 className="btn btn-ghost py-2 lg:hidden"
