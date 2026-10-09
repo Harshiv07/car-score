@@ -41,6 +41,7 @@ export function CarPhoto({
   width = 640,
   className = "",
   priority = false,
+  quiet = false,
 }: {
   src: string | null | undefined;
   alt: string;
@@ -49,6 +50,8 @@ export function CarPhoto({
   width?: number;
   className?: string;
   priority?: boolean;
+  /** Glyph only when there's no photo; for thumbnails under ~150px wide. */
+  quiet?: boolean;
 }) {
   const [state, setState] = useState<"loading" | "ready" | "failed">(src ? "loading" : "failed");
 
@@ -81,18 +84,19 @@ export function CarPhoto({
         />
       )}
 
-      {state === "failed" && <NoPhoto />}
+      {state === "failed" && <NoPhoto quiet={quiet} />}
     </div>
   );
 }
 
-/** Shown when a listing has no photo, or the dealer's CDN drops it. */
-function NoPhoto() {
+/** Shown when a listing has no photo, or the dealer's CDN drops it. `quiet`
+ *  drops the caption for thumbnails too small to hold it. */
+function NoPhoto({ quiet }: { quiet: boolean }) {
   return (
     <div className="absolute inset-0 grid place-items-center bg-surface2" role="img" aria-label="No photo available">
-      <div className="flex flex-col items-center gap-1.5 text-faint">
+      <div className="flex flex-col items-center gap-1.5 px-2 text-center text-faint">
         <CarGlyph />
-        <span className="text-[12px] font-medium">No photo from the seller</span>
+        {!quiet && <span className="text-[12px] font-medium">No photo from the seller</span>}
       </div>
     </div>
   );

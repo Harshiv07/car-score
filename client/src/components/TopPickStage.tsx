@@ -65,6 +65,7 @@ function TopPickStageImpl({
               width={480}
               sizes="132px"
               priority
+              quiet
               className="rounded-[10px] border border-line shadow-[var(--shadow)]"
             />
             <figcaption className="mt-1 text-right text-[12px] text-faint">The actual car</figcaption>

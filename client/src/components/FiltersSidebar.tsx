@@ -28,7 +28,7 @@ function FiltersSidebarImpl({
 }) {
   const get = (k: string) => params.get(k) ?? "";
   const models = meta?.models.filter((m) => !get("make") || m.make === get("make")) ?? [];
-  const activeCount = [...params.keys()].filter((k) => !["sort", "page", "pageSize"].includes(k)).length;
+  const activeCount = [...params.keys()].filter((k) => !["sort", "page", "pageSize", "view"].includes(k)).length;
 
   const label = "label mb-2";
 

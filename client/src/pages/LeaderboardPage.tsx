@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "react-router-dom";
-import { useListings, useListingStats, useMeta, useScrapeStatus } from "../api/hooks";
+import { useListings, useListingStats, useMarketMap, useMeta, useScrapeStatus } from "../api/hooks";
+import { MarketMap } from "../components/MarketMap";
 import { FiltersSidebar } from "../components/FiltersSidebar";
 import { FilterDrawer } from "../components/FilterDrawer";
 import { ListingRow } from "../components/ListingRow";
@@ -9,7 +10,7 @@ import { CompareTray } from "../components/CompareTray";
 import { Pagination } from "../components/Pagination";
 import { WakingNotice } from "../components/WakingNotice";
 import { Icon } from "../components/Icon";
-import { cad, Select, timeAgo } from "../components/ui";
+import { cad, Segmented, Select, timeAgo } from "../components/ui";
 import { gsap, useGSAP, SplitText, hasPlayed, markPlayed, prefersReducedMotion } from "../lib/motion";
 
 const DEFAULT_PAGE_SIZE = 12;
@@ -21,7 +22,7 @@ function readPageSize(params: URLSearchParams): number {
 }
 
 /** Params that aren't filters, for counting how many filters are actually on. */
-const NON_FILTER_PARAMS = ["sort", "page", "pageSize"];
+const NON_FILTER_PARAMS = ["sort", "page", "pageSize", "view"];
 
 export function LeaderboardPage() {
   const [params, setParams] = useSearchParams();
@@ -40,6 +41,13 @@ export function LeaderboardPage() {
 
   const { data, isLoading, isError, error, isFetching } = useListings(queryParams);
   const listings = data?.listings ?? [];
+  const view = params.get("view") === "map" ? "map" : "list";
+  const mapParams = useMemo(() => {
+    const p = new URLSearchParams(params);
+    NON_FILTER_PARAMS.forEach((k) => p.delete(k));
+    return p;
+  }, [params]);
+  const { data: mapData, isLoading: mapLoading } = useMarketMap(mapParams, view === "map");
   const { data: meta } = useMeta();
   const { data: stats } = useListingStats();
   const { data: scrape } = useScrapeStatus();
@@ -179,7 +187,9 @@ export function LeaderboardPage() {
                 ) : (
                   <>
                     <span className="nums">{data.total.toLocaleString("en-CA")}</span> cars
-                    <span className="font-medium text-muted">, ranked by {sortLabel}</span>
+                    <span className="font-medium text-muted">
+                      {view === "map" ? ", by price and mileage" : `, ranked by ${sortLabel}`}
+                    </span>
                   </>
                 )
               ) : (
@@ -195,16 +205,27 @@ export function LeaderboardPage() {
                 <Icon name="filters" size={16} />
                 Filters{activeFilters > 0 ? ` (${activeFilters})` : ""}
               </button>
+              <div className="w-[8.5rem]">
+                <Segmented
+                  ariaLabel="View"
+                  value={view}
+                  options={[
+                    { value: "list", label: "List" },
+                    { value: "map", label: "Map" },
+                  ]}
+                  onChange={(v) => setParam("view", v === "map" ? "map" : "")}
+                />
+              </div>
               <Select
                 ariaLabel="Listings per page"
-                className="hidden w-[7.75rem] sm:block"
+                className={`${view === "map" ? "hidden" : "hidden sm:block"} w-[7.75rem]`}
                 value={String(pageSize)}
                 options={PAGE_SIZES.map((n) => ({ value: String(n), label: `${n} a page` }))}
                 onChange={(v) => setParam("pageSize", v === String(DEFAULT_PAGE_SIZE) ? "" : v)}
               />
               <Select
                 ariaLabel="Sort"
-                className="w-44"
+                className={`${view === "map" ? "hidden" : ""} w-44`}
                 value={sort}
                 options={(meta?.sortOptions ?? [{ key: "score", label: "Best Score" }]).map((o) => ({
                   value: o.key,
@@ -227,7 +248,15 @@ export function LeaderboardPage() {
             </div>
           )}
 
-          {isLoading && (
+          {view === "map" && (
+            mapData ? (
+              <MarketMap points={mapData.points} />
+            ) : (
+              <div className="h-[420px] animate-pulse rounded-[var(--radius-card)] bg-surface" aria-busy={mapLoading} />
+            )
+          )}
+
+          {view === "list" && isLoading && (
             <div className="divide-y divide-line overflow-hidden rounded-[var(--radius-card)] border border-line bg-surface" aria-label="Loading listings">
               {Array.from({ length: 5 }).map((_, i) => (
                 <div key={i} className="flex gap-5 p-5">
@@ -242,7 +271,7 @@ export function LeaderboardPage() {
             </div>
           )}
 
-          {data && data.listings.length === 0 && (
+          {view === "list" && data && data.listings.length === 0 && (
             <div className="rounded-[var(--radius-card)] border border-dashed border-line-strong px-6 py-14 text-center">
               {/* Two different empty states: an empty inventory isn't a filter problem. */}
               {data.totalUnfiltered === 0 ? (
@@ -269,7 +298,7 @@ export function LeaderboardPage() {
             </div>
           )}
 
-          {rest.length > 0 && (
+          {view === "list" && rest.length > 0 && (
             <div className="row-list divide-y divide-line overflow-hidden rounded-[var(--radius-card)] border border-line bg-surface">
               {rest.map((l, i) => (
                 <ListingRow key={l.id} listing={l} rank={(page - 1) * pageSize + i + 1 + (hero ? 1 : 0)} />
@@ -277,7 +306,7 @@ export function LeaderboardPage() {
             </div>
           )}
 
-          {data && (
+          {view === "list" && data && (
             <Pagination
               page={page}
               pageSize={pageSize}

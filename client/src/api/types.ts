@@ -157,6 +157,21 @@ export interface MetaResponse {
   storage: string;
 }
 
+/** One dot on the market map (server/src/services/mapPoints.ts). */
+export interface MapPoint {
+  id: string;
+  /** price */
+  p: number;
+  /** odometer, km */
+  k: number;
+  /** score, rounded */
+  s: number;
+  /** "2021 Mazda CX-5" */
+  t: string;
+  /** asking price minus market value; negative is under market */
+  d: number;
+}
+
 export interface NewCar {
   id: string;
   make: string;

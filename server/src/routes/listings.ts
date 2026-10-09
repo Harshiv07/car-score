@@ -9,6 +9,7 @@ import {
   ownershipEstimate,
   sortListings,
 } from "../services/listingService";
+import { mapPoints } from "../services/mapPoints";
 import { getModelInfo } from "../data/vehicleModels";
 import { getRecallHistory } from "../services/recallService";
 import { asyncHandler, intParam } from "../util/http";
@@ -102,6 +103,14 @@ listingsRouter.get("/", asyncHandler(async (req, res) => {
     sort,
     listings: sorted.slice(start, start + pageSize),
   });
+}));
+
+/** GET /api/listings/map — compact price/mileage/score points for the filtered set. */
+listingsRouter.get("/map", asyncHandler(async (req, res) => {
+  const all = await getScoredListings();
+  const points = mapPoints(applyFilters(all, parseFilters(req)));
+  res.set("Cache-Control", READ_CACHE);
+  res.json({ total: points.length, points });
 }));
 
 /**

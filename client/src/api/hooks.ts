@@ -4,6 +4,7 @@ import {
   InventoryStats,
   ListingDetailResponse,
   ListingsResponse,
+  MapPoint,
   MetaResponse,
   NewCarsResponse,
   ScrapeProgress,
@@ -20,6 +21,19 @@ export function useListings(params: URLSearchParams) {
     // Holding the previous results means the page changes rather than reloads —
     // invisible against a 2ms local API, very visible against the deployed one.
     // `isFetching` still exposes the in-flight state for a quiet indicator.
+    placeholderData: keepPreviousData,
+  });
+}
+
+/** Compact points for the market map, for the same filters as the list. Only
+ *  fetched while the map is on screen. */
+export function useMarketMap(params: URLSearchParams, enabled: boolean) {
+  const qs = params.toString();
+  return useQuery({
+    queryKey: ["marketMap", qs],
+    queryFn: () => apiGet<{ total: number; points: MapPoint[] }>(`/api/listings/map${qs ? `?${qs}` : ""}`),
+    enabled,
+    staleTime: 60_000,
     placeholderData: keepPreviousData,
   });
 }
