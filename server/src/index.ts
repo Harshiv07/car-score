@@ -25,6 +25,8 @@ const PORT = Number(process.env.PORT ?? 4000);
  * can't match an arbitrary *.vercel.app site.
  */
 const DEFAULT_ORIGINS: (string | RegExp)[] = [
+  "https://carscores.vercel.app",
+  // The project's earlier production alias; harmless to keep allowed.
   "https://cargrade.vercel.app",
   /^https:\/\/car-score-[a-z0-9-]+-pharshiv07-gmailcoms-projects\.vercel\.app$/,
   "http://localhost:3000",

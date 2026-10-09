@@ -21,6 +21,14 @@
   deliberately `sync: false` (not stored in the YAML) and will need to be
   re-entered in the new service's Environment tab.
 
+  **CORS**: the API only answers browsers on an allowlist
+  (`DEFAULT_ORIGINS` in `server/src/index.ts`: `https://carscores.vercel.app`,
+  the earlier `cargrade.vercel.app`, this project's Vercel previews, and
+  localhost). If you set `CORS_ORIGIN` in the Render Environment tab it
+  **replaces** those defaults entirely, so include
+  `https://carscores.vercel.app` in it (comma-separated) or the live site's
+  API calls will be blocked.
+
 ## Keeping the free-tier API awake
 
 Render's free tier sleeps an idle instance, and waking it takes 30–60 s.

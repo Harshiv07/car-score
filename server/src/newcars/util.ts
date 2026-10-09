@@ -15,7 +15,7 @@ import { fetchWithTimeout } from "../scrapers/config";
  * Cached in-process. Used to fill in cars whose OEM page didn't expose one.
  */
 const imgCache = new Map<string, string | null>();
-const UA = "CarScore/2.0 (https://cargrade.vercel.app; car listing app)";
+const UA = "CarScore/2.0 (https://carscores.vercel.app; car listing app)";
 // Close-up/detail/technical shots that make poor hero images even when they
 // genuinely are the right model — a fuel-gauge closeup or an engine/hybrid-
 // system diagram matches the model name fine, it's just not a photo of the
