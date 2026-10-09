@@ -1,6 +1,13 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "react-router-dom";
-import { useListings, useListingStats, useMarketMap, useMeta, useScrapeStatus } from "../api/hooks";
+import {
+  useListings,
+  useListingStats,
+  useMarketMap,
+  useMeta,
+  usePrefetchListingPages,
+  useScrapeStatus,
+} from "../api/hooks";
 import { MarketMap } from "../components/MarketMap";
 import { FiltersSidebar } from "../components/FiltersSidebar";
 import { FilterDrawer } from "../components/FilterDrawer";
@@ -39,9 +46,17 @@ export function LeaderboardPage() {
     return p;
   }, [params, pageSize]);
 
-  const { data, isLoading, isError, error, isFetching } = useListings(queryParams);
-  const listings = data?.listings ?? [];
   const view = params.get("view") === "map" ? "map" : "list";
+  const { data, isLoading, isError, error, isFetching, isPlaceholderData } = useListings(queryParams);
+  const listings = data?.listings ?? [];
+  // Once this page is really here (not the previous one held as a placeholder),
+  // fetch the next two pages and the previous one, so turning a page is instant.
+  usePrefetchListingPages(
+    queryParams,
+    data?.page ?? 1,
+    data ? Math.ceil(data.total / pageSize) : 0,
+    !!data && !isPlaceholderData && view === "list"
+  );
   const mapParams = useMemo(() => {
     const p = new URLSearchParams(params);
     NON_FILTER_PARAMS.forEach((k) => p.delete(k));

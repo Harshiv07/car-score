@@ -9,6 +9,21 @@ const NewCarsPage = lazy(() => import("./pages/NewCarsPage").then((m) => ({ defa
 const ComparePage = lazy(() => import("./pages/ComparePage").then((m) => ({ default: m.ComparePage })));
 const NotFoundPage = lazy(() => import("./pages/NotFoundPage").then((m) => ({ default: m.NotFoundPage })));
 const GuidePage = lazy(() => import("./pages/GuidePage").then((m) => ({ default: m.GuidePage })));
+
+/** Download the other routes' code once the browser is idle, so the first visit to each is instant. */
+function useIdleRoutePrefetch() {
+  useEffect(() => {
+    const run = () => {
+      void import("./pages/NewCarsPage");
+      void import("./pages/GuidePage");
+      void import("./pages/ComparePage");
+      void import("./pages/FavoritesPage");
+    };
+    const w = window as Window & { requestIdleCallback?: (cb: () => void, o?: { timeout: number }) => number };
+    if (w.requestIdleCallback) w.requestIdleCallback(run, { timeout: 4000 });
+    else setTimeout(run, 2000);
+  }, []);
+}
 import { RefreshControl } from "./components/RefreshControl";
 import { ScrollManager } from "./components/ScrollManager";
 import { Icon } from "./components/Icon";
@@ -113,6 +128,7 @@ export default function App() {
   const [dark, setDark] = useDarkMode();
   const { count } = useFavorites();
   const location = useLocation();
+  useIdleRoutePrefetch();
 
   return (
     <div className="min-h-screen bg-bg text-text">

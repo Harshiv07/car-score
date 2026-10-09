@@ -157,6 +157,49 @@ test("saved-cars page shows the empty state", async ({ page }) => {
   await expect(page.getByRole("link", { name: /browse the leaderboard/i })).toBeVisible();
 });
 
+test("the next pages are fetched before the reader asks for them", async ({ page }) => {
+  // The e2e inventory is empty, so stand in a 100-car ranking (9 pages of 12)
+  // and record which pages the app asks for.
+  const requested: number[] = [];
+  await page.route(/\/api\/listings\?/, (route) => {
+    const p = Number(new URL(route.request().url()).searchParams.get("page") ?? 1);
+    requested.push(p);
+    return route.fulfill({
+      json: { total: 100, totalUnfiltered: 100, page: p, pageSize: 12, sort: "score", listings: [] },
+    });
+  });
+  const seen = () => [...new Set(requested)].sort((a, b) => a - b);
+
+  // Landing on page one warms pages two and three.
+  await page.goto("/");
+  await expect.poll(seen).toEqual([1, 2, 3]);
+
+  // Turning to page two shows it from the cache and slides the window to page four.
+  await page.getByRole("button", { name: "2", exact: true }).click();
+  await expect(page).toHaveURL(/page=2/);
+  await expect.poll(seen).toEqual([1, 2, 3, 4]);
+
+  // And nothing is fetched twice: pages already held are not requested again.
+  expect(requested.filter((p) => p === 3)).toHaveLength(1);
+  expect(requested.filter((p) => p === 2)).toHaveLength(1);
+
+  // Turning to page three, then, only needs page five.
+  await page.getByRole("button", { name: "3", exact: true }).click();
+  await expect.poll(seen).toEqual([1, 2, 3, 4, 5]);
+});
+
+test("the studio's car models and their palette are served", async ({ request }) => {
+  // A wrong filename here would silently drop the stage to the flat fallback car.
+  for (const file of ["models/sedan.glb", "models/suv-luxury.glb", "models/Textures/colormap.png"]) {
+    const res = await request.get(`/${file}`);
+    expect(res.ok(), file).toBe(true);
+    expect((await res.body()).length, file).toBeGreaterThan(5_000);
+  }
+  // glTF binary magic: "glTF"
+  const glb = await (await request.get("/models/sedan.glb")).body();
+  expect(glb.subarray(0, 4).toString("ascii")).toBe("glTF");
+});
+
 test("an unknown address shows the not-found page with a way back", async ({ page }) => {
   await page.goto("/this/does/not/exist");
   await expect(page.getByRole("heading", { name: "Nothing at this address" })).toBeVisible();

@@ -1,8 +1,9 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import * as THREE from "three";
 import { RoomEnvironment } from "three/examples/jsm/environments/RoomEnvironment.js";
 import gsap from "gsap";
-import { BodyStyle, buildCar, hotspotsFor, makeMaterials, CarMaterials } from "./carModel";
+import type { BodyStyle } from "./bodyStyle";
+import { loadCar, RealCar } from "./realCar";
 
 /**
  * The studio stage: one car on a soft floor, lit like a configurator.
@@ -94,12 +95,16 @@ export default function CarStage({
     scene: THREE.Scene;
     camera: THREE.PerspectiveCamera;
     pivot: THREE.Group;
-    car: THREE.Group | null;
-    mats: CarMaterials;
+    car: RealCar | null;
     target: THREE.Vector3;
     invalidate: () => void;
     style: BodyStyle | null;
   } | null>(null);
+  /** The body style whose model is on the stage; effects that need the car wait on it. */
+  const [shown, setShown] = useState<BodyStyle | null>(null);
+  /** The latest paint, readable from the async load without re-running it. */
+  const paintRef = useRef(paint);
+  paintRef.current = paint;
 
   // ---- scene lifetime ---------------------------------------------------
   useEffect(() => {
@@ -124,12 +129,12 @@ export default function CarStage({
     const room = new RoomEnvironment();
     const env = pmrem.fromScene(room, 0.04).texture;
     scene.environment = env;
-    scene.environmentIntensity = 0.75;
+    scene.environmentIntensity = 0.32;
 
-    const key = new THREE.DirectionalLight("#ffffff", 1.4);
+    const key = new THREE.DirectionalLight("#ffffff", 1.15);
     key.position.set(4, 7, 5);
     scene.add(key);
-    scene.add(new THREE.HemisphereLight("#eaf2ff", "#3a4048", 0.35));
+    scene.add(new THREE.HemisphereLight("#eaf2ff", "#3a4048", 0.12));
 
     const shadowTex = shadowTexture();
     const floor = new THREE.Mesh(
@@ -149,8 +154,6 @@ export default function CarStage({
     pivot.rotation.y = mode === "turntable" ? -0.55 : 0.35;
     scene.add(pivot);
 
-    const mats = makeMaterials(paint);
-
     let raf = 0;
     let visible = true;
     let last = performance.now();
@@ -165,8 +168,8 @@ export default function CarStage({
 
     const placeSpots = () => {
       const w = world.current;
-      if (!w || !w.style || spotRefs.current.size === 0) return;
-      const hs = hotspotsFor(w.style);
+      if (!w || !w.car || spotRefs.current.size === 0) return;
+      const hs = w.car.hotspots;
       const rect = wrap.getBoundingClientRect();
       pivot.updateMatrixWorld();
       for (const [id, el] of spotRefs.current) {
@@ -243,7 +246,7 @@ export default function CarStage({
       invalidate();
     };
 
-    world.current = { renderer, scene, camera, pivot, car: null, mats, target, invalidate, style: null };
+    world.current = { renderer, scene, camera, pivot, car: null, target, invalidate, style: null };
 
     const ro = new ResizeObserver(fit);
     ro.observe(wrap);
@@ -308,10 +311,7 @@ export default function CarStage({
       canvas.removeEventListener("pointercancel", onUp);
       canvas.removeEventListener("webglcontextlost", onLost);
       gsap.killTweensOf([pivot.rotation, pivot.position, camera.position, target]);
-      scene.traverse((o) => {
-        if (o instanceof THREE.Mesh) o.geometry.dispose();
-      });
-      Object.values(mats).forEach((m) => m.dispose());
+      world.current?.car?.dispose();
       shadowTex.dispose();
       env.dispose();
       pmrem.dispose();
@@ -327,74 +327,93 @@ export default function CarStage({
   useEffect(() => {
     const w = world.current;
     if (!w || w.style === style) return;
-    const first = w.car === null;
-    if (w.car) {
-      w.pivot.remove(w.car);
-      w.car.traverse((o) => o instanceof THREE.Mesh && o.geometry.dispose());
-    }
-    const car = buildCar(style, w.mats);
-    w.pivot.add(car);
-    w.car = car;
-    w.style = style;
-
-    if (reducedMotion) {
-      w.invalidate();
-      return;
-    }
-    const wheels = car.children.filter((c) => c.name === "wheel");
+    let cancelled = false;
     let tween: gsap.core.Tween | null = null;
-    if (first && intro) {
-      // Rolls on from behind the headline and settles: the page's one entrance.
-      const roll = { x: -7 };
-      tween = gsap.fromTo(
-        roll,
-        { x: -7 },
-        {
-          x: 0,
-          duration: 1.5,
-          ease: "power3.out",
-          delay: 0.25,
-          onUpdate: () => {
-            car.position.x = roll.x;
-            wheels.forEach((wh) => (wh.rotation.z = -roll.x / 0.35));
-            w.invalidate();
-          },
-        },
-      );
-    } else if (!first) {
-      tween = gsap.fromTo(
-        car.position,
-        { y: 0.35 },
-        { y: 0, duration: 0.55, ease: "bounce.out", onUpdate: w.invalidate },
-      );
-    }
-    w.invalidate();
+
+    loadCar(style, paintRef.current)
+      .then((car) => {
+        // The scene may have been torn down, or the style changed again, while the file loaded.
+        if (cancelled || world.current !== w) {
+          car.dispose();
+          return;
+        }
+        const first = w.car === null;
+        if (w.car) {
+          w.pivot.remove(w.car.group);
+          w.car.dispose();
+        }
+        w.pivot.add(car.group);
+        w.car = car;
+        w.style = style;
+        // Aim at the middle of the car, whatever its height.
+        w.target.y = car.height * 0.45;
+        setShown(style);
+
+        if (reducedMotion) {
+          w.invalidate();
+          return;
+        }
+        if (first && intro) {
+          // Rolls on from behind the headline and settles: the page's one entrance.
+          const roll = { x: -7 };
+          tween = gsap.fromTo(
+            roll,
+            { x: -7 },
+            {
+              x: 0,
+              duration: 1.5,
+              ease: "power3.out",
+              delay: 0.25,
+              onUpdate: () => {
+                car.group.position.x = roll.x;
+                car.roll(roll.x);
+                w.invalidate();
+              },
+            },
+          );
+        } else if (!first) {
+          tween = gsap.fromTo(
+            car.group.position,
+            { y: 0.35 },
+            { y: 0, duration: 0.55, ease: "bounce.out", onUpdate: w.invalidate },
+          );
+        }
+        w.invalidate();
+      })
+      .catch(() => {
+        // A model that won't load is the same as no WebGL: show the flat car.
+        if (!cancelled) onUnsupported?.();
+      });
+
     // A tween must not outlive the scene it draws into.
     return () => {
+      cancelled = true;
       tween?.kill();
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [style, intro, reducedMotion, mode]);
 
   // ---- paint ---------------------------------------------------------------
   useEffect(() => {
     const w = world.current;
-    if (!w) return;
-    w.mats.paint.color.set(paint);
+    if (!w?.car) return;
+    w.car.setPaint(paint);
     w.invalidate();
-  }, [paint, mode]);
+  }, [paint, mode, shown]);
 
   // ---- inspect: turn the chosen point towards the viewer ---------------------
   useEffect(() => {
     const w = world.current;
-    if (!w || mode !== "inspect" || !activeSpot || !w.style) return;
-    const h = hotspotsFor(w.style)[activeSpot];
+    if (!w || !w.car || mode !== "inspect" || !activeSpot) return;
+    const h = w.car.hotspots[activeSpot];
     if (!h) return;
+    const k = w.car.height / 1.4; // the lift values below were tuned for a 1.4-tall car
     const camAz = azimuth(w.camera.position.clone().setY(0));
     // Aim a little past square-on, so the point sits on a curve of the body
     // rather than dead centre of a flat side.
     const want = camAz - azimuth(h.normal.clone().setY(0)) + 0.18;
     const to = nearestAngle(w.pivot.rotation.y, want);
-    const lift = activeSpot === "underneath" ? 0.28 : activeSpot === "engine" || activeSpot === "glass" ? 0.95 : 0.62;
+    const lift = k * (activeSpot === "underneath" ? 0.28 : activeSpot === "engine" || activeSpot === "glass" ? 0.95 : 0.62);
     if (reducedMotion) {
       w.pivot.rotation.y = to;
       w.target.y = lift;
@@ -403,7 +422,7 @@ export default function CarStage({
     }
     gsap.to(w.pivot.rotation, { y: to, duration: 0.9, ease: "power2.inOut", onUpdate: w.invalidate });
     gsap.to(w.target, { y: lift, duration: 0.9, ease: "power2.inOut", onUpdate: w.invalidate });
-  }, [activeSpot, mode, reducedMotion, style]);
+  }, [activeSpot, mode, reducedMotion, shown]);
 
   return (
     <div ref={wrapRef} className={`relative ${className}`}>

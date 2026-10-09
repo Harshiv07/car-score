@@ -64,6 +64,9 @@ ReactDOM.createRoot(document.getElementById("root") as HTMLElement).render(
             // been filled.
             const data = q.state.data as { totalUnfiltered?: number; totalListings?: number } | undefined;
             if (root === "listings" && !data?.totalUnfiltered) return false;
+            // A cold start needs page one. Pages fetched ahead of the reader are
+            // cheap to refetch and would only bloat what is written to disk.
+            if (root === "listings" && /(^|&)page=/.test(String(q.queryKey[1]))) return false;
             if (root === "listingStats" && !data?.totalListings) return false;
             return root === "listings" || root === "listingStats" || root === "meta";
           },

@@ -1,3 +1,4 @@
+import { useEffect } from "react";
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { apiGet, apiPost } from "./client";
 import {
@@ -10,12 +11,64 @@ import {
   ScrapeProgress,
 } from "./types";
 
-export function useListings(params: URLSearchParams) {
-  const qs = params.toString();
-  return useQuery({
-    queryKey: ["listings", qs],
+/**
+ * One canonical query string per set of parameters: keys sorted, so
+ * `?make=X&page=2` and `?page=2&make=X` are the same cache entry. Without this,
+ * a page fetched ahead of time under one ordering is a miss when the reader
+ * navigates there under another.
+ */
+function canonicalQs(params: URLSearchParams): string {
+  return new URLSearchParams([...params.entries()].sort(([a], [b]) => a.localeCompare(b))).toString();
+}
+
+function listingsQuery(params: URLSearchParams) {
+  const qs = canonicalQs(params);
+  return {
+    queryKey: ["listings", qs] as const,
     queryFn: () => apiGet<ListingsResponse>(`/api/listings${qs ? `?${qs}` : ""}`),
     staleTime: 30_000,
+  };
+}
+
+/**
+ * Keep the pages around the one on screen warm.
+ *
+ * Paging used to be a round trip every time: against the deployed API that is
+ * most of a second, and tens of seconds when it has spun down. Reading a list
+ * is sequential, so the next pages are the ones to fetch before they are asked
+ * for. Once the current page has landed this fetches the next `ahead` pages and
+ * the previous `behind`, and every page turn then re-runs it, so the window
+ * keeps sliding: showing page 2 fetches 3 and 4, showing 3 fetches 4 and 5.
+ * Pages already in the cache (and still fresh) cost nothing.
+ */
+export function usePrefetchListingPages(
+  params: URLSearchParams,
+  page: number,
+  totalPages: number,
+  enabled: boolean,
+  { ahead = 2, behind = 1 } = {}
+) {
+  const qc = useQueryClient();
+  const base = canonicalQs(params);
+  useEffect(() => {
+    if (!enabled) return;
+    const wanted: number[] = [];
+    for (let i = 1; i <= ahead; i++) wanted.push(page + i);
+    for (let i = 1; i <= behind; i++) wanted.push(page - i);
+    for (const p of wanted) {
+      if (p < 1 || p > totalPages) continue;
+      const next = new URLSearchParams(base);
+      // Page one is requested without a page parameter, as the pager does.
+      if (p <= 1) next.delete("page");
+      else next.set("page", String(p));
+      void qc.prefetchQuery(listingsQuery(next));
+    }
+  }, [qc, base, page, totalPages, enabled, ahead, behind]);
+}
+
+export function useListings(params: URLSearchParams) {
+  return useQuery({
+    ...listingsQuery(params),
     // Changing a filter or turning a page is a new query key, so by default the
     // list would blank to skeletons and rebuild while the request is in flight.
     // Holding the previous results means the page changes rather than reloads —
