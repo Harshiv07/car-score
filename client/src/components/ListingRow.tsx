@@ -5,11 +5,12 @@ import { useFavorites } from "../hooks/useFavorites";
 import { useCompare } from "../hooks/useCompare";
 import { usePrefetchListing } from "../api/hooks";
 import { CarPhoto } from "./CarPhoto";
+import { CarSilhouette } from "./CarSilhouette";
 import { ScoreStrip } from "./ScoreStrip";
 import { Icon } from "./Icon";
-import { whyLine, kmPerYear, mileageVerdict, scoreBand } from "../lib/whyLine";
+import { whyLine, mileageVerdict, scoreBand } from "../lib/whyLine";
 import { quickMonthly } from "../lib/finance";
-import { Badge, cad, DealTag, EvapBadge, isRecent, km, NewBadge, scoreHex, timeAgo } from "./ui";
+import { Badge, cad, EvapBadge, isRecent, km, NewBadge, scoreHex } from "./ui";
 
 /**
  * One car on the leaderboard, as a row in a ledger rather than a card in a
@@ -30,13 +31,11 @@ function ListingRowImpl({ listing, rank }: { listing: ScoredListing; rank?: numb
   const { has: inCompare, toggle: toggleCompare, canAdd } = useCompare();
   const fav = isFavorite(l.dedupeKey);
   const comparing = inCompare(l.id);
-  const perYear = kmPerYear(l);
   const prefetch = usePrefetchListing();
   const mileage = mileageVerdict(l);
   const hex = scoreHex(l.score.total);
   const n = Math.round(l.score.total);
   const place = l.city ? `${tidyCity(l.city)}${l.province ? `, ${l.province}` : ""}` : null;
-  const badges = l.badges.filter((b) => b !== l.score.dealRating && b !== "CPO");
 
   const actions = (
     <div className="relative z-10 flex items-center">
@@ -74,65 +73,53 @@ function ListingRowImpl({ listing, rank }: { listing: ScoredListing; rank?: numb
     </div>
   );
 
+  const meta = [
+    l.mileageKm != null ? km(l.mileageKm) : "Mileage n/a",
+    l.drivetrain !== "Unknown" ? l.drivetrain : null,
+    place,
+  ].filter(Boolean) as string[];
+
   return (
     <article
       onPointerEnter={() => prefetch(l.id)}
       onFocusCapture={() => prefetch(l.id)}
-      className="group relative transition-colors hover:bg-surface2/60"
+      className="group relative transition-colors hover:bg-surface2"
     >
-      <div className="grid grid-cols-1 md:grid-cols-[56px_140px_minmax(0,1fr)_150px] md:gap-5 md:px-5 md:py-5 xl:grid-cols-[60px_168px_minmax(0,1fr)_160px]">
-        {/* Rank and score. On phones this sits on the photo instead. */}
-        <div className="hidden flex-col md:flex">
-          {rank != null && (
-            <span className="nums text-[13px] font-semibold text-faint" aria-label={`Rank ${rank}`}>
-              #{rank}
-            </span>
-          )}
-          <span className="nums display mt-1 text-[34px]" style={{ color: hex }}>
+      <div className="grid grid-cols-[64px_minmax(0,1fr)] md:grid-cols-[40px_92px_112px_minmax(0,1fr)_auto]">
+        {rank != null && (
+          <span
+            className="nums hidden items-center justify-center border-r border-line text-[13px] text-faint md:flex"
+            aria-label={`Rank ${rank}`}
+          >
+            {rank}
+          </span>
+        )}
+
+        {/* The score, boxed like a sticker field. */}
+        <div className="flex flex-col items-center justify-center border-r border-line px-1 py-3 text-center">
+          <span className="nums text-[28px] font-semibold leading-none md:text-[30px]" style={{ color: hex }}>
             {n}
           </span>
-          <span className="mt-1 text-[12px] font-semibold" style={{ color: hex }}>
+          <span className="label mt-1.5 !text-[10px]" style={{ color: hex }}>
             {scoreBand(l.score.total)}
           </span>
         </div>
 
-        <div className="relative">
+        <div className="hidden border-r border-line md:block">
           <CarPhoto
             src={l.image}
             alt=""
             ratio={null}
             width={480}
-            sizes="(max-width: 768px) 100vw, 168px"
-            className="aspect-[16/9] w-full md:aspect-[4/3] md:rounded-[10px]"
+            sizes="112px"
+            className="h-full min-h-[84px] w-full"
+            fallback={<CarSilhouette className="w-[70%] opacity-60" />}
           />
-          {/* Phone: rank and score on the photo, actions in its corner. */}
-          <div className="absolute bottom-2 left-2 flex items-end gap-1.5 md:hidden">
-            <span
-              className="nums display flex items-baseline gap-1 rounded-lg bg-surface/92 px-2 py-1.5 text-[22px] backdrop-blur-sm"
-              style={{ color: hex }}
-            >
-              {n}
-              <span className="text-[12px] font-semibold" style={{ fontStretch: "100%" }}>
-                {scoreBand(l.score.total)}
-              </span>
-            </span>
-            {rank != null && (
-              <span
-                className="nums rounded-md bg-surface/92 px-1.5 py-1 text-[12px] font-semibold text-muted backdrop-blur-sm"
-                aria-hidden
-              >
-                #{rank}
-              </span>
-            )}
-          </div>
-          <div className="absolute right-1.5 top-1.5 rounded-full bg-surface/92 backdrop-blur-sm md:hidden">
-            {actions}
-          </div>
         </div>
 
-        <div className="min-w-0 px-4 pb-1 pt-3 md:p-0">
-          <div className="flex flex-wrap items-center gap-x-2 gap-y-1.5">
-            <h3 className="wide min-w-0 max-w-full truncate text-[16px] font-bold text-text">
+        <div className="min-w-0 py-3 pl-4 pr-[108px] md:px-4">
+          <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+            <h3 className="wide min-w-0 max-w-full truncate text-[17px] text-text">
               <Link
                 to={`/listing/${l.id}`}
                 className="after:absolute after:inset-0 after:content-[''] focus-visible:outline-none"
@@ -141,65 +128,43 @@ function ListingRowImpl({ listing, rank }: { listing: ScoredListing; rank?: numb
                 {l.title}
               </Link>
             </h3>
-            <DealTag rating={l.score.dealRating} />
             {l.cpo && <Badge label="CPO" />}
             {isRecent(l.firstSeenAt) && <NewBadge />}
             {l.evap?.eligible && <EvapBadge rebateAmount={l.evap.rebateAmount} reason={l.evap.reason} />}
-            {badges.slice(0, 2).map((b) => (
-              <Badge key={b} label={b} />
-            ))}
           </div>
 
-          {/* Price, on phones only — the desktop column handles it. */}
-          <div className="mt-1.5 flex flex-wrap items-baseline gap-x-3 md:hidden">
-            <span className="nums display text-[20px] text-text">{cad(l.price)}</span>
+          <p className="nums mt-0.5 text-[12.5px] text-muted">
+            {meta.join(" · ")}
+            {mileage === "high" && <span className="font-medium text-fair"> · high km for its age</span>}
+          </p>
+
+          <p className="mt-1 line-clamp-1 text-[13.5px] text-muted">{whyLine(l, { omitPrice: true })}</p>
+
+          {/* Phone: the price sits under the title, where the right column is gone. */}
+          <div className="mt-2 flex flex-wrap items-baseline gap-x-3 md:hidden">
+            <span className="nums text-[18px] font-semibold text-text">{cad(l.price)}</span>
             <Delta savings={savings} />
-            <span className="nums text-[13px] text-muted">≈{cad(quickMonthly(l.price, l.province))}/mo</span>
           </div>
-
-          <p className="mt-1.5 line-clamp-2 text-[14px] leading-snug text-muted">{whyLine(l, { omitPrice: true })}</p>
-
-          <div className="mt-3 max-w-[360px]">
+          <div className="mt-2 max-w-[260px]">
             <ScoreStrip breakdown={l.score.breakdown} />
           </div>
+        </div>
 
-          <div className="cond mt-3 flex flex-wrap items-center gap-x-4 gap-y-1 text-[13px] text-muted">
-            <span className="nums font-semibold text-text">
-              {l.mileageKm != null ? km(l.mileageKm) : "Mileage n/a"}
-            </span>
-            {perYear && (
-              <span
-                className={`nums ${mileage === "high" ? "font-semibold text-fair" : mileage === "low" ? "text-good" : ""}`}
-                title={
-                  mileage === "high"
-                    ? "Above the distance expected for this car's age"
-                    : mileage === "low"
-                      ? "Below the distance expected for this car's age"
-                      : undefined
-                }
-              >
-                {perYear.toLocaleString("en-CA")} km a year
-              </span>
-            )}
-            {l.drivetrain !== "Unknown" && <span>{l.drivetrain}</span>}
-            {place && <span className="truncate">{place}</span>}
+        <div className="hidden flex-col items-end justify-between border-l border-line px-4 py-3 text-right md:flex">
+          <div>
+            <span className="nums block text-[20px] font-semibold text-text">{cad(l.price)}</span>
+            <Delta savings={savings} />
+            <span className="nums block text-[12.5px] text-muted">≈{cad(quickMonthly(l.price, l.province))}/mo</span>
+          </div>
+          <div className="mt-2 flex items-center gap-1">
+            <span className="mr-1 text-[12px] text-faint">{l.sourceWebsite}</span>
+            {actions}
           </div>
         </div>
-
-        <div className="hidden flex-col items-end text-right md:flex">
-          <span className="nums display text-[22px] text-text">{cad(l.price)}</span>
-          <Delta savings={savings} />
-          <span className="nums mt-1 text-[13px] text-muted">≈{cad(quickMonthly(l.price, l.province))}/mo</span>
-          <div className="mt-auto pt-3">{actions}</div>
-          <span className="mt-1 text-[12px] text-faint">
-            {l.sourceWebsite}, {timeAgo(l.firstSeenAt)}
-          </span>
-        </div>
-
-        <p className="px-4 pb-4 text-[12px] text-faint md:hidden">
-          {l.sourceWebsite}, {timeAgo(l.firstSeenAt)}
-        </p>
       </div>
+
+      {/* Phone: actions in the corner, clear of the stretched title link. */}
+      <div className="absolute right-1 top-1 md:hidden">{actions}</div>
     </article>
   );
 }

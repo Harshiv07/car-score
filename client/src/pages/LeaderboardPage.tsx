@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import {
   useListings,
@@ -6,19 +6,17 @@ import {
   useMarketMap,
   useMeta,
   usePrefetchListingPages,
-  useScrapeStatus,
 } from "../api/hooks";
 import { MarketMap } from "../components/MarketMap";
 import { FiltersSidebar } from "../components/FiltersSidebar";
 import { FilterDrawer } from "../components/FilterDrawer";
 import { ListingRow } from "../components/ListingRow";
-import { TopPickStage } from "../components/TopPickStage";
+import { TopPickCard } from "../components/TopPickCard";
 import { CompareTray } from "../components/CompareTray";
 import { Pagination } from "../components/Pagination";
 import { WakingNotice } from "../components/WakingNotice";
 import { Icon } from "../components/Icon";
-import { cad, Segmented, Select, timeAgo } from "../components/ui";
-import { gsap, useGSAP, SplitText, hasPlayed, markPlayed, prefersReducedMotion } from "../lib/motion";
+import { Segmented, Select } from "../components/ui";
 
 const DEFAULT_PAGE_SIZE = 12;
 const PAGE_SIZES = [12, 24, 48] as const;
@@ -34,10 +32,6 @@ const NON_FILTER_PARAMS = ["sort", "page", "pageSize", "view"];
 export function LeaderboardPage() {
   const [params, setParams] = useSearchParams();
   const [drawerOpen, setDrawerOpen] = useState(false);
-  // Decided once per mount: the entrance plays on the first visit of a session.
-  const [intro] = useState(() => !prefersReducedMotion() && !hasPlayed("leaderboard"));
-  useEffect(() => markPlayed("leaderboard"), []);
-  const headRef = useRef<HTMLElement>(null);
 
   const pageSize = readPageSize(params);
   const queryParams = useMemo(() => {
@@ -65,7 +59,6 @@ export function LeaderboardPage() {
   const { data: mapData, isLoading: mapLoading } = useMarketMap(mapParams, view === "map");
   const { data: meta } = useMeta();
   const { data: stats } = useListingStats();
-  const { data: scrape } = useScrapeStatus();
 
   // Stable identity so the memoised sidebar doesn't redraw on every result.
   const setParam = useCallback(
@@ -103,76 +96,25 @@ export function LeaderboardPage() {
   const rest = hero ? listings.slice(1) : listings;
   const sortLabel = meta?.sortOptions.find((o) => o.key === sort)?.label.toLowerCase() ?? "best score";
 
-  // The page's one entrance: the headline rises line by line out of a mask.
-  useGSAP(
-    () => {
-      if (!intro || !headRef.current) return;
-      const h1 = headRef.current.querySelector("h1")!;
-      SplitText.create(h1, {
-        type: "lines",
-        mask: "lines",
-        autoSplit: true,
-        onSplit: (self) =>
-          gsap.from(self.lines, { yPercent: 105, duration: 0.9, ease: "power4.out", stagger: 0.09 }),
-      });
-      gsap.from(headRef.current.querySelectorAll("[data-after-head]"), {
-        opacity: 0,
-        duration: 0.6,
-        delay: 0.45,
-        stagger: 0.08,
-      });
-    },
-    { scope: headRef, dependencies: [intro] }
-  );
-
   return (
-    <div className="mx-auto max-w-[1240px] px-4 pb-10 pt-8 sm:px-6 sm:pt-12">
-      <header ref={headRef}>
-        <h1 className="display max-w-[15ch] text-[clamp(2.5rem,6.4vw,5.25rem)] text-text">
-          Which used car should you actually look at first?
-        </h1>
-
-        <div className={`mt-8 grid gap-8 ${hero ? "lg:grid-cols-[minmax(0,4fr)_minmax(0,8fr)] lg:gap-10" : ""}`}>
-          <div className={hero ? "" : "grid gap-6 md:grid-cols-[minmax(0,1fr)_auto] md:items-start"}>
-            <p data-after-head className="max-w-[46ch] text-[17px] leading-relaxed text-muted">
-              Every listing is scored out of 100 on reliability, real market value, winter capability and what it
-              costs to run. The ranking reflects the car, not the asking price.
+    <div className="mx-auto max-w-[1240px] px-4 pb-10 pt-6 sm:px-6 sm:pt-8">
+      <header>
+        <div className="flex flex-wrap items-baseline justify-between gap-x-6 gap-y-1">
+          <h1 className="display text-[26px]">Best used cars</h1>
+          {stats ? (
+            <p className="nums text-[12.5px] text-muted">
+              {stats.totalListings.toLocaleString("en-CA")} cars · {stats.excellentDeals.toLocaleString("en-CA")} excellent
             </p>
-
-            {/* Provenance, in one sentence rather than a grid of stat tiles. */}
-            <div data-after-head className={`${hero ? "mt-8" : "md:max-w-[34ch]"} text-[15px] leading-relaxed text-muted`}>
-              {stats ? (
-                <>
-                  <p>
-                    <Figure>{stats.totalListings.toLocaleString("en-CA")}</Figure> cars from{" "}
-                    <Figure>{stats.sourcesActive}</Figure> sources, <Figure>{stats.excellentDeals.toLocaleString("en-CA")}</Figure>{" "}
-                    of them rated excellent.
-                    {scrape?.lastScrapeTime && <> Last refreshed {timeAgo(scrape.lastScrapeTime)}.</>}
-                  </p>
-                  {stats.bestSavings > 0 && (
-                    <p className="mt-3 border-t border-line pt-3">
-                      Best find right now:{" "}
-                      <Figure className="text-good">{cad(stats.bestSavings)}</Figure> under market
-                      {stats.bestSavingsTitle && <span className="block text-[13px] text-faint">{stats.bestSavingsTitle}</span>}
-                    </p>
-                  )}
-                </>
-              ) : (
-                <div className="h-16 animate-pulse rounded-lg bg-surface" />
-              )}
-            </div>
-          </div>
-
-          {hero && (
-            <TopPickStage
-              listing={hero}
-              meta={meta}
-              total={data?.totalUnfiltered ?? 0}
-              filtered={isFiltered}
-              intro={intro}
-            />
+          ) : (
+            <span className="h-4 w-56 animate-pulse bg-surface" aria-hidden />
           )}
         </div>
+
+        {hero && (
+          <div className="mt-4">
+            <TopPickCard listing={hero} meta={meta} filtered={isFiltered} />
+          </div>
+        )}
       </header>
 
       <div className="mt-14 grid grid-cols-1 gap-10 lg:grid-cols-[248px_minmax(0,1fr)]">
@@ -310,7 +252,7 @@ export function LeaderboardPage() {
           )}
 
           {view === "list" && rest.length > 0 && (
-            <div className="row-list divide-y divide-line overflow-hidden rounded-[var(--radius-card)] border border-line bg-surface">
+            <div className="row-list sticker divide-y divide-line">
               {rest.map((l, i) => (
                 <ListingRow key={l.id} listing={l} rank={(page - 1) * pageSize + i + 1 + (hero ? 1 : 0)} />
               ))}
@@ -353,6 +295,3 @@ export function LeaderboardPage() {
   );
 }
 
-function Figure({ children, className = "text-text" }: { children: React.ReactNode; className?: string }) {
-  return <strong className={`nums font-bold ${className}`}>{children}</strong>;
-}

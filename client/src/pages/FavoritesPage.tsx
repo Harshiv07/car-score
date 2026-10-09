@@ -67,7 +67,7 @@ export function FavoritesPage() {
         )}
 
         {saved.length > 0 && (
-          <div className="row-list divide-y divide-line overflow-hidden rounded-[var(--radius-card)] border border-line bg-surface">
+          <div className="row-list sticker divide-y divide-line">
             {[...saved]
               .sort((a, b) => b.score.total - a.score.total)
               .map((l) => (

@@ -1,6 +1,6 @@
 import { useEffect } from "react";
 import { Link } from "react-router-dom";
-import { CarSilhouette } from "../components/Stage";
+import { CarSilhouette } from "../components/CarSilhouette";
 
 /** A dead link still gets a way back: the ranking, or the buying guide. */
 export function NotFoundPage() {

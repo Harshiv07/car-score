@@ -6,11 +6,15 @@
 
 import { test, expect } from "@playwright/test";
 
-test("leaderboard renders its thesis, provenance line and filters", async ({ page }) => {
+test("leaderboard renders a small title, one meta line and filters", async ({ page }) => {
   await page.goto("/");
-  await expect(page.locator("header").getByText("CARSCORE")).toBeVisible();
-  await expect(page.getByRole("heading", { level: 1 })).toContainText(/look at first/i);
-  await expect(page.getByText(/listings/).first()).toBeVisible();
+  await expect(page.locator("header").getByText("CarScore")).toBeVisible();
+  const h1 = page.getByRole("heading", { level: 1 });
+  await expect(h1).toHaveText("Best used cars");
+  // A title, not a billboard: no larger than the type scale's page-title size.
+  const size = await h1.evaluate((el) => parseFloat(getComputedStyle(el).fontSize));
+  expect(size).toBeLessThanOrEqual(30);
+  await expect(page.getByText(/\d cars · \d+ excellent/)).toBeVisible();
   await expect(page.getByLabel("Brand")).toBeVisible();
 });
 

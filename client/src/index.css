@@ -3,25 +3,23 @@
 @custom-variant dark (&:where(.dark, .dark *));
 
 /*
- * CarScore — "winter daylight".
+ * CarScore: the window sticker.
  *
- * The app is for first-time buyers in Canada, and the setting it borrows from
- * is a dealer lot on a clear February morning: cold, bright, salt-white air
- * (frost, not cream), asphalt-blue ink, and one colour you can't miss — the
- * hi-vis orange of a snowplough. Orange does exactly two jobs: it marks the
- * thing you can do next, and it marks the number-one car. Everything else
- * earns its colour from data.
+ * Every car on a lot wears one: white stock, black ink, ruled boxes, one spot
+ * colour, a number in a box. CarScore is the sticker the dealer didn't print, so
+ * it borrows the artifact: square ruled panels on a cool grey desk, set in IBM
+ * Plex (Condensed for headings and labels, Sans for reading, Mono for every
+ * figure). Ink does the work; the spot orange marks the one thing you can do
+ * next (and only that). Score bands keep their own four colours, and every band
+ * is also named in words, never colour alone.
  *
- * Score bands have their own four-step scale (spruce, lake, amber, brake),
- * and they read the same everywhere. Night mode keeps the same roles on a
- * night-highway blue-black.
- *
- * One family, Archivo, used across its width axis: wide and heavy for
- * headlines, scores and prices, the way automotive badging is set; normal
- * width for reading; slightly condensed for dense data.
+ * Night mode is the same sticker printed on a dark desk: the stock goes
+ * charcoal, the ink goes paper-white, the rules stay hard.
  */
 @theme {
-  --font-sans: "Archivo Variable", "Archivo", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-sans: "IBM Plex Sans", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-cond: "IBM Plex Sans Condensed", "IBM Plex Sans", ui-sans-serif, system-ui, sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace;
 
   --color-bg: var(--bg);
   --color-bg-deep: var(--bg-deep);
@@ -29,6 +27,7 @@
   --color-surface2: var(--surface-2);
   --color-line: var(--line);
   --color-line-strong: var(--line-strong);
+  --color-rule: var(--rule);
   --color-text: var(--text);
   --color-muted: var(--muted);
   --color-faint: var(--faint);
@@ -41,49 +40,59 @@
   --color-bad: var(--bad);
   --color-info: var(--strong);
 
-  --radius-card: 14px;
+  /* Stickers are cut square. A hair of radius so corners aren't razor-sharp on screen. */
+  --radius-xs: 1px;
+  --radius-sm: 1px;
+  --radius-md: 2px;
+  --radius-lg: 2px;
+  --radius-xl: 3px;
+  --radius-2xl: 3px;
+  --radius-3xl: 4px;
+  --radius-card: 0px;
 }
 
 :root {
-  --bg: #eef2f5;
-  --bg-deep: #dfe6ec;
-  --surface: #ffffff;
-  --surface-2: #f4f7f9;
-  --line: #d6dee5;
-  --line-strong: #aab7c2;
-  --text: #16212b;
-  --muted: #4d5b68;
-  --faint: #5f6c78;
+  --bg: #d7dde2; /* the desk */
+  --bg-deep: #c8d0d6;
+  --surface: #ffffff; /* the stock */
+  --surface-2: #f1f4f6;
+  --line: #c5ccd2; /* hairline rules inside a sticker */
+  --line-strong: #8a949d; /* control borders */
+  --rule: #14171a; /* the sticker's outline and hard rules */
+  --text: #14171a;
+  --muted: #455059;
+  --faint: #4f5b66;
 
-  --accent: #f26419;
-  --accent-ink: #b5410a;
-  --on-accent: #16212b;
-  --paint: #e9581b;
+  --accent: #e4501c; /* spot orange */
+  --accent-ink: #b8400f; /* the same, dark enough to read as text on white */
+  --on-accent: #14171a;
+  --paint: #e4501c;
   --clay: #dfe5ea;
 
-  --good: #0b7a55;
-  --strong: #2259a0;
-  --fair: #8f5a05;
-  --bad: #ba3628;
+  --good: #0a7a4f;
+  --strong: #1f56b3;
+  --fair: #8a5604;
+  --bad: #b3261e;
 
-  --shadow: 0 1px 2px rgb(22 33 43 / 0.06), 0 8px 24px -12px rgb(22 33 43 / 0.18);
+  --shadow: 0 1px 0 rgb(20 23 26 / 0.06), 0 14px 22px -16px rgb(20 23 26 / 0.45);
   color-scheme: light;
 }
 
 .dark {
-  --bg: #0e151c;
-  --bg-deep: #0a1016;
-  --surface: #151f28;
-  --surface-2: #1a2631;
-  --line: #24323e;
-  --line-strong: #3a4b5a;
-  --text: #e6edf2;
-  --muted: #9aa8b4;
-  --faint: #7d8b97;
+  --bg: #0f1316;
+  --bg-deep: #0a0d10;
+  --surface: #171c20;
+  --surface-2: #1d2328;
+  --line: #2a3238;
+  --line-strong: #56626d;
+  --rule: #cdd5db;
+  --text: #e8edf0;
+  --muted: #a3afb8;
+  --faint: #8c99a3;
 
-  --accent: #ff7a33;
-  --accent-ink: #ff8f52;
-  --on-accent: #0e151c;
+  --accent: #ff6a2e;
+  --accent-ink: #ff8a57;
+  --on-accent: #14171a;
   --paint: #f0631f;
   --clay: #7b8794;
 
@@ -92,7 +101,7 @@
   --fair: #e2a33e;
   --bad: #f2735f;
 
-  --shadow: 0 1px 2px rgb(0 0 0 / 0.3), 0 12px 32px -16px rgb(0 0 0 / 0.6);
+  --shadow: 0 1px 0 rgb(0 0 0 / 0.4), 0 16px 26px -18px rgb(0 0 0 / 0.7);
   color-scheme: dark;
 }
 
@@ -125,35 +134,62 @@ p {
 @layer components {
 /* ---- type ------------------------------------------------------------------ */
 
-/* Wide and heavy: headlines, scores, prices. */
+/* Headings, scores, prices: Plex Condensed, bold. Never larger than 6rem; page
+   titles are set small on purpose (see DESIGN.md). */
 .display {
-  font-stretch: 125%;
-  font-weight: 800;
-  letter-spacing: -0.025em;
-  line-height: 0.98;
+  font-family: var(--font-cond);
+  font-weight: 700;
+  letter-spacing: 0;
+  line-height: 1.05;
 }
-/* A notch wide: titles and sub-heads. */
+/* Titles and sub-heads. */
 .wide {
-  font-stretch: 112%;
-  letter-spacing: -0.01em;
+  font-family: var(--font-cond);
+  font-weight: 700;
+  letter-spacing: 0.005em;
 }
-/* A notch narrow: dense data and small labels. */
+/* Dense data and small labels. */
 .cond {
-  font-stretch: 88%;
+  font-family: var(--font-cond);
 }
 
+/* Every figure on the page is Plex Mono, tabular: scores, prices, kilometres. */
 .nums {
+  font-family: var(--font-mono);
   font-variant-numeric: tabular-nums;
   font-feature-settings: "tnum";
 }
 
-/* Small field labels: sentence case, never shouted. */
+/* Small field labels, the sticker's box captions: condensed, spaced, quiet. */
 .label {
   display: block;
-  font-size: 13px;
+  font-family: var(--font-cond);
+  font-size: 11.5px;
   font-weight: 600;
-  font-stretch: 92%;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
   color: var(--muted);
+}
+
+/* A sticker panel: stock, hard ink outline, soft contact shadow. */
+.sticker {
+  background: var(--surface);
+  border: 2px solid var(--rule);
+  box-shadow: var(--shadow);
+}
+/* The black caption bar across a sticker's top. */
+.sticker-bar {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  background: var(--rule);
+  color: var(--surface);
+  padding: 7px 14px;
+  font-family: var(--font-cond);
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
 }
 
 /* ---- controls ------------------------------------------------------------- */
@@ -163,12 +199,19 @@ p {
   align-items: center;
   justify-content: center;
   gap: 0.5rem;
-  border-radius: 10px;
-  padding: 0.65rem 1.1rem;
+  min-height: 44px;
+  border: 2px solid var(--rule);
+  border-radius: 0;
+  padding: 0.55rem 1.1rem;
+  font-family: var(--font-cond);
   font-size: 14px;
   font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
   line-height: 1.2;
-  transition: background-color 0.15s ease, border-color 0.15s ease, color 0.15s ease, transform 0.1s ease;
+  background: var(--surface);
+  color: var(--text);
+  transition: background-color 0.15s ease, color 0.15s ease, transform 0.1s ease;
 }
 .btn:active {
   transform: translateY(1px);
@@ -184,14 +227,13 @@ p {
   color: var(--on-accent);
 }
 .btn-primary:hover {
-  background: color-mix(in oklab, var(--accent) 88%, var(--text));
+  background: color-mix(in oklab, var(--accent) 86%, var(--rule));
 }
 .btn-ghost {
-  border: 1px solid var(--line-strong);
-  color: var(--text);
+  background: var(--surface);
 }
 .btn-ghost:hover {
-  border-color: var(--text);
+  background: var(--surface-2);
 }
 
 .link {
@@ -261,6 +303,39 @@ p {
   box-shadow: 0 0 0 2px var(--on-accent), 0 0 0 6px color-mix(in oklab, var(--accent) 35%, transparent);
 }
 
+}
+
+/* ---- the ink bar ------------------------------------------------------------ */
+
+/* The black caption strip across the top of the page. It remaps the colour
+   tokens locally, so anything placed in it (nav, refresh, theme switch) reads
+   as light-on-ink without each component knowing. */
+.site-bar {
+  --text: #f2f5f7;
+  --muted: #c4ccd2;
+  --faint: #a6b0b8;
+  --line: #2f373d;
+  --line-strong: #56626d;
+  --surface: #14171a;
+  --surface-2: #222a30;
+  --accent-ink: #ff8a57;
+  /* Tailwind's colour utilities read these, and they were resolved at :root, so
+     the remap has to be repeated on them or `text-text` stays dark-on-dark. */
+  --color-text: #f2f5f7;
+  --color-muted: #c4ccd2;
+  --color-faint: #a6b0b8;
+  --color-line: #2f373d;
+  --color-line-strong: #56626d;
+  --color-surface: #14171a;
+  --color-surface2: #222a30;
+  --color-accent-ink: #ff8a57;
+  background: #14171a;
+  color: #f2f5f7;
+}
+.dark .site-bar {
+  background: #0a0d10;
+  --surface: #0a0d10;
+  --color-surface: #0a0d10;
 }
 
 /* ---- focus, skip link, scrollbars ---------------------------------------- */

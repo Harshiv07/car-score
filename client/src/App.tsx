@@ -27,6 +27,7 @@ function useIdleRoutePrefetch() {
 import { RefreshControl } from "./components/RefreshControl";
 import { ScrollManager } from "./components/ScrollManager";
 import { Icon } from "./components/Icon";
+import { ScoreMark } from "./components/Logo";
 import { useFavorites } from "./hooks/useFavorites";
 
 const THEME_KEY = "carscore:v2:theme";
@@ -64,28 +65,14 @@ function ThemeSwitch({ dark, onToggle }: { dark: boolean; onToggle: () => void }
 }
 
 /**
- * The wordmark carries a tiny composition strip — the same ten segments every
- * score is drawn with, so the brand mark and the product's one idea are the
- * same picture.
+ * The wordmark: the wheel-as-score mark and the name. It takes its colour from
+ * where it sits (ink bar, paper stock), so it is one component for both.
  */
 export function Wordmark() {
-  const segs = [20, 20, 15, 10, 10, 10, 5, 5, 3, 2];
   return (
     <span className="flex items-center gap-2.5">
-      <span className="flex h-[9px] w-[30px] gap-[1.5px]" aria-hidden>
-        {segs.map((w, i) => (
-          <span
-            key={i}
-            className="h-full first:rounded-l-[2px] last:rounded-r-[2px]"
-            style={{
-              flexGrow: w,
-              flexBasis: 0,
-              backgroundColor: i === 0 ? "var(--accent)" : i === 7 ? "var(--line-strong)" : "var(--text)",
-            }}
-          />
-        ))}
-      </span>
-      <span className="display text-[19px] tracking-[-0.03em] text-text">CarScore</span>
+      <ScoreMark size={26} />
+      <span className="display text-[20px] leading-none">CarScore</span>
     </span>
   );
 }
@@ -103,7 +90,7 @@ function NavItem({ to, label, end, count }: { to: string; label: string; end: bo
       to={to}
       end={end}
       className={({ isActive }) =>
-        `group relative shrink-0 px-3 py-2 text-[14px] font-semibold transition-colors ${
+        `cond group relative shrink-0 px-3 py-2.5 text-[13px] font-semibold uppercase tracking-[0.1em] transition-colors ${
           isActive ? "text-text" : "text-muted hover:text-text"
         }`
       }
@@ -113,7 +100,7 @@ function NavItem({ to, label, end, count }: { to: string; label: string; end: bo
           {label}
           {count ? <span className="nums ml-1 text-[12px] font-bold text-accent-ink">{count}</span> : null}
           <span
-            className={`absolute inset-x-3 -bottom-px h-[2px] rounded-full bg-accent transition-transform duration-200 ${
+            className={`absolute inset-x-3 bottom-0 h-[3px] bg-accent transition-transform duration-200 ${
               isActive ? "scale-x-100" : "scale-x-0 group-hover:scale-x-50"
             }`}
             aria-hidden
@@ -138,14 +125,14 @@ export default function App() {
         Skip to content
       </a>
 
-      <header className="sticky top-0 z-30 border-b border-line bg-bg/92 backdrop-blur-md">
+      <header className="site-bar sticky top-0 z-30">
         <div className="relative mx-auto max-w-[1240px] px-4 sm:px-6">
-          <div className="flex h-16 items-center gap-4">
+          <div className="flex h-14 items-center gap-4">
             <NavLink to="/" aria-label="CarScore home" className="shrink-0">
               <Wordmark />
             </NavLink>
 
-            <nav aria-label="Primary" className="ml-4 hidden h-16 items-stretch md:flex">
+            <nav aria-label="Primary" className="ml-4 hidden h-14 items-stretch md:flex">
               {TABS.map((t) => (
                 <div key={t.to} className="flex items-center">
                   <NavItem {...t} count={t.to === "/favorites" ? count : undefined} />

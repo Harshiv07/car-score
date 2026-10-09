@@ -42,6 +42,7 @@ export function CarPhoto({
   className = "",
   priority = false,
   quiet = false,
+  fallback,
 }: {
   src: string | null | undefined;
   alt: string;
@@ -52,6 +53,8 @@ export function CarPhoto({
   priority?: boolean;
   /** Glyph only when there's no photo; for thumbnails under ~150px wide. */
   quiet?: boolean;
+  /** Shown instead of the generic "no photo" glyph when there is no image or it fails to load. */
+  fallback?: React.ReactNode;
 }) {
   const [state, setState] = useState<"loading" | "ready" | "failed">(src ? "loading" : "failed");
 
@@ -84,7 +87,12 @@ export function CarPhoto({
         />
       )}
 
-      {state === "failed" && <NoPhoto quiet={quiet} />}
+      {state === "failed" &&
+        (fallback ? (
+          <div className="absolute inset-0 grid place-items-center bg-surface2 px-6">{fallback}</div>
+        ) : (
+          <NoPhoto quiet={quiet} />
+        ))}
     </div>
   );
 }
