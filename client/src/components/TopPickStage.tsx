@@ -54,7 +54,6 @@ function TopPickStageImpl({
     >
       <div className="flex items-start justify-between gap-4 px-5 pt-5 sm:px-6 sm:pt-6">
         <p id="toppick-heading" className="text-[14px] font-semibold text-text">
-          <span className="mr-2 inline-block h-2.5 w-2.5 rounded-full bg-accent align-[1px]" aria-hidden />
           {filtered ? "Best match for your filters" : `Number one of ${total.toLocaleString("en-CA")}`}
         </p>
         {l.image && (

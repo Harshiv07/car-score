@@ -27,7 +27,7 @@ export function Pagination({
   return (
     <nav className="mt-8 flex flex-col items-center gap-3 sm:flex-row sm:justify-between" aria-label="Pagination">
       <p className="nums text-[13px] text-faint">
-        Showing {from.toLocaleString("en-CA")}–{to.toLocaleString("en-CA")} of {total.toLocaleString("en-CA")}
+        Showing {from.toLocaleString("en-CA")}-{to.toLocaleString("en-CA")} of {total.toLocaleString("en-CA")}
       </p>
       <div className="flex items-center gap-1">
         <button className={`${btn} ${idle}`} disabled={page <= 1} onClick={() => onPage(page - 1)} aria-label="Previous page">

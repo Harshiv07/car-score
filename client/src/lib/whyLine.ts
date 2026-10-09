@@ -78,7 +78,7 @@ export function whyLine(l: ScoredListing, opts: { omitPrice?: boolean } = {}): s
   let sentence = joinParts(parts);
 
   // One honest caveat, so the line isn't pure salesmanship.
-  if (worst && WEAKNESSES[worst.key]) sentence += ` — but ${WEAKNESSES[worst.key]}`;
+  if (worst && WEAKNESSES[worst.key]) sentence += `, but ${WEAKNESSES[worst.key]}`;
 
   return capitalize(sentence) + ".";
 }

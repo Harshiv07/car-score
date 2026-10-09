@@ -20,7 +20,7 @@ interface Pattern {
 
 const PATTERNS: Pattern[] = [
   { label: "Even", cause: "Correctly inflated and aligned. This is what you want.", depths: [1, 1, 1, 1, 1], tone: "good" },
-  { label: "Worn in the centre", cause: "Over-inflated — the middle of the tread carries the load. Cheap to correct, but check the others match.", depths: [1, 0.8, 0.35, 0.8, 1], tone: "warn" },
+  { label: "Worn in the centre", cause: "Over-inflated: the middle of the tread carries the load. Cheap to correct, but check the others match.", depths: [1, 0.8, 0.35, 0.8, 1], tone: "warn" },
   { label: "Worn at both edges", cause: "Under-inflated, often for a long time. Also ask whether it has been driven low enough to damage a sidewall.", depths: [0.35, 0.75, 1, 0.75, 0.35], tone: "warn" },
   { label: "Worn on one side", cause: "Alignment or worn suspension. The alignment is cheap; the suspension part that caused it is not.", depths: [0.3, 0.55, 0.8, 0.95, 1], tone: "bad" },
 ];
@@ -57,10 +57,10 @@ export function TyreWear() {
 /* ---- where rust starts --------------------------------------------------- */
 
 const RUST = [
-  { x: 24, y: 68, label: "Rocker panels", note: "Below the doors — salt sits here" },
+  { x: 24, y: 68, label: "Rocker panels", note: "Below the doors: salt sits here" },
   { x: 33, y: 60, label: "Wheel arch lips", note: "Front arches go first" },
   { x: 70, y: 62, label: "Rear arches", note: "Behind the rear wheels" },
-  { x: 50, y: 84, label: "Subframe & floor", note: "Structural — a walk-away" },
+  { x: 50, y: 84, label: "Subframe & floor", note: "Structural: a walk-away" },
   { x: 84, y: 46, label: "Tailgate & boot well", note: "Water pools where the spare lives" },
   { x: 14, y: 44, label: "Under the doors", note: "Open them and look at the underside" },
 ];
@@ -108,10 +108,10 @@ export function RustMap() {
 const SERVICE = [
   { when: "Every fill-up", items: ["Glance at the tyres", "Top up washer fluid"], accent: "var(--muted)" },
   { when: "Monthly", items: ["Tyre pressures when cold", "Oil level on level ground", "Every light works"], accent: "var(--muted)" },
-  { when: "8,000–12,000 km", items: ["Oil and filter", "Rotate the tyres", "Cabin and engine air filters as needed"], accent: "var(--text)" },
+  { when: "8,000-12,000 km", items: ["Oil and filter", "Rotate the tyres", "Cabin and engine air filters as needed"], accent: "var(--text)" },
   { when: "Twice a year", items: ["Swap winter and summer tyres", "Wash the underbody after salt season", "Check brake pads"], accent: "var(--text)" },
   { when: "Every 2 years", items: ["Brake fluid", "Coolant condition", "Battery load test"], accent: "var(--strong)" },
-  { when: "By the book", items: ["Timing belt if the engine has one — a missed belt destroys the engine", "Transmission fluid", "Spark plugs"], accent: "var(--bad)" },
+  { when: "By the book", items: ["Timing belt if the engine has one: a missed belt destroys the engine", "Transmission fluid", "Spark plugs"], accent: "var(--bad)" },
 ];
 
 export function ServiceTimeline() {

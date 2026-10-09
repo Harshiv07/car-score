@@ -156,3 +156,10 @@ test("saved-cars page shows the empty state", async ({ page }) => {
   await expect(page.getByText("Nothing saved yet")).toBeVisible();
   await expect(page.getByRole("link", { name: /browse the leaderboard/i })).toBeVisible();
 });
+
+test("an unknown address shows the not-found page with a way back", async ({ page }) => {
+  await page.goto("/this/does/not/exist");
+  await expect(page.getByRole("heading", { name: "Nothing at this address" })).toBeVisible();
+  await page.getByRole("link", { name: "Back to the ranking" }).click();
+  await expect(page).toHaveURL(/\/$/);
+});

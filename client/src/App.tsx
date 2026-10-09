@@ -7,6 +7,7 @@ import { DetailPage } from "./pages/DetailPage";
 const FavoritesPage = lazy(() => import("./pages/FavoritesPage").then((m) => ({ default: m.FavoritesPage })));
 const NewCarsPage = lazy(() => import("./pages/NewCarsPage").then((m) => ({ default: m.NewCarsPage })));
 const ComparePage = lazy(() => import("./pages/ComparePage").then((m) => ({ default: m.ComparePage })));
+const NotFoundPage = lazy(() => import("./pages/NotFoundPage").then((m) => ({ default: m.NotFoundPage })));
 const GuidePage = lazy(() => import("./pages/GuidePage").then((m) => ({ default: m.GuidePage })));
 import { RefreshControl } from "./components/RefreshControl";
 import { ScrollManager } from "./components/ScrollManager";
@@ -160,6 +161,7 @@ export default function App() {
               <Route path="/guide" element={<GuidePage />} />
               <Route path="/compare" element={<ComparePage />} />
               <Route path="/listing/:id" element={<DetailPage />} />
+              <Route path="*" element={<NotFoundPage />} />
             </Routes>
           </Suspense>
         </div>

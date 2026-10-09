@@ -187,33 +187,33 @@ export function GuidePage() {
             <div className="rounded-[var(--radius-card)] border border-line bg-surface p-5">
               <CostRow
                 label="Sales tax"
-                amount="5–15%"
+                amount="5-15%"
                 note="Depends on province. In Ontario, 13% HST on the purchase price."
               />
               <CostRow
                 label="Safety inspection certificate"
-                amount="$80–150"
+                amount="$80-150"
                 note="Required to register a used car in most provinces."
               />
               <CostRow
                 label="Insurance"
-                amount="$150–400 / mo"
+                amount="$150-400 / mo"
                 note="A new driver pays the most. Get a real quote on the exact VIN before you commit."
               />
-              <CostRow label="Registration and plates" amount="$60–200" note="One-off, plus annual renewal." />
+              <CostRow label="Registration and plates" amount="$60-200" note="One-off, plus annual renewal." />
               <CostRow
                 label="Pre-purchase inspection"
-                amount="$100–200"
+                amount="$100-200"
                 note="The best money in this entire list. Details below."
               />
               <CostRow
                 label="Winter tyres"
-                amount="$600–1,200"
+                amount="$600-1,200"
                 note="Not optional in most of Canada. Legally required in Quebec."
               />
               <CostRow
                 label="First service and repairs"
-                amount="$300–800"
+                amount="$300-800"
                 note="Assume the previous owner deferred something. They usually did."
               />
             </div>
@@ -238,7 +238,7 @@ export function GuidePage() {
               <Card title="Get an insurance quote first">
                 <p>
                   On the exact year, make, model and trim. Insurance for a new driver can cost more per year than the
-                  car does, and some models — anything with a sporty badge — are dramatically worse. Finding this out
+                  car does, and some models, anything with a sporty badge, are dramatically worse. Finding this out
                   after you've paid is the expensive order to do it in.
                 </p>
               </Card>
@@ -290,7 +290,7 @@ export function GuidePage() {
             <div className="mt-6 rounded-r-[var(--radius-card)] border-l-[3px] border-fair bg-surface p-5">
               <p className="text-[15px] leading-relaxed text-text">
                 <span className="font-bold">A listing site is not a seller.</span> AutoTrader and CarGurus are
-                noticeboards — a listing there can be a franchised dealer, an independent lot, or someone in a driveway,
+                noticeboards: a listing there can be a franchised dealer, an independent lot, or someone in a driveway,
                 and the column that applies to you changes completely between them. This app shows the source it found a
                 car on, which is not the same as who is selling it, so the first question on the phone is:{" "}
                 <span className="font-semibold text-text">are you a registered dealer, or a private seller?</span>
@@ -303,7 +303,7 @@ export function GuidePage() {
             id="certified"
             eyebrow="04"
             title="Three different things are called &ldquo;certified&rdquo;"
-            lede="This single word does more damage than any other in a used-car advert, because a seller can say it and mean any of the following — and none of them means what a first buyer assumes."
+            lede="This single word does more damage than any other in a used-car advert, because a seller can say it and mean any of the following, and none of them means what a first buyer assumes."
           >
             <CertifiedMeanings />
 
@@ -348,10 +348,10 @@ export function GuidePage() {
           >
             <TyreWear />
             <p className="mt-5 max-w-[62ch] text-[15px] leading-relaxed text-muted">
-              Also check the date. Every tyre carries a four-digit code on the sidewall —{" "}
+              Also check the date. Every tyre carries a four-digit code on the sidewall:{" "}
               <span className="nums font-semibold text-text">3223</span> means the 32nd week of 2023. Rubber hardens
               with age regardless of tread depth, and anything past about six years should be replaced whatever it looks
-              like. Four tyres on a small car runs $600–900 fitted, so this is a real negotiating number, not a detail.
+              like. Four tyres on a small car runs $600-900 fitted, so this is a real negotiating number, not a detail.
             </p>
           </Section>
 
@@ -387,7 +387,7 @@ export function GuidePage() {
             id="drive"
             eyebrow="08"
             title="The test drive"
-            lede="Twenty minutes, with the radio off, on roads you choose — not the loop the seller suggests. You are listening, not enjoying it."
+            lede="Twenty minutes, with the radio off, on roads you choose, not the loop the seller suggests. You are listening, not enjoying it."
           >
             <div className="grid gap-x-8 gap-y-8 sm:grid-cols-2">
               <Card title="From cold, before you move">
@@ -405,13 +405,13 @@ export function GuidePage() {
               <Card title="Steering and suspension">
                 <p>
                   On a straight, flat road, briefly loosen your grip. Drifting to one side means alignment at best. Over
-                  bumps, listen for knocks or clunks — those are suspension components, and they are labour.
+                  bumps, listen for knocks or clunks. Those are suspension components, and they are labour.
                 </p>
               </Card>
               <Card title="Transmission">
                 <p>
                   An automatic should shift without lurching or hesitating, including on the downshift as you slow. A
-                  manual should not slip when you accelerate in a high gear. Try reverse — a whine only in reverse is
+                  manual should not slip when you accelerate in a high gear. Try reverse: a whine only in reverse is
                   worth asking about.
                 </p>
               </Card>
@@ -423,7 +423,7 @@ export function GuidePage() {
               </Card>
               <Card title="After you park">
                 <p>
-                  Leave it idling and look underneath for fresh drips. Then switch it off and restart it warm — a car
+                  Leave it idling and look underneath for fresh drips. Then switch it off and restart it warm: a car
                   that starts cold but struggles warm has its own set of problems.
                 </p>
               </Card>
@@ -441,13 +441,13 @@ export function GuidePage() {
               <Card title="Match the VIN in three places">
                 <p>
                   The dashboard by the windscreen, the sticker in the driver's door jamb, and the ownership document.
-                  All three must be identical. A mismatch means the car is not what the paperwork says it is — stop
+                  All three must be identical. A mismatch means the car is not what the paperwork says it is: stop
                   there.
                 </p>
               </Card>
               <Card title="The seller's name must be on the ownership">
                 <p>
-                  If the name doesn't match the person selling it, you are dealing with a curbsider — someone flipping
+                  If the name doesn't match the person selling it, you are dealing with a curbsider: someone flipping
                   cars privately while posing as a regular owner, without the obligations of a dealer. It is illegal in
                   most provinces and you have almost no recourse.
                 </p>
@@ -461,7 +461,7 @@ export function GuidePage() {
               <Card title="Safety standards certificate">
                 <p>
                   Needed to register and plate the car in most provinces. Agree in advance who pays for it and who fixes
-                  whatever it fails on — this is a common surprise bill.
+                  whatever it fails on. This is a common surprise bill.
                 </p>
               </Card>
               <Card title="Odometer versus wear">
@@ -483,13 +483,13 @@ export function GuidePage() {
           <Section id="ppi" eyebrow="10" title="Pay a mechanic before you pay the seller">
             <div className="rounded-r-[var(--radius-card)] border-l-[3px] border-accent bg-surface p-6 sm:p-8">
               <p className="text-[17px] leading-relaxed text-text">
-                A pre-purchase inspection costs <span className="nums font-bold text-text">$100–200</span> at an
-                independent shop — not the seller's mechanic, and not the dealer selling it. They put it on a hoist,
+                A pre-purchase inspection costs <span className="nums font-bold text-text">$100-200</span> at an
+                independent shop, not the seller's mechanic, and not the dealer selling it. They put it on a hoist,
                 which is the only way anyone sees the things that actually end a car.
               </p>
               <p className="mt-4 text-[15px] leading-relaxed text-muted">
                 It is the highest-return money in the whole process. Either it finds nothing and you buy with
-                confidence, or it finds something and you have a written estimate to negotiate with — or a reason to
+                confidence, or it finds something and you have a written estimate to negotiate with, or a reason to
                 walk. Spending $150 to avoid a $3,000 transmission is not a close call.
               </p>
               <p className="mt-4 text-[15px] leading-relaxed text-muted">
@@ -516,7 +516,7 @@ export function GuidePage() {
               </Card>
               <Card title="Know the market number">
                 <p>
-                  This is what the leaderboard's market comparison is for — what similar cars actually list for, not
+                  This is what the leaderboard's market comparison is for: what similar cars actually list for, not
                   what one seller hopes. Arriving with a real comparable is worth more than any tactic.
                 </p>
               </Card>
@@ -548,7 +548,7 @@ export function GuidePage() {
                 "The seller's name isn't on the ownership.",
                 "There's a lien on the vehicle that they won't clear before sale.",
                 "You're refused an independent inspection.",
-                "Structural rust — flaking or holes in frame rails, subframes or mounting points.",
+                "Structural rust: flaking or holes in frame rails, subframes or mounting points.",
                 "Milky oil, or coolant and oil mixing anywhere.",
                 "A warning light that never illuminates at all when you turn the key.",
                 "The odometer reading conflicts with the history report or the wear.",

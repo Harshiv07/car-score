@@ -92,7 +92,7 @@ export function RefreshControl() {
           onClick={() => setOpen((v) => !v)}
           aria-expanded={open}
           aria-haspopup="dialog"
-          aria-label={`Data freshness — ${statusText}`}
+          aria-label={`Data freshness: ${statusText}`}
           title="Data freshness"
           className="flex h-9 min-w-9 items-center justify-center gap-2 rounded-full px-2.5 text-[13px] font-semibold text-muted transition-colors hover:bg-surface2 hover:text-text"
         >

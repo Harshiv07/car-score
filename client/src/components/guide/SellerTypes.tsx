@@ -52,7 +52,7 @@ const TYPES: SellerType[] = [
       { label: "Compensation fund", answer: "yes", note: "Same protection as any registered dealer." },
       { label: "Must disclose history", answer: "yes", note: "Plus a published inspection report and photos of cosmetic flaws." },
       { label: "Safety certificate", answer: "yes", note: "Delivered road-ready and registerable; they handle the paperwork." },
-      { label: "Manufacturer CPO available", answer: "no", note: "\"Clutch Certified\" is their own programme — 210-point inspection, not a factory one." },
+      { label: "Manufacturer CPO available", answer: "no", note: "\"Clutch Certified\" is their own programme: a 210-point inspection, not a factory one." },
       { label: "Independent inspection still worth it", answer: "yes", note: "Use the return window for it. 10 days or 750 km, and a 90-day/6,000 km warranty on major systems." },
     ],
   },
@@ -60,7 +60,7 @@ const TYPES: SellerType[] = [
     key: "private",
     name: "Private seller",
     who: "An individual selling their own car. Cheapest, and entirely on you.",
-    sources: "Many AutoTrader.ca listings — check each one",
+    sources: "Many AutoTrader.ca listings: check each one",
     accent: "var(--bad)",
     rows: [
       { label: "Regulated seller", answer: "no", note: "No regulator has jurisdiction. If it goes wrong, your only route is civil court." },
@@ -141,7 +141,7 @@ const CERTIFIED = [
   },
   {
     term: "Certified Pre-Owned (CPO)",
-    what: "A manufacturer programme at a franchised dealer of that brand — a longer inspection plus extended factory warranty.",
+    what: "A manufacturer programme at a franchised dealer of that brand, with a longer inspection plus extended factory warranty.",
     covers: "A multi-point inspection and real warranty cover",
     notCovers: "Only applies to that brand, and only to newer, lower-mileage cars",
     life: "Warranty runs months or years",
@@ -152,7 +152,7 @@ const CERTIFIED = [
     what: "A retailer's own programme. Real, but it is the seller's standard rather than a regulator's or a manufacturer's.",
     covers: "210-point inspection, 90-day/6,000 km warranty, 10-day return",
     notCovers: "Not a factory warranty, and not a legal standard",
-    life: "Return window is short — use it",
+    life: "Return window is short, so use it",
     accent: "var(--strong)",
   },
 ];

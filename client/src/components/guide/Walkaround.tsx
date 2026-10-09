@@ -35,7 +35,7 @@ const SPOTS: Spot[] = [
     y: 55,
     title: "Panel gaps and paint",
     look: "Crouch at each end and sight down the side. Gaps between panels should stay the same width the whole way along, and the colour should stay the same as it moves from wing to door.",
-    bad: "A gap that widens, a door that sits proud, or paint that shifts shade in daylight means panels have been off — usually accident repair the seller hasn't mentioned.",
+    bad: "A gap that widens, a door that sits proud, or paint that shifts shade in daylight means panels have been off, usually accident repair the seller hasn't mentioned.",
   },
   {
     id: "rust-arch",
@@ -52,7 +52,7 @@ const SPOTS: Spot[] = [
     x: 75,
     y: 70,
     title: "Tyres",
-    look: "All four should match in brand and wear. Press a coin into the tread — under 4mm and they need replacing soon. Check the four-digit date code on the sidewall.",
+    look: "All four should match in brand and wear. Press a coin into the tread: under 4mm and they need replacing soon. Check the four-digit date code on the sidewall.",
     bad: "Uneven wear points at alignment or suspension trouble. Tyres over six years old are hard regardless of tread. Four new tyres on a cheap car can be $800.",
   },
   {
@@ -62,7 +62,7 @@ const SPOTS: Spot[] = [
     y: 52,
     title: "Under the hood, engine cold",
     look: "Oil on the dipstick should be brown, not black sludge or milky. Coolant should be coloured and clean. Look for crust around the battery terminals and dampness around hoses.",
-    bad: "Milky oil can mean coolant getting where it shouldn't — a head gasket, and a bill worth more than the car. Insist the engine is cold when you arrive; a warm one hides cold-start problems.",
+    bad: "Milky oil can mean coolant getting where it shouldn't: a head gasket, and a bill worth more than the car. Insist the engine is cold when you arrive; a warm one hides cold-start problems.",
   },
   {
     id: "glass",
@@ -70,7 +70,7 @@ const SPOTS: Spot[] = [
     x: 63,
     y: 37,
     title: "Glass and lights",
-    look: "Windscreen chips in the driver's line of sight, and whether every bulb works — have someone press the brake while you stand behind.",
+    look: "Windscreen chips in the driver's line of sight, and whether every bulb works: have someone press the brake while you stand behind.",
     bad: "A chip spreads in a Canadian winter and can fail a safety inspection. Foggy headlight lenses are cheap to fix but tell you the car has lived outside.",
   },
   {
@@ -80,7 +80,7 @@ const SPOTS: Spot[] = [
     y: 37,
     title: "Inside, before you start it",
     look: "Turn the key to accessory: every warning light should come on, then go out when it starts. Test the heat, the air conditioning, every window and the wipers.",
-    bad: "A warning light that never illuminates has usually been disconnected. A damp or musty smell means water is getting in — check under the carpet and in the boot well.",
+    bad: "A warning light that never illuminates has usually been disconnected. A damp or musty smell means water is getting in. Check under the carpet and in the boot well.",
   },
   {
     id: "underneath",

@@ -112,6 +112,16 @@ body {
   overflow-x: hidden;
 }
 
+/* Headlines break evenly; paragraphs avoid a single orphaned word. */
+h1,
+h2,
+h3 {
+  text-wrap: balance;
+}
+p {
+  text-wrap: pretty;
+}
+
 @layer components {
 /* ---- type ------------------------------------------------------------------ */
 
