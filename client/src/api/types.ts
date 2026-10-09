@@ -196,6 +196,9 @@ export interface NewCarsResponse {
   cars: NewCar[];
   fetchedAt: string | null;
   loading: boolean;
+  /** YYYY-MM-DD the curated prices are as of. */
+  pricesAsOf?: string;
+  priceNote?: string;
 }
 
 export interface ScrapeProgress {

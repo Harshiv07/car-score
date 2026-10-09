@@ -2,7 +2,7 @@ import { useMemo, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import { useNewCars } from "../api/hooks";
 import { NewCar } from "../api/types";
-import { cad, ScoreChip, timeAgo } from "../components/ui";
+import { cad, ScoreChip } from "../components/ui";
 import { Icon } from "../components/Icon";
 import { WakingNotice } from "../components/WakingNotice";
 
@@ -92,9 +92,10 @@ export function NewCarsPage() {
         </div>
       )}
 
-      {data?.fetchedAt && (
+      {data?.pricesAsOf && (
         <p className="mt-10 text-center text-[13px] text-faint">
-          From official manufacturer sites, updated {timeAgo(data.fetchedAt)}
+          Prices as of {new Date(`${data.pricesAsOf}T12:00:00`).toLocaleDateString("en-CA", { month: "long", year: "numeric" })}.{" "}
+          {data.priceNote ?? "MSRP in CAD, before freight, PDI and taxes."}
         </p>
       )}
     </div>

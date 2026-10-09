@@ -1,0 +1,233 @@
+{
+  "_comment": "Curated new-car lineup for Canada. Edit by hand; server/src/newcars/catalog.ts validates it at boot and fails loudly on bad data. RULES: priceCad is a number ONLY where a source explicitly states a Canadian MSRP (CAD, before freight, PDI and taxes unless the source says otherwise). Anything unconfirmed is null and the site shows 'See official site'. Never copy a US price, a dealer 'from' price, or a fee-inclusive 'drive-away' price into priceCad. Trim lists hold only trims a source named; an empty list means the lineup exists but no trustworthy price was found. Fuel economy (L/100 km) and EV range (km) are filled only where a source stated them.",
+  "pricesAsOf": "2026-10-09",
+  "currency": "CAD",
+  "priceNote": "MSRP in CAD, before freight, PDI and taxes. Dealer fees and incentives vary.",
+  "models": [
+    {
+      "make": "Toyota", "model": "Corolla", "year": 2026, "bodyType": "Compact sedan", "bodyGroup": "Sedan", "seats": 5,
+      "officialUrl": "https://www.toyota.ca/toyota/en/vehicles/corolla/overview", "image": null,
+      "priceSource": "Auto123 (Toyota Canada MSRP)",
+      "trims": [
+        { "name": "L", "priceCad": 24520, "powertrain": "Gas", "drivetrain": "FWD" },
+        { "name": "LE", "priceCad": 25700, "powertrain": "Gas", "drivetrain": "FWD" },
+        { "name": "SE", "priceCad": 27260, "powertrain": "Gas", "drivetrain": "FWD" },
+        { "name": "XSE", "priceCad": 32840, "powertrain": "Gas", "drivetrain": "FWD" },
+        { "name": "Hybrid LE", "priceCad": 27740, "powertrain": "Hybrid", "drivetrain": "FWD" }
+      ]
+    },
+    {
+      "make": "Toyota", "model": "Camry", "year": 2026, "bodyType": "Midsize sedan", "bodyGroup": "Sedan", "seats": 5,
+      "officialUrl": "https://www.toyota.ca/toyota/en/vehicles/camry/overview",
+      "image": "https://toyotacanada.scene7.com/is/image/toyotacanada/toyota-2026-features-hero-camry-xse-heavy-metal-s",
+      "priceSource": "Auto123 (Toyota Canada launch pricing)",
+      "trims": [
+        { "name": "SE", "priceCad": 34575, "powertrain": "Hybrid", "drivetrain": "FWD" },
+        { "name": "SE Upgrade", "priceCad": 36625, "powertrain": "Hybrid", "drivetrain": "FWD" },
+        { "name": "SE Upgrade AWD", "priceCad": 38270, "powertrain": "Hybrid", "drivetrain": "AWD" },
+        { "name": "Nightshade", "priceCad": 39397, "powertrain": "Hybrid", "drivetrain": "AWD" },
+        { "name": "XLE", "priceCad": 45225, "powertrain": "Hybrid", "drivetrain": "AWD" },
+        { "name": "XSE", "priceCad": 45330, "powertrain": "Hybrid", "drivetrain": "AWD" }
+      ]
+    },
+    {
+      "make": "Toyota", "model": "RAV4", "year": 2026, "bodyType": "Compact SUV", "bodyGroup": "SUV", "seats": 5,
+      "officialUrl": "https://www.toyota.ca/toyota/en/vehicles/rav4/overview",
+      "image": "https://toyotacanada.scene7.com/is/image/toyotacanada/toyota-2026-hero-rav4-limited-storm-cloud-l",
+      "priceSource": "Toyota Canada release and Auto123 (all-hybrid 2026 lineup)",
+      "trims": [
+        { "name": "LE", "priceCad": 37500, "powertrain": "Hybrid", "drivetrain": "AWD" },
+        { "name": "XLE", "priceCad": 41300, "powertrain": "Hybrid", "drivetrain": "AWD" },
+        { "name": "XLE Premium", "priceCad": 43800, "powertrain": "Hybrid", "drivetrain": "AWD" },
+        { "name": "Woodland", "priceCad": 47000, "powertrain": "Hybrid", "drivetrain": "AWD" },
+        { "name": "XSE", "priceCad": 50900, "powertrain": "Hybrid", "drivetrain": "AWD" },
+        { "name": "Limited", "priceCad": 52000, "powertrain": "Hybrid", "drivetrain": "AWD" },
+        { "name": "XSE Technology", "priceCad": 52450, "powertrain": "Hybrid", "drivetrain": "AWD" }
+      ]
+    },
+    {
+      "make": "Toyota", "model": "RAV4 Plug-in Hybrid", "year": 2026, "bodyType": "Compact SUV", "bodyGroup": "SUV", "seats": 5,
+      "officialUrl": "https://www.toyota.ca", "image": null,
+      "priceSource": "Auto123 (Toyota Canada MSRP)",
+      "trims": [
+        { "name": "SE", "priceCad": 48750, "powertrain": "Plug-in hybrid", "drivetrain": "AWD" },
+        { "name": "XSE", "priceCad": 56400, "powertrain": "Plug-in hybrid", "drivetrain": "AWD" },
+        { "name": "GR Sport", "priceCad": 57500, "powertrain": "Plug-in hybrid", "drivetrain": "AWD" },
+        { "name": "XSE Technology", "priceCad": 59350, "powertrain": "Plug-in hybrid", "drivetrain": "AWD" }
+      ]
+    },
+    {
+      "make": "Toyota", "model": "bZ", "year": 2026, "bodyType": "Compact SUV", "bodyGroup": "SUV", "seats": 5,
+      "officialUrl": "https://www.toyota.ca", "image": null,
+      "priceSource": "Auto123, Electric Autonomy (before freight and destination)",
+      "trims": [
+        { "name": "XLE FWD", "priceCad": 45990, "powertrain": "Electric", "drivetrain": "FWD" },
+        { "name": "XLE AWD", "priceCad": 53390, "powertrain": "Electric", "drivetrain": "AWD" },
+        { "name": "Limited AWD", "priceCad": 61690, "powertrain": "Electric", "drivetrain": "AWD" }
+      ]
+    },
+
+    {
+      "make": "Honda", "model": "Civic", "year": 2026, "bodyType": "Compact sedan", "bodyGroup": "Sedan", "seats": 5,
+      "officialUrl": "https://www.honda.ca/en/civic_sedan", "image": null,
+      "priceSource": "No Canadian MSRP confirmed (sources quote fee-inclusive prices)",
+      "trims": []
+    },
+    {
+      "make": "Honda", "model": "Accord", "year": 2026, "bodyType": "Midsize sedan", "bodyGroup": "Sedan", "seats": 5,
+      "officialUrl": "https://www.honda.ca/en/accord", "image": null,
+      "priceSource": "Guide Auto (Honda Canada MSRP)",
+      "trims": [
+        { "name": "SE", "priceCad": 38500, "powertrain": "Gas", "drivetrain": "FWD" },
+        { "name": "Sport-L Hybrid", "priceCad": 43700, "powertrain": "Hybrid", "drivetrain": "FWD", "fuelEconomyL100": 5.3 },
+        { "name": "Touring Hybrid", "priceCad": 46200, "powertrain": "Hybrid", "drivetrain": "FWD", "fuelEconomyL100": 5.3 }
+      ]
+    },
+    {
+      "make": "Honda", "model": "CR-V", "year": 2026, "bodyType": "Compact SUV", "bodyGroup": "SUV", "seats": 5,
+      "officialUrl": "https://www.honda.ca/en/crv", "image": null,
+      "priceSource": "No Canadian MSRP confirmed (sources disagree or quote fee-inclusive prices)",
+      "trims": []
+    },
+
+    {
+      "make": "Mazda", "model": "Mazda3", "year": 2026, "bodyType": "Compact sedan", "bodyGroup": "Sedan", "seats": 5,
+      "officialUrl": "https://www.mazda.ca/en/vehicles/mazda3/", "image": null,
+      "priceSource": "Mazda Canada release (4 Dec 2025)",
+      "trims": [
+        { "name": "Starting trim (sedan)", "priceCad": 25250, "powertrain": "Gas", "drivetrain": null },
+        { "name": "Sport (hatchback), starting", "priceCad": 26000, "powertrain": "Gas", "drivetrain": null },
+        { "name": "Top trim, AWD Turbo GT", "priceCad": 39200, "powertrain": "Gas", "drivetrain": "AWD" }
+      ]
+    },
+    {
+      "make": "Mazda", "model": "CX-30", "year": 2026, "bodyType": "Subcompact SUV", "bodyGroup": "SUV", "seats": 5,
+      "officialUrl": "https://www.mazda.ca", "image": null,
+      "priceSource": "Auto123 (Mazda Canada MSRP)",
+      "trims": [
+        { "name": "Starting trim", "priceCad": 29300, "powertrain": "Gas", "drivetrain": null },
+        { "name": "GT Kuro Turbo", "priceCad": 41350, "powertrain": "Gas", "drivetrain": null }
+      ]
+    },
+    {
+      "make": "Mazda", "model": "CX-5", "year": 2026, "bodyType": "Compact SUV", "bodyGroup": "SUV", "seats": 5,
+      "officialUrl": "https://www.mazda.ca/en/vehicles/cx-5/", "image": null,
+      "priceSource": "Auto123 (Mazda Canada MSRP, all-new generation)",
+      "trims": [
+        { "name": "GX", "priceCad": 36300, "powertrain": "Gas", "drivetrain": null },
+        { "name": "GS", "priceCad": 39200, "powertrain": "Gas", "drivetrain": null },
+        { "name": "GT", "priceCad": 42200, "powertrain": "Gas", "drivetrain": null }
+      ]
+    },
+    {
+      "make": "Mazda", "model": "CX-50", "year": 2026, "bodyType": "Compact SUV", "bodyGroup": "SUV", "seats": 5,
+      "officialUrl": "https://www.mazda.ca/en/vehicles/cx-50/", "image": null,
+      "priceSource": "No Canadian MSRP confirmed; Guide Auto reports limited availability in Canada",
+      "trims": []
+    },
+    {
+      "make": "Mazda", "model": "CX-90", "year": 2026, "bodyType": "Midsize SUV", "bodyGroup": "SUV", "seats": 7,
+      "officialUrl": "https://www.mazda.ca", "image": null,
+      "priceSource": "Mazda Canada release (Dec 2025): starting MSRP",
+      "trims": [
+        { "name": "Starting trim", "priceCad": 47100, "powertrain": "Gas", "drivetrain": null }
+      ]
+    },
+
+    {
+      "make": "Hyundai", "model": "Venue", "year": 2026, "bodyType": "Subcompact SUV", "bodyGroup": "SUV", "seats": 5,
+      "officialUrl": "https://www.hyundaicanada.com/en/showroom/venue", "image": null,
+      "priceSource": "Hyundai Canada (MSRP plus additional fees)",
+      "trims": [
+        { "name": "Gas", "priceCad": 21999, "powertrain": "Gas", "drivetrain": "FWD" }
+      ]
+    },
+    {
+      "make": "Hyundai", "model": "Elantra", "year": 2026, "bodyType": "Compact sedan", "bodyGroup": "Sedan", "seats": 5,
+      "officialUrl": "https://www.hyundaicanada.com/en/showroom/elantra", "image": null,
+      "priceSource": "Hyundai Canada (MSRP plus additional fees)",
+      "trims": [
+        { "name": "Gas", "priceCad": 23499, "powertrain": "Gas", "drivetrain": "FWD" },
+        { "name": "Hybrid", "priceCad": 31999, "powertrain": "Hybrid", "drivetrain": "FWD" },
+        { "name": "N", "priceCad": 40949, "powertrain": "Gas", "drivetrain": "FWD" }
+      ]
+    },
+    {
+      "make": "Hyundai", "model": "Sonata", "year": 2026, "bodyType": "Midsize sedan", "bodyGroup": "Sedan", "seats": 5,
+      "officialUrl": "https://www.hyundaicanada.com/en/showroom/sonata", "image": null,
+      "priceSource": "Hyundai Canada (MSRP plus additional fees)",
+      "trims": [
+        { "name": "Gas", "priceCad": 36099, "powertrain": "Gas", "drivetrain": "FWD" },
+        { "name": "Hybrid", "priceCad": 36199, "powertrain": "Hybrid", "drivetrain": "FWD" },
+        { "name": "N Line", "priceCad": 40699, "powertrain": "Gas", "drivetrain": "FWD" }
+      ]
+    },
+    {
+      "make": "Hyundai", "model": "Kona", "year": 2026, "bodyType": "Subcompact SUV", "bodyGroup": "SUV", "seats": 5,
+      "officialUrl": "https://www.hyundaicanada.com/en/showroom/kona", "image": null,
+      "priceSource": "Hyundai Canada (MSRP plus additional fees)",
+      "trims": [
+        { "name": "Gas", "priceCad": 26749, "powertrain": "Gas", "drivetrain": null },
+        { "name": "Electric", "priceCad": 43999, "powertrain": "Electric", "drivetrain": null }
+      ]
+    },
+    {
+      "make": "Hyundai", "model": "Tucson", "year": 2026, "bodyType": "Compact SUV", "bodyGroup": "SUV", "seats": 5,
+      "officialUrl": "https://www.hyundaicanada.com/en/showroom/tucson", "image": null,
+      "priceSource": "Hyundai Canada (MSRP plus additional fees)",
+      "trims": [
+        { "name": "Gas", "priceCad": 35499, "powertrain": "Gas", "drivetrain": null },
+        { "name": "Hybrid", "priceCad": 44399, "powertrain": "Hybrid", "drivetrain": null },
+        { "name": "Plug-in hybrid", "priceCad": 53299, "powertrain": "Plug-in hybrid", "drivetrain": null }
+      ]
+    },
+    {
+      "make": "Hyundai", "model": "Santa Fe", "year": 2026, "bodyType": "Midsize SUV", "bodyGroup": "SUV", "seats": null,
+      "officialUrl": "https://www.hyundaicanada.com/en/showroom/santa-fe", "image": null,
+      "priceSource": "Hyundai Canada (MSRP plus additional fees; hybrid)",
+      "trims": [
+        { "name": "Hybrid", "priceCad": 43799, "powertrain": "Hybrid", "drivetrain": null }
+      ]
+    },
+    {
+      "make": "Hyundai", "model": "Ioniq 5", "year": 2026, "bodyType": "Compact SUV", "bodyGroup": "SUV", "seats": 5,
+      "officialUrl": "https://www.hyundaicanada.com/en/showroom/ioniq-5", "image": null,
+      "priceSource": "Hyundai Canada (MSRP plus additional fees)",
+      "trims": [
+        { "name": "Starting trim", "priceCad": 55499, "powertrain": "Electric", "drivetrain": null }
+      ]
+    },
+
+    {
+      "make": "Subaru", "model": "Forester", "year": 2026, "bodyType": "Compact SUV", "bodyGroup": "SUV", "seats": 5,
+      "officialUrl": "https://www.subaru.ca/en/vehicles/forester", "image": null,
+      "priceSource": "CarCostCanada and dealer listing agree on the Convenience MSRP",
+      "trims": [
+        { "name": "Convenience", "priceCad": 34195, "powertrain": "Gas", "drivetrain": "AWD" }
+      ]
+    },
+    {
+      "make": "Subaru", "model": "Crosstrek", "year": 2026, "bodyType": "Subcompact SUV", "bodyGroup": "SUV", "seats": 5,
+      "officialUrl": "https://www.subaru.ca/en/vehicles/crosstrek", "image": null,
+      "priceSource": "No Canadian MSRP confirmed (only a third-party range)",
+      "trims": []
+    },
+    {
+      "make": "Subaru", "model": "Outback", "year": 2026, "bodyType": "Midsize SUV", "bodyGroup": "SUV", "seats": 5,
+      "officialUrl": "https://www.subaru.ca/en/vehicles/outback", "image": null,
+      "priceSource": "Auto123 (Subaru Canada MSRP)",
+      "trims": [
+        { "name": "Touring", "priceCad": 43563, "powertrain": "Gas", "drivetrain": "AWD" },
+        { "name": "Limited XT", "priceCad": 50863, "powertrain": "Gas", "drivetrain": "AWD" }
+      ]
+    },
+    {
+      "make": "Subaru", "model": "Solterra", "year": 2026, "bodyType": "Compact SUV", "bodyGroup": "SUV", "seats": 5,
+      "officialUrl": "https://www.subaru.ca", "image": null,
+      "priceSource": "Auto123 (Subaru Canada MSRP)",
+      "trims": [
+        { "name": "Starting trim", "priceCad": 52495, "powertrain": "Electric", "drivetrain": "AWD" }
+      ]
+    }
+  ]
+}
