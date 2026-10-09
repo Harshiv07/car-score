@@ -58,7 +58,14 @@ ReactDOM.createRoot(document.getElementById("root") as HTMLElement).render(
           // per-listing detail is prefetched on hover anyway.
           shouldDehydrateQuery: (q) => {
             const root = q.queryKey[0];
-            return q.state.status === "success" && (root === "listings" || root === "listingStats" || root === "meta");
+            if (q.state.status !== "success") return false;
+            // An empty inventory (a cold database, a failed crawl) is never worth
+            // restoring: it would paint "No listings yet" over a lot that has since
+            // been filled.
+            const data = q.state.data as { totalUnfiltered?: number; totalListings?: number } | undefined;
+            if (root === "listings" && !data?.totalUnfiltered) return false;
+            if (root === "listingStats" && !data?.totalListings) return false;
+            return root === "listings" || root === "listingStats" || root === "meta";
           },
         },
       }}

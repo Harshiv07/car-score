@@ -124,32 +124,28 @@ export function LeaderboardPage() {
               costs to run. The ranking reflects the car, not the asking price.
             </p>
 
-            {/* Provenance, as a spec list. */}
-            <dl data-after-head className={`grid grid-cols-2 gap-x-6 gap-y-4 ${hero ? "mt-8" : "md:min-w-[420px]"} text-[14px]`}>
+            {/* Provenance, in one sentence rather than a grid of stat tiles. */}
+            <div data-after-head className={`${hero ? "mt-8" : "md:max-w-[34ch]"} text-[15px] leading-relaxed text-muted`}>
               {stats ? (
                 <>
-                  <Spec label="Listings scored" value={stats.totalListings.toLocaleString("en-CA")} />
-                  <Spec label="Sources crawled" value={String(stats.sourcesActive)} />
-                  <Spec label="Rated excellent" value={stats.excellentDeals.toLocaleString("en-CA")} />
-                  <Spec
-                    label="Last refreshed"
-                    value={scrape?.lastScrapeTime ? timeAgo(scrape.lastScrapeTime) : "Never"}
-                  />
+                  <p>
+                    <Figure>{stats.totalListings.toLocaleString("en-CA")}</Figure> cars from{" "}
+                    <Figure>{stats.sourcesActive}</Figure> sources, <Figure>{stats.excellentDeals.toLocaleString("en-CA")}</Figure>{" "}
+                    of them rated excellent.
+                    {scrape?.lastScrapeTime && <> Last refreshed {timeAgo(scrape.lastScrapeTime)}.</>}
+                  </p>
                   {stats.bestSavings > 0 && (
-                    <div className="col-span-2 border-t border-line pt-4">
-                      <dt className="label">Best find right now</dt>
-                      <dd className="mt-1 text-text">
-                        <span className="nums display text-[22px] text-good">{cad(stats.bestSavings)}</span>{" "}
-                        <span className="text-muted">under market</span>
-                        {stats.bestSavingsTitle && <span className="block text-[13px] text-faint">{stats.bestSavingsTitle}</span>}
-                      </dd>
-                    </div>
+                    <p className="mt-3 border-t border-line pt-3">
+                      Best find right now:{" "}
+                      <Figure className="text-good">{cad(stats.bestSavings)}</Figure> under market
+                      {stats.bestSavingsTitle && <span className="block text-[13px] text-faint">{stats.bestSavingsTitle}</span>}
+                    </p>
                   )}
                 </>
               ) : (
-                <div className="col-span-2 h-24 animate-pulse rounded-lg bg-surface" />
+                <div className="h-16 animate-pulse rounded-lg bg-surface" />
               )}
-            </dl>
+            </div>
           </div>
 
           {hero && (
@@ -342,11 +338,6 @@ export function LeaderboardPage() {
   );
 }
 
-function Spec({ label, value }: { label: string; value: string }) {
-  return (
-    <div>
-      <dt className="label">{label}</dt>
-      <dd className="nums display mt-1 text-[22px] text-text">{value}</dd>
-    </div>
-  );
+function Figure({ children, className = "text-text" }: { children: React.ReactNode; className?: string }) {
+  return <strong className={`nums font-bold ${className}`}>{children}</strong>;
 }

@@ -239,6 +239,8 @@ p {
 /* The cyclorama behind the 3D car: a floor that fades into the wall. */
 .studio {
   background:
+    /* Fine grain, so the stage reads as a painted wall rather than a flat gradient. */
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 .09 0 0 0 0 .13 0 0 0 0 .17 0 0 0 .055 0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E"),
     radial-gradient(120% 70% at 50% 78%, var(--surface) 0%, transparent 60%),
     linear-gradient(to bottom, var(--bg-deep), var(--bg) 70%);
 }
