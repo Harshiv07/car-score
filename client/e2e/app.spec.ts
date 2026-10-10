@@ -58,6 +58,22 @@ test("no horizontal overflow at any common width", async ({ page }) => {
   }
 });
 
+test("no page overflows sideways on a phone", async ({ page }) => {
+  // The Guide once rendered 1,300px wide in a 380px screen because its scrolling
+  // contents strip sat in a grid cell that could not shrink. Every route is checked.
+  for (const route of ["/", "/new-cars", "/guide", "/favorites", "/compare", "/no-such-page"]) {
+    for (const width of [320, 390]) {
+      await page.setViewportSize({ width, height: 800 });
+      await page.goto(route);
+      await page.waitForLoadState("networkidle");
+      const overflow = await page.evaluate(
+        () => document.documentElement.scrollWidth - document.documentElement.clientWidth
+      );
+      expect(overflow, `${route} overflows at ${width}px`).toBeLessThanOrEqual(0);
+    }
+  }
+});
+
 test("no text is rendered below 10px", async ({ page }) => {
   // The score's "/100" label was 8px, with a further 40-odd elements at 10px.
   await page.setViewportSize({ width: 390, height: 844 });
@@ -146,7 +162,7 @@ test("theme switch toggles night mode and remembers it", async ({ page }) => {
 
 test("guide walkaround steps through its stops", async ({ page }) => {
   await page.goto("/guide");
-  await expect(page.getByRole("heading", { level: 1 })).toContainText(/how to buy a car/i, { timeout: 15_000 });
+  await expect(page.getByRole("heading", { level: 1 })).toHaveText("Buying a used car", { timeout: 15_000 });
   await expect(page.getByText("Stop 1 of 7")).toBeVisible();
   await page.getByRole("button", { name: "Next stop" }).click();
   await expect(page.getByText("Stop 2 of 7")).toBeVisible();

@@ -24,12 +24,7 @@ export function NewCarsPage() {
   return (
     <div className="mx-auto max-w-[1240px] px-4 pb-12 pt-8 sm:px-6 sm:pt-12">
       <div>
-        <h1 className="display text-[clamp(2.25rem,5vw,3.75rem)] text-text">New cars</h1>
-        <p className="mt-3 max-w-[58ch] text-[16px] leading-relaxed text-muted">
-          This year's lineups from the manufacturers' Canadian sites: starting MSRP, powertrain and specs. Worth a
-          look before you settle on used, because a new car's warranty and financing rates can close more of the
-          price gap than you'd expect.
-        </p>
+        <h1 className="display text-[26px]">New cars</h1>
       </div>
 
       {byMake.length > 0 && (

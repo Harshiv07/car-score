@@ -48,7 +48,7 @@ function TopPickCardImpl({
       </div>
 
       <div className="grid lg:grid-cols-[5fr_7fr]">
-        <div className="border-b-2 border-rule lg:border-b-0 lg:border-r-2">
+        <div className="border-b border-line-strong lg:border-b-0 lg:border-r">
           <CarPhoto
             src={l.image}
             alt={l.title}
@@ -62,20 +62,20 @@ function TopPickCardImpl({
         </div>
 
         <div className="grid grid-cols-[minmax(0,1fr)_auto]">
-          <div className="border-b border-rule px-4 py-3 sm:px-5">
+          <div className="border-b border-line px-4 py-3 sm:px-5">
             <h2 className="display text-[26px] sm:text-[30px]">
               <Link to={`/listing/${l.id}`} className="hover:text-accent-ink">
                 {l.title}
               </Link>
             </h2>
-            <p className="nums mt-1 text-[12px] uppercase tracking-[0.04em] text-muted">
+            <p className="nums mt-1 text-[12px] tracking-[0.02em] text-muted">
               {[l.mileageKm != null ? `${l.mileageKm.toLocaleString("en-CA")} km` : null, l.drivetrain !== "Unknown" ? l.drivetrain : null]
                 .filter(Boolean)
                 .join(" · ")}
             </p>
           </div>
 
-          <div className="row-span-2 grid min-w-[104px] place-items-center border-b border-l border-rule px-3 py-3 text-center sm:min-w-[148px]">
+          <div className="row-span-2 grid min-w-[104px] place-items-center border-b border-l border-line px-3 py-3 text-center sm:min-w-[148px]">
             <div>
               <CountUp
                 value={l.score.total}
@@ -88,7 +88,7 @@ function TopPickCardImpl({
             </div>
           </div>
 
-          <dl className="grid grid-cols-2 gap-x-6 gap-y-3 border-b border-rule px-4 py-3 sm:flex sm:flex-wrap sm:gap-x-8 sm:px-5">
+          <dl className="grid grid-cols-2 gap-x-6 gap-y-3 border-b border-line px-4 py-3 sm:flex sm:flex-wrap sm:gap-x-8 sm:px-5">
             <Field label="Asking">
               <span className="nums text-[26px] font-semibold leading-none">{cad(l.price)}</span>
             </Field>
@@ -106,7 +106,7 @@ function TopPickCardImpl({
             </Field>
           </dl>
 
-          <ul className="col-span-2 divide-y divide-line border-b border-rule" aria-label="Score breakdown">
+          <ul className="col-span-2 divide-y divide-line border-b border-line" aria-label="Score breakdown">
             {cats.map((c) => (
               <Category key={c.key} c={c} />
             ))}
@@ -154,8 +154,8 @@ function Category({ c }: { c: ScoreCategory }) {
   return (
     <li className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-x-4 px-4 py-1.5 text-[13px] sm:grid-cols-[minmax(0,1fr)_minmax(0,1.1fr)_84px] sm:px-5">
       <span className={weak ? "font-semibold text-bad" : ""}>{c.label}</span>
-      <span className="hidden h-2 bg-line sm:block" aria-hidden>
-        <span className="block h-full" style={{ width: `${frac * 100}%`, background: weak ? "var(--bad)" : "var(--text)" }} />
+      <span className="hidden h-2 overflow-hidden rounded-full bg-line sm:block" aria-hidden>
+        <span className="block h-full rounded-full" style={{ width: `${frac * 100}%`, background: weak ? "var(--bad)" : "var(--text)" }} />
       </span>
       <span className="nums whitespace-nowrap text-right">
         {round(c.points)} / {c.max}

@@ -36,11 +36,8 @@ export function FavoritesPage() {
 
   return (
     <div className="mx-auto max-w-[1240px] px-4 pb-12 pt-8 sm:px-6 sm:pt-12">
-      <h1 className="display text-[clamp(2.25rem,5vw,3.75rem)] text-text">Saved cars</h1>
-      <p className="mt-3 text-[15px] text-muted">
-        Kept in this browser, no account needed.
-        {saved.length > 0 ? ` ${saved.length} saved, best score first.` : ""}
-      </p>
+      <h1 className="display text-[26px]">Saved cars</h1>
+      {saved.length > 0 && <p className="nums mt-1 text-[12.5px] text-muted">{saved.length} saved in this browser</p>}
 
       <div className="mt-8">
         {isLoading && ids.length > 0 && (

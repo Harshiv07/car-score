@@ -97,7 +97,7 @@ export function DetailPage() {
             {l.evap?.eligible && <EvapBadge rebateAmount={l.evap.rebateAmount} reason={l.evap.reason} />}
           </div>
 
-          <h1 className="wide mt-3 text-[clamp(1.75rem,3.4vw,2.6rem)] font-extrabold leading-[1.08] text-text">{l.title}</h1>
+          <h1 className="wide mt-3 text-[clamp(1.5rem,3vw,1.9rem)] leading-[1.1] text-text">{l.title}</h1>
           <p className="mt-2 text-[15px] text-muted">{place || "Private or aggregator listing"}</p>
 
           {/* The verdict, stated as a measurement: it counts up as you arrive. */}

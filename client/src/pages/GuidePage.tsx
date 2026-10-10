@@ -130,28 +130,17 @@ export function GuidePage() {
 
   return (
     <div ref={rootRef} className="mx-auto max-w-[1240px] px-4 pb-16 sm:px-6">
-      <header className="pb-12 pt-10 sm:pt-16">
-        <p className="text-[15px] font-semibold text-accent-ink">The first-car guide</p>
-        <h1 className="display mt-4 max-w-[14ch] text-[clamp(2.75rem,7vw,5.75rem)] text-text">
-          Nobody teaches you how to buy a car.
-        </h1>
-        <div className="mt-8 grid gap-6 md:grid-cols-2">
-          <p className="max-w-[56ch] text-[17px] leading-relaxed text-muted">
-            A score tells you which cars are worth your time. It can't stand in a parking lot with you while someone
-            waits for an answer. This is the other half: what to look at, in what order, what the findings mean, and
-            which ones are worth walking away over.
-          </p>
-          <p className="max-w-[56ch] text-[15px] leading-relaxed text-faint">
-            Written for a first buyer in Canada, so it assumes road salt, winter tyres and provincial paperwork. None of
-            it replaces an independent mechanic. It's what gets you to the point of paying for one, on a car worth
-            inspecting.
-          </p>
-        </div>
+      <header className="pb-8 pt-6 sm:pt-8">
+        <h1 className="display text-[26px]">Buying a used car</h1>
+        <p className="mt-2 max-w-[56ch] text-[15px] text-muted">
+          What to check, in order, written for a first buyer in Canada. It doesn't replace an independent mechanic.
+        </p>
       </header>
 
-      <div className="grid gap-10 lg:grid-cols-[220px_minmax(0,1fr)] lg:gap-14">
-        {/* Contents: the buying process in order, so numbered. */}
-        <nav aria-label="On this page" className="lg:sticky lg:top-24 lg:self-start">
+      <div className="grid grid-cols-[minmax(0,1fr)] gap-10 lg:grid-cols-[220px_minmax(0,1fr)] lg:gap-14">
+        {/* Contents: the buying process in order, so numbered. `min-w-0` lets the
+            scrolling strip stay inside the screen instead of widening the page. */}
+        <nav aria-label="On this page" className="min-w-0 lg:sticky lg:top-24 lg:self-start">
           <p className="label">In order</p>
           <ol className="mt-3 flex gap-1 overflow-x-auto pb-2 lg:block lg:space-y-0.5 lg:overflow-visible lg:pb-0">
             {CONTENTS.map((c, i) => {
@@ -602,7 +591,7 @@ export function GuidePage() {
 
       {/* Close */}
       <div className="studio mt-20 rounded-[22px] border border-line p-8 text-center sm:p-14">
-        <h2 className="display text-[clamp(1.75rem,3.5vw,2.75rem)] text-text">Now go and find one worth inspecting.</h2>
+        <h2 className="display text-[22px]">Now go and find one worth inspecting.</h2>
         <p className="mx-auto mt-3 max-w-xl text-[15px] leading-relaxed text-muted">
           The leaderboard ranks what's listed right now on reliability, real market value, winter capability and running
           cost, so the shortlist you take this checklist to is already a good one.

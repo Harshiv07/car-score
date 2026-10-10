@@ -90,7 +90,7 @@ function NavItem({ to, label, end, count }: { to: string; label: string; end: bo
       to={to}
       end={end}
       className={({ isActive }) =>
-        `cond group relative shrink-0 px-3 py-2.5 text-[13px] font-semibold uppercase tracking-[0.1em] transition-colors ${
+        `cond group relative shrink-0 px-3 py-2.5 text-[15px] font-semibold transition-colors ${
           isActive ? "text-text" : "text-muted hover:text-text"
         }`
       }
@@ -100,7 +100,7 @@ function NavItem({ to, label, end, count }: { to: string; label: string; end: bo
           {label}
           {count ? <span className="nums ml-1 text-[12px] font-bold text-accent-ink">{count}</span> : null}
           <span
-            className={`absolute inset-x-3 bottom-0 h-[3px] bg-accent transition-transform duration-200 ${
+            className={`absolute inset-x-3 bottom-0 h-[3px] rounded-t-full bg-accent transition-transform duration-200 ${
               isActive ? "scale-x-100" : "scale-x-0 group-hover:scale-x-50"
             }`}
             aria-hidden

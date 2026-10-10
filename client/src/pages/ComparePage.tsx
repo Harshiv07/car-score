@@ -81,7 +81,7 @@ export function ComparePage() {
         </button>
       </div>
 
-      <h1 className="display mt-4 text-[clamp(2rem,4vw,3rem)] text-text">Side by side</h1>
+      <h1 className="display mt-4 text-[26px]">Side by side</h1>
       <p className="mt-2 max-w-[60ch] text-[15px] text-muted">
         The leader in each row is marked. The trade-off between two good cars usually lives in one or two categories,
         and this is where you'll see it.
